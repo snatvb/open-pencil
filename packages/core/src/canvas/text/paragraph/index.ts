@@ -2,6 +2,7 @@ import type {
   CanvasKit,
   FontStyle,
   FontWeight,
+  FontWidth,
   Paint,
   Paragraph,
   ParagraphBuilder,
@@ -9,8 +10,14 @@ import type {
   TextFontVariations,
   TextHeightBehavior
 } from 'canvaskit-wasm'
+import { memoize } from 'es-toolkit/function'
 
-import type { SceneNode } from '@open-pencil/scene-graph'
+import {
+  fontFaceStyle,
+  parseFontStyle,
+  runFontName,
+  type SceneNode
+} from '@open-pencil/scene-graph'
 import { resolveRGBAForPreview } from '@open-pencil/scene-graph/color'
 import { resolveNodeTextDirection } from '@open-pencil/scene-graph/text-direction'
 
@@ -119,16 +126,35 @@ function blockHeightBehavior(
   return ck.TextHeightBehavior.All
 }
 
+const fontWidthsByWidthClass = memoize((ck: CanvasKit): readonly FontWidth[] => [
+  ck.FontWidth.UltraCondensed,
+  ck.FontWidth.ExtraCondensed,
+  ck.FontWidth.Condensed,
+  ck.FontWidth.SemiCondensed,
+  ck.FontWidth.Normal,
+  ck.FontWidth.SemiExpanded,
+  ck.FontWidth.Expanded,
+  ck.FontWidth.ExtraExpanded,
+  ck.FontWidth.UltraExpanded
+])
+
 /**
  * The style a paragraph asks CanvasKit for: the face of the family that is loaded. Asked for a
  * face it lacks, CanvasKit slants and emboldens another, which neither Figma, a browser, nor a
  * native text stack draws the same, so a missing face is drawn as the face that exists and
  * reported missing, as Figma does. A family with no face loaded asks for the style as given.
  */
-function drawnFontStyle(ck: CanvasKit, family: string, weight: number, italic: boolean): FontStyle {
-  const face = loadedFace(family, weight, italic) ?? { weight, italic }
+function drawnFontStyle(
+  ck: CanvasKit,
+  family: string,
+  weight: number,
+  italic: boolean,
+  style: string
+): FontStyle {
+  const face = loadedFace(family, weight, italic, style) ?? { weight, italic, style }
   return {
     weight: { value: face.weight } as FontWeight,
+    width: fontWidthsByWidthClass(ck)[parseFontStyle(face.style).width - 1] ?? ck.FontWidth.Normal,
     slant: face.italic ? ck.FontSlant.Italic : ck.FontSlant.Upright
   }
 }
@@ -170,16 +196,17 @@ function pushStyleRun(
   const runFamily = style.fontFamily ?? (node.fontFamily || DEFAULT_FONT_FAMILY)
   const runWeight = style.fontWeight ?? node.fontWeight
   const runItalic = style.italic ?? node.italic
+  const runStyle = fontFaceStyle(runFontName(node, style), runFamily, runWeight, runItalic)
 
   const textStyle = new ck.TextStyle({
     color: styleRunColor(ck, style, baseColor),
     fontFamilies: fontFamilies(runFamily, runWeight, runItalic),
     fontSize: runFontSize,
     locale: styleRunLanguage(style, node),
-    fontStyle: drawnFontStyle(ck, runFamily, runWeight, runItalic),
+    fontStyle: drawnFontStyle(ck, runFamily, runWeight, runItalic, runStyle),
     fontVariations: textFontVariations(
       style.fontVariations ?? node.fontVariations,
-      fontManager.namedInstanceVariations(runFamily, weightToStyle(runWeight, runItalic))
+      fontManager.namedInstanceVariations(runFamily, runStyle)
     ),
     fontFeatures: textFontFeatures(style.fontFeatures ?? node.fontFeatures),
     letterSpacing: style.letterSpacing ?? (node.letterSpacing || 0),
@@ -275,6 +302,8 @@ export function buildSkParagraph(
       cjkFallbacks
     )
 
+  const baseFamily = node.fontFamily || DEFAULT_FONT_FAMILY
+  const baseStyle = fontFaceStyle(node.fontName, baseFamily, node.fontWeight, node.italic)
   const baseTextStyle = {
     color: baseColor,
     fontFamilies: fontFamilies(
@@ -284,18 +313,10 @@ export function buildSkParagraph(
     ),
     fontSize: baseFontSize,
     locale: node.textLanguage ?? undefined,
-    fontStyle: drawnFontStyle(
-      ck,
-      node.fontFamily || DEFAULT_FONT_FAMILY,
-      node.fontWeight,
-      node.italic
-    ),
+    fontStyle: drawnFontStyle(ck, baseFamily, node.fontWeight, node.italic, baseStyle),
     fontVariations: textFontVariations(
       node.fontVariations,
-      fontManager.namedInstanceVariations(
-        node.fontFamily || DEFAULT_FONT_FAMILY,
-        weightToStyle(node.fontWeight, node.italic)
-      )
+      fontManager.namedInstanceVariations(baseFamily, baseStyle)
     ),
     fontFeatures: textFontFeatures(node.fontFeatures),
     letterSpacing: node.letterSpacing || 0,

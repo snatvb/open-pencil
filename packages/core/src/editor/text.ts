@@ -1,5 +1,6 @@
 import {
   cloneInstanceOverrideState,
+  fontFaceStyle,
   setInstanceOverride,
   type InstanceOverrideState,
   type SceneNode
@@ -8,7 +9,6 @@ import { copyDerivedGlyphs, copyGeometryPaths } from '@open-pencil/scene-graph/c
 
 import { textAutoResizeChanges } from '#core/layout/text-auto-resize'
 import type { TextEditorState } from '#core/text/editor'
-import { weightToStyle } from '#core/text/fonts'
 import { hasGlyphOutlines } from '#core/text/opentype'
 
 import { applyBoundTextEdit } from './components/authoring/text-edit'
@@ -35,7 +35,10 @@ import { createVariableBindingActions } from './variable-bindings'
  */
 function isPathTextEditable(node: SceneNode): boolean {
   if (!node.textPathData) return true
-  return hasGlyphOutlines(node.fontFamily, weightToStyle(node.fontWeight, node.italic))
+  return hasGlyphOutlines(
+    node.fontFamily,
+    fontFaceStyle(node.fontName, node.fontFamily, node.fontWeight, node.italic)
+  )
 }
 
 type PathTextEditSnapshot = Pick<

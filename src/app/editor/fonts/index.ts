@@ -171,7 +171,11 @@ export async function ensureGraphFonts(
     const fontKeys = fontManager.collectFontKeys(graph, nodeIds)
     const requirements = collectGraphFontRequirements(graph, nodeIds)
     const { characters } = requirements
-    await Promise.all(fontKeys.map(([family, style]) => loadFont(family, style, characters)))
+    await Promise.all(
+      fontKeys.map(([family, style, postScriptName]) =>
+        loadFont(family, style, characters, undefined, postScriptName)
+      )
+    )
     const fallbackScripts = missingGraphFontScripts(requirements, {
       treatUnknownCoverageAsMissing: IS_TAURI
     })
@@ -202,11 +206,15 @@ function clearTextPictures(graph: SceneGraph, nodeIds: string[]): void {
 
 type NativeFontLoadError = { code?: 'not-found' | 'unsupported-format' | 'failed' }
 
-async function loadSystemFont(family: string, style = 'Regular'): Promise<ArrayBuffer | null> {
+async function loadSystemFont(
+  family: string,
+  style = 'Regular',
+  postScriptName?: string
+): Promise<ArrayBuffer | null> {
   if (!isTauri()) return null
   try {
     const { invoke } = await import('@tauri-apps/api/core')
-    const data = await invoke<ArrayBuffer>('load_system_font', { family, style })
+    const data = await invoke<ArrayBuffer>('load_system_font', { family, style, postScriptName })
     if (data.byteLength === 0) return null
     return data
   } catch (error) {
@@ -221,8 +229,9 @@ export async function loadFont(
   family: string,
   style = 'Regular',
   characters = '',
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  postScriptName?: string
 ): Promise<ArrayBuffer | null> {
   configureTauriFontCache()
-  return fontManager.loadFont(family, style, characters, signal)
+  return fontManager.loadFont(family, style, characters, signal, postScriptName)
 }

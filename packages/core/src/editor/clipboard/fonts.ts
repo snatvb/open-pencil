@@ -11,7 +11,9 @@ export function createClipboardFontActions(ctx: EditorContext) {
       const requirements = collectGraphFontRequirements(ctx.graph, nodeIds)
       const toLoad = fontManager.collectFontKeys(ctx.graph, nodeIds)
       const results = await Promise.all(
-        toLoad.map(([family, style]) => ctx.loadFont(family, style, requirements.characters))
+        toLoad.map(([family, style, postScriptName]) =>
+          ctx.loadFont(family, style, requirements.characters, undefined, postScriptName)
+        )
       )
       const failed = toLoad.filter((_, index) => results[index] === null)
       const requiredFallbacks = missingGraphFontScripts(requirements)

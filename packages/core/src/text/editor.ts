@@ -1,12 +1,11 @@
 import type { CanvasKit } from 'canvaskit-wasm'
 
-import type { DerivedTextGlyph, SceneNode } from '@open-pencil/scene-graph'
+import { fontFaceStyle, type DerivedTextGlyph, type SceneNode } from '@open-pencil/scene-graph'
 import type { Rect, Vector } from '@open-pencil/scene-graph/primitives'
 import { resolveNodeTextDirection } from '@open-pencil/scene-graph/text-direction'
 
 import type { SkiaRenderer } from '#core/canvas'
 import type { TextLayout } from '#core/canvas/text/layout'
-import { weightToStyle } from '#core/text/fonts'
 import { nextGraphemeBoundary, previousGraphemeBoundary } from '#core/text/graphemes'
 import { fontVerticalMetricsSync } from '#core/text/opentype'
 import {
@@ -69,7 +68,7 @@ export class TextEditor {
     if (!node?.textPathData || !node.derivedTextGlyphs?.length) return null
     const metrics = fontVerticalMetricsSync(
       node.fontFamily,
-      weightToStyle(node.fontWeight, node.italic)
+      fontFaceStyle(node.fontName, node.fontFamily, node.fontWeight, node.italic)
     )
     return metrics ? { glyphs: node.derivedTextGlyphs, metrics } : null
   }

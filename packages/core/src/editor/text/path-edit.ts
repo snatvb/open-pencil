@@ -1,10 +1,14 @@
 import { mean } from 'es-toolkit'
 
 import { encodePathCommandsBlob } from '@open-pencil/fig/node-change'
-import type { DerivedTextGlyph, SceneNode, TextPathData } from '@open-pencil/scene-graph'
+import {
+  fontFaceStyle,
+  type DerivedTextGlyph,
+  type SceneNode,
+  type TextPathData
+} from '@open-pencil/scene-graph'
 import type { Rect } from '@open-pencil/scene-graph/primitives'
 
-import { weightToStyle } from '#core/text/fonts'
 import { getGlyphOutlineMetricsSync } from '#core/text/opentype'
 import {
   calibratePathTextLayout,
@@ -20,6 +24,7 @@ const PATH_TEXT_LAYOUT_FIELDS = [
   'text',
   'fontFamily',
   'fontWeight',
+  'fontName',
   'italic',
   'fontSize',
   'letterSpacing',
@@ -42,7 +47,7 @@ function layOutPathText(
   const { fontSize, letterSpacing } = type
   const metrics = getGlyphOutlineMetricsSync(
     type.fontFamily,
-    weightToStyle(type.fontWeight, type.italic),
+    fontFaceStyle(type.fontName, type.fontFamily, type.fontWeight, type.italic),
     type.text,
     fontSize
   )
@@ -107,6 +112,7 @@ export function pathTextEditChanges(
       text,
       fontFamily: changes.fontFamily ?? node.fontFamily,
       fontWeight: changes.fontWeight ?? node.fontWeight,
+      fontName: changes.fontName !== undefined ? changes.fontName : node.fontName,
       italic: changes.italic ?? node.italic,
       fontSize: changes.fontSize ?? node.fontSize,
       letterSpacing: changes.letterSpacing ?? node.letterSpacing,
@@ -229,7 +235,7 @@ function alignedRun(
   if (align !== 'CENTER' && align !== 'RIGHT') return all
   const old = getGlyphOutlineMetricsSync(
     node.fontFamily,
-    weightToStyle(node.fontWeight, node.italic),
+    fontFaceStyle(node.fontName, node.fontFamily, node.fontWeight, node.italic),
     node.text,
     node.fontSize
   )

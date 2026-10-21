@@ -263,7 +263,8 @@ export interface EditorContext {
     family: string,
     style: string,
     characters?: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    postScriptName?: string
   ) => Promise<ArrayBuffer | null>
   resolveFigmaClipboardImages: FigmaClipboardImageResolver | null
   getViewportSize: () => { width: number; height: number }

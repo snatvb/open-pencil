@@ -128,6 +128,33 @@ export function authoredFontName(
   return authored.weight === weight && authored.italic === italic ? fontName : null
 }
 
+const namesOnlyWeightAndSlant = memoize((style: string): boolean => {
+  if (parseFontStyle(style).width !== NORMAL_FONT_WIDTH) {
+    return false
+  }
+  const name = normalizeFontStyleName(style)
+  return name === '' || FONT_WEIGHT_BY_STYLE.has(name) || /^[1-9]00$/u.test(name)
+})
+
+export function distinctFontFace(
+  fontName: FontName | null | undefined,
+  family: string,
+  weight: number,
+  italic: boolean
+): FontName | null {
+  const authored = authoredFontName(fontName, family, weight, italic)
+  return authored && !namesOnlyWeightAndSlant(authored.style) ? authored : null
+}
+
+export function fontFaceStyle(
+  fontName: FontName | null | undefined,
+  family: string,
+  weight: number,
+  italic: boolean
+): string {
+  return distinctFontFace(fontName, family, weight, italic)?.style ?? weightToStyle(weight, italic)
+}
+
 export function runFontName(
   text: { fontName: FontName | null },
   style: Pick<CharacterStyleOverride, 'fontName'>

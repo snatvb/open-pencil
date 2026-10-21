@@ -1,11 +1,12 @@
 import type { Canvas, CanvasKit, Paint } from 'canvaskit-wasm'
 import { isEqual } from 'es-toolkit/predicate'
 
-import type {
-  DerivedTextGlyph,
-  Fill,
-  SceneNode,
-  TextDecorationStyle
+import {
+  fontFaceStyle,
+  type DerivedTextGlyph,
+  type Fill,
+  type SceneNode,
+  type TextDecorationStyle
 } from '@open-pencil/scene-graph'
 import { resolveRGBAForPreview } from '@open-pencil/scene-graph/color'
 
@@ -17,7 +18,6 @@ import { laidOutGlyphs, type LaidOutGlyph } from '#core/canvas/text/placed'
 import type { PreparedText } from '#core/canvas/text/preparation/cache'
 import { shownCharacters, shownText } from '#core/text/case'
 import { characterStyles, TEXT_STYLE_KEYS, type CharacterStyle } from '#core/text/character-style'
-import { weightToStyle } from '#core/text/fonts'
 import { fontDecorationMetricsSync, type FontDecorationMetrics } from '#core/text/opentype'
 
 /**
@@ -166,8 +166,10 @@ function decorationRects(
   lines: LineSpan[]
 ): TextDecorationRect[] {
   const metrics =
-    fontDecorationMetricsSync(style.fontFamily, weightToStyle(style.fontWeight, style.italic)) ??
-    UNLOADED_FONT_METRICS
+    fontDecorationMetricsSync(
+      style.fontFamily,
+      fontFaceStyle(style.fontName, style.fontFamily, style.fontWeight, style.italic)
+    ) ?? UNLOADED_FONT_METRICS
   const size = style.fontSize
   const underline = style.textDecoration === 'UNDERLINE'
   // Figma measures from the baseline rounded to a whole pixel. An underline's offset and

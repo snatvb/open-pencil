@@ -1,44 +1,78 @@
-import type { SceneGraph, SceneNode } from '@open-pencil/scene-graph'
+import {
+  distinctFontFace,
+  runFontName,
+  weightToStyle,
+  type FontName,
+  type SceneGraph,
+  type SceneNode
+} from '@open-pencil/scene-graph'
 
 import { DEFAULT_FONT_FAMILY } from '#core/constants'
 import { shownCharacters } from '#core/text/case'
 import { cjkFallbackScriptForLanguage, type FontFallbackScript } from '#core/text/fallbacks'
-import { weightToStyle } from '#core/text/font/style'
 
-export function collectNodeFontFaces(node: SceneNode): Array<{ family: string; style: string }> {
+export interface TextFontFace {
+  family: string
+  style: string
+  postScriptName?: string
+}
+
+export type FontKey = [family: string, style: string, postScriptName?: string]
+
+function textFontFace(
+  family: string,
+  weight: number,
+  italic: boolean,
+  fontName: FontName | null
+): TextFontFace {
+  const distinct = distinctFontFace(fontName, family, weight, italic)
+  if (!distinct) {
+    return { family, style: weightToStyle(weight, italic) }
+  }
+  return distinct.postScriptName
+    ? { family, style: distinct.style, postScriptName: distinct.postScriptName }
+    : { family, style: distinct.style }
+}
+
+export function collectNodeFontFaces(node: SceneNode): TextFontFace[] {
   if (node.type !== 'TEXT') return []
   const family = node.fontFamily || DEFAULT_FONT_FAMILY
-  const faces = new Map<string, { family: string; style: string }>()
-  const add = (faceFamily: string, style: string) => {
-    faces.set(`${faceFamily}\0${style}`, { family: faceFamily, style })
+  const faces = new Map<string, TextFontFace>()
+  const add = (face: TextFontFace) => {
+    faces.set(`${face.family}\u0000${face.style}`, face)
   }
-  add(family, weightToStyle(node.fontWeight || 400, node.italic))
+  add(textFontFace(family, node.fontWeight || 400, node.italic, node.fontName))
   for (const run of node.styleRuns) {
-    const runFamily = run.style.fontFamily ?? family
-    const weight = run.style.fontWeight ?? node.fontWeight
-    const italic = run.style.italic ?? node.italic
-    add(runFamily, weightToStyle(weight, italic))
+    add(
+      textFontFace(
+        run.style.fontFamily ?? family,
+        run.style.fontWeight ?? node.fontWeight,
+        run.style.italic ?? node.italic,
+        runFontName(node, run.style)
+      )
+    )
   }
   return [...faces.values()]
 }
 
-export function collectGraphFontKeys(
-  graph: SceneGraph,
-  nodeIds: readonly string[]
-): Array<[string, string]> {
-  const fontKeys = new Set<string>()
+function fontKeyOf({ family, style, postScriptName }: TextFontFace): FontKey {
+  return postScriptName ? [family, style, postScriptName] : [family, style]
+}
+
+export function collectGraphFontKeys(graph: SceneGraph, nodeIds: readonly string[]): FontKey[] {
+  const fontKeys = new Map<string, FontKey>()
   const collect = (nodeId: string) => {
     const node = graph.getNode(nodeId)
     if (!node) return
     if (node.type === 'TEXT') {
-      for (const { family, style } of collectNodeFontFaces(node)) {
-        fontKeys.add(`${family}\0${style}`)
+      for (const face of collectNodeFontFaces(node)) {
+        fontKeys.set(`${face.family}\u0000${face.style}`, fontKeyOf(face))
       }
     }
     for (const childId of node.childIds) collect(childId)
   }
   for (const nodeId of nodeIds) collect(nodeId)
-  return Array.from(fontKeys, (key) => key.split('\0') as [string, string])
+  return [...fontKeys.values()]
 }
 
 function fallbackScriptForCharacter(

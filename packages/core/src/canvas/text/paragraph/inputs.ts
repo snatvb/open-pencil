@@ -9,6 +9,7 @@ export const PARAGRAPH_INPUT_KEYS = [
   'fontFamily',
   'fontSize',
   'fontWeight',
+  'fontName',
   'italic',
   'styleRuns',
   'fontVariations',

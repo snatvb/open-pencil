@@ -46,7 +46,9 @@ export async function prepareGraphFonts(
   const requirements = collectGraphFontRequirements(graph, nodeIds)
   const faces = requirements.nodes.flatMap(collectNodeFontFaces)
   await Promise.all(
-    faces.map(({ family, style }) => fontManager.loadFont(family, style, requirements.characters))
+    faces.map(({ family, style, postScriptName }) =>
+      fontManager.loadFont(family, style, requirements.characters, undefined, postScriptName)
+    )
   )
   await fontManager.ensureFallbackPack(
     missingGraphFontScripts(requirements),

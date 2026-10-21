@@ -71,9 +71,14 @@ impl FontLoadError {
     }
 }
 
-fn load_system_font_blocking(family: String, style: String) -> Result<Vec<u8>, FontLoadError> {
-    let (weight, italic) = style::requested_face(&style);
-    let Some(face) = catalog::load_face(&family, weight, italic) else {
+fn load_system_font_blocking(
+    family: String,
+    style: String,
+    post_script_name: Option<String>,
+) -> Result<Vec<u8>, FontLoadError> {
+    let request = style::requested_face(&style);
+    let Some(face) = catalog::load_face(&family, &style, request, post_script_name.as_deref())
+    else {
         #[cfg(target_os = "macos")]
         if macos::family_has_only_unsupported_outlines(&family) {
             return Err(FontLoadError::new(
@@ -98,15 +103,17 @@ fn load_system_font_blocking(family: String, style: String) -> Result<Vec<u8>, F
 pub async fn load_system_font(
     family: String,
     style: String,
+    post_script_name: Option<String>,
 ) -> Result<tauri::ipc::Response, FontLoadError> {
-    let data =
-        tauri::async_runtime::spawn_blocking(move || load_system_font_blocking(family, style))
-            .await
-            .map_err(|e| {
-                FontLoadError::new(
-                    FontLoadErrorCode::Failed,
-                    format!("Font load task failed: {e}"),
-                )
-            })??;
+    let data = tauri::async_runtime::spawn_blocking(move || {
+        load_system_font_blocking(family, style, post_script_name)
+    })
+    .await
+    .map_err(|e| {
+        FontLoadError::new(
+            FontLoadErrorCode::Failed,
+            format!("Font load task failed: {e}"),
+        )
+    })??;
     Ok(tauri::ipc::Response::new(data))
 }

@@ -21,7 +21,11 @@ export interface DownloadedFontCache {
   write(family: string, style: string, data: ArrayBuffer, characters?: string): Promise<void>
 }
 
-export type HostFontLoader = (family: string, style: string) => Promise<ArrayBuffer | null>
+export type HostFontLoader = (
+  family: string,
+  style: string,
+  postScriptName?: string
+) => Promise<ArrayBuffer | null>
 
 /** Why an installed face could not be loaded, when the host can tell. */
 export type FontUnavailableReason = 'unsupported-format'

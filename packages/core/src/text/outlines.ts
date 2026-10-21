@@ -1,8 +1,13 @@
 import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext'
 
-import type { CharacterStyleOverride, SceneNode } from '@open-pencil/scene-graph'
+import {
+  fontFaceStyle,
+  runFontName,
+  type CharacterStyleOverride,
+  type SceneNode
+} from '@open-pencil/scene-graph'
 
-import { fontManager, weightToStyle } from '#core/text/fonts'
+import { fontManager } from '#core/text/fonts'
 import {
   fontHasGlyphSync,
   getGlyphOutlineMetricsSync,
@@ -37,7 +42,7 @@ const COMPLEX_SCRIPT_PATTERN = /[\u0590-\u08ff\u0900-\u0dff\ufb1d-\ufdff\ufe70-\
 type TextStyle = Required<
   Pick<
     CharacterStyleOverride,
-    'fontFamily' | 'fontSize' | 'fontWeight' | 'italic' | 'letterSpacing'
+    'fontFamily' | 'fontSize' | 'fontWeight' | 'fontName' | 'italic' | 'letterSpacing'
   >
 >
 
@@ -46,13 +51,14 @@ function baseTextStyle(node: SceneNode): TextStyle {
     fontFamily: node.fontFamily,
     fontSize: node.fontSize,
     fontWeight: node.fontWeight,
+    fontName: node.fontName,
     italic: node.italic,
     letterSpacing: node.letterSpacing
   }
 }
 
-function styleName(style: Pick<TextStyle, 'fontWeight' | 'italic'>): string {
-  return weightToStyle(style.fontWeight, style.italic)
+function styleName(style: TextStyle): string {
+  return fontFaceStyle(style.fontName, style.fontFamily, style.fontWeight, style.italic)
 }
 
 function styleKey(style: TextStyle): string {
@@ -67,6 +73,7 @@ function textStyleAt(node: SceneNode, index: number): TextStyle {
     fontFamily: run.style.fontFamily ?? base.fontFamily,
     fontSize: run.style.fontSize ?? base.fontSize,
     fontWeight: run.style.fontWeight ?? base.fontWeight,
+    fontName: runFontName(base, run.style),
     italic: run.style.italic ?? base.italic,
     letterSpacing: run.style.letterSpacing ?? base.letterSpacing
   }

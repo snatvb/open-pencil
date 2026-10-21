@@ -245,6 +245,7 @@ describe('text preparation cache', () => {
         fontFamily: 'Other',
         fontSize: 20,
         fontWeight: 700,
+        fontName: { family: 'Other', style: 'Condensed Bold Italic', postScriptName: '' },
         italic: true,
         fontFeatures: [{ tag: 'liga', enabled: false }],
         fontVariations: [{ axis: 'wght', value: 700 }],

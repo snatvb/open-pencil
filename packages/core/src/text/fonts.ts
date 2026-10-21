@@ -5,13 +5,10 @@ import type { CanvasKit, TypefaceFontProvider } from 'canvaskit-wasm'
 import type { FontVariation, SceneGraph } from '@open-pencil/scene-graph'
 
 import { DEFAULT_FONT_FAMILY, IS_BROWSER } from '#core/constants'
+import { parseFontStyle } from '#core/text/face'
 import { facesFromStyles, hasFamilyFace, type FamilyFace } from '#core/text/font/faces'
-import {
-  chooseLocalFontMatch,
-  normalizeFontFamily,
-  styleToWeight,
-  weightToStyle
-} from '#core/text/font/style'
+import { LocalFontLibrary } from '#core/text/font/local'
+import { normalizeFontFamily, weightToStyle } from '#core/text/font/style'
 import { isVariableFont, namedInstanceVariations } from '#core/text/font/variation'
 
 export * from '#core/text/font/sources'
@@ -29,11 +26,11 @@ import type {
   HostFontLoader,
   LocalFontAccessState
 } from '#core/text/font/sources'
-import { collectGraphFontKeys } from '#core/text/requirements'
+import { collectGraphFontKeys, type FontKey } from '#core/text/requirements'
 import { normalizedCoverageText, WebFontResolver } from '#core/text/web-fonts'
 import type { WebFontFetch, WebFontProviderId } from '#core/text/web-fonts'
 
-type FindLocalFontOptions = { allowVariable?: boolean }
+type FindLocalFontOptions = { allowVariable?: boolean; postScriptName?: string }
 
 const BUNDLED_FONTS: Record<string, string> = {
   'Inter|Regular': '/Inter-Regular.ttf',
@@ -51,6 +48,18 @@ const BUNDLED_FONTS: Record<string, string> = {
  * `@open-pencil/core/assets` at the site root.
  */
 export type BundledFontLocator = (file: string) => string
+
+const FONT_STRETCH_BY_WIDTH_CLASS = [
+  'ultra-condensed',
+  'extra-condensed',
+  'condensed',
+  'semi-condensed',
+  'normal',
+  'semi-expanded',
+  'expanded',
+  'extra-expanded',
+  'ultra-expanded'
+] as const
 
 const defaultBundledFontLocator: BundledFontLocator = (file) => `/${file}`
 
@@ -70,6 +79,9 @@ export class FontManager {
   private registrationGeneration = 0
   private providerRegistrations = new WeakMap<TypefaceFontProvider, Map<string, Set<ArrayBuffer>>>()
   private localFonts: FontInfo[] | null = null
+  private readonly localFontLibrary = new LocalFontLibrary<FontData>(
+    async () => (await window.queryLocalFonts?.()) ?? []
+  )
   private hostStyles = new Map<string, readonly string[]>()
   private familyFaceLoads = new Map<string, Promise<FamilyFace[] | null>>()
   private knownFamilyFaces = new Map<string, FamilyFace[] | null>()
@@ -83,6 +95,22 @@ export class FontManager {
   private cjkFallbackPromise: Promise<string[]> | null = null
   private arabicFallbackFamilies: string[] = []
   private arabicFallbackPromise: Promise<string[]> | null = null
+
+  constructor() {
+    if (IS_BROWSER && typeof document !== 'undefined') {
+      this.relistLocalFontsOnReturn()
+    }
+  }
+
+  private relistLocalFontsOnReturn(): void {
+    const beginGeneration = () => this.localFontLibrary.beginGeneration()
+    window.addEventListener('focus', beginGeneration)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        beginGeneration()
+      }
+    })
+  }
 
   attachProvider(canvasKit: CanvasKit, provider: TypefaceFontProvider): void {
     this.fontProviders.add(provider)
@@ -299,6 +327,7 @@ export class FontManager {
         })
       }
       this.localFonts = result
+      this.localFontLibrary.forget()
       this.localFontAccessState = 'granted'
       this.forgetFamilyFaces()
       return result
@@ -361,7 +390,11 @@ export class FontManager {
     return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
   }
 
-  async loadLocalFont(family: string, style = 'Regular'): Promise<ArrayBuffer | null> {
+  async loadLocalFont(
+    family: string,
+    style = 'Regular',
+    postScriptName?: string
+  ): Promise<ArrayBuffer | null> {
     const cacheKey = `${family}|${style}`
     const loaded = this.loadedFamilies.get(cacheKey)
     if (loaded) {
@@ -369,9 +402,9 @@ export class FontManager {
       return loaded
     }
 
-    const hostBuffer = await this.loadHostFont(family, style)
+    const hostBuffer = await this.loadHostFont(family, style, postScriptName)
     if (hostBuffer) return this.registerAndCache(family, style, hostBuffer, 'local')
-    const localBuffer = await this.findLocalFont(family, style)
+    const localBuffer = await this.findLocalFont(family, style, { postScriptName })
     if (localBuffer) return this.registerAndCache(family, style, localBuffer, 'local')
 
     const bundledURL = BUNDLED_FONTS[cacheKey]
@@ -432,7 +465,8 @@ export class FontManager {
     family: string,
     style = 'Regular',
     characters = '',
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    postScriptName?: string
   ): Promise<ArrayBuffer | null> {
     signal?.throwIfAborted()
     const loaded = this.loadedData(family, style)
@@ -450,7 +484,7 @@ export class FontManager {
     }
 
     return (
-      (await this.loadLocalFont(family, style)) ??
+      (await this.loadLocalFont(family, style, postScriptName)) ??
       (await this.loadCachedFont(family, style, characters)) ??
       (await this.loadRemoteFont(family, style, characters, signal))
     )
@@ -515,7 +549,7 @@ export class FontManager {
     return family
   }
 
-  collectFontKeys(graph: SceneGraph, nodeIds: string[]): Array<[string, string]> {
+  collectFontKeys(graph: SceneGraph, nodeIds: string[]): FontKey[] {
     return collectGraphFontKeys(graph, nodeIds)
   }
 
@@ -638,11 +672,15 @@ export class FontManager {
     return targetFamilies
   }
 
-  private async loadHostFont(family: string, style: string): Promise<ArrayBuffer | null> {
+  private async loadHostFont(
+    family: string,
+    style: string,
+    postScriptName?: string
+  ): Promise<ArrayBuffer | null> {
     if (!this.hostFontLoader) return null
     const key = `${family}|${style}`
     try {
-      const data = await this.hostFontLoader(family, style)
+      const data = await this.hostFontLoader(family, style, postScriptName)
       if (data) this.unavailableFaces.delete(key)
       return data
     } catch (e) {
@@ -691,14 +729,14 @@ export class FontManager {
     if (!IS_BROWSER || !window.queryLocalFonts) return null
     if (this.localFontAccessState !== 'granted') return null
     try {
-      const fonts = await window.queryLocalFonts()
-      const match = chooseLocalFontMatch(fonts, family, style)
+      const match = await this.localFontLibrary.match(family, style, options.postScriptName)
       if (!match) return null
       const blob: Blob = await match.blob()
       const buffer = await blob.arrayBuffer()
       if (!options.allowVariable && isVariableFont(buffer)) return null
       return buffer
     } catch (e) {
+      this.localFontLibrary.forget()
       console.warn(`Local font access failed for "${family}" ${style ?? ''}:`, e)
       return null
     }
@@ -768,11 +806,11 @@ export class FontManager {
   /** Makes a face available to the page's own text, such as fields over canvas labels. */
   registerFontInBrowser(family: string, style: string, data: ArrayBuffer) {
     if (!IS_BROWSER) return
-    const weight = styleToWeight(style)
-    const italic = style.toLowerCase().includes('italic') ? 'italic' : 'normal'
+    const { weight, italic, width } = parseFontStyle(style)
     const face = new FontFace(family, data, {
       weight: String(weight),
-      style: italic
+      style: italic ? 'italic' : 'normal',
+      stretch: FONT_STRETCH_BY_WIDTH_CLASS[width - 1] ?? 'normal'
     })
     face
       .load()

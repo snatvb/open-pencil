@@ -15,7 +15,7 @@ import {
 import { isReaderPagePending, recoverReaderPage } from '#core/kiwi/fig/session/document-state'
 import { computeAllLayouts } from '#core/layout'
 import { fontManager } from '#core/text/fonts'
-import { collectGraphFontRequirements } from '#core/text/requirements'
+import { collectGraphFontRequirements, type FontKey } from '#core/text/requirements'
 import { missingGraphFontScripts } from '#core/text/resolved-requirements'
 
 import { createPageViewportStore } from './page-viewports'
@@ -149,9 +149,15 @@ export function createPageActions(ctx: EditorContext, drawing?: PageDrawing) {
     fontManager.blockNodesUntilFontsResolve(childIds)
     try {
       let completedFaces = 0
-      const loadFace = limitAsync(async ([family, style]: [string, string]) => {
+      const loadFace = limitAsync(async ([family, style, postScriptName]: FontKey) => {
         throwIfAborted(options.signal)
-        const result = await ctx.loadFont(family, style, requirements.characters, options.signal)
+        const result = await ctx.loadFont(
+          family,
+          style,
+          requirements.characters,
+          options.signal,
+          postScriptName
+        )
         throwIfAborted(options.signal)
         completedFaces++
         options.onProgress?.({

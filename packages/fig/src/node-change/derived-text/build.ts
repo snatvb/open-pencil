@@ -2,17 +2,18 @@ import { groupBy } from 'es-toolkit/array'
 
 import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
 import {
+  fontFaceStyle,
   hasTextList,
   normalizeFontFamily,
   paragraphIndexAt,
-  textParagraphRanges,
-  weightToStyle
+  runFontName,
+  textParagraphRanges
 } from '@open-pencil/scene-graph'
-import type { DerivedTextGlyph, SceneNode } from '@open-pencil/scene-graph'
+import type { DerivedTextGlyph, FontName, SceneNode } from '@open-pencil/scene-graph'
 
 import { bytesToHex } from '../bytes'
 import type { PlacedTextGlyph, TextDecorationRecord } from '../export/runtime'
-import { weightToFigmaStyle } from '../font/style'
+import { figmaFontName } from '../font/style'
 import { bakeGlyphScale, encodePathCommandsBlob, type OutlineCommand } from '../path/commands'
 import { characterStyleIDs } from '../text/data-export'
 import { buildDerivedTextData } from './data'
@@ -74,25 +75,26 @@ function fontMetaData(
 ): DerivedTextData['fontMetaData'] {
   const fonts: NonNullable<DerivedTextData['fontMetaData']> = []
   const seen = new Set<string>()
-  const addFont = (family: string, weight: number, italic: boolean) => {
+  const addFont = (family: string, weight: number, italic: boolean, fontName: FontName | null) => {
     const normalized = normalizeFontFamily(family)
-    const key = `${normalized}|${weightToStyle(weight, italic)}`
+    const key = `${normalized}|${fontFaceStyle(fontName, family, weight, italic)}`
     if (seen.has(key)) return
     seen.add(key)
     fonts.push({
-      key: { family: normalized, style: weightToFigmaStyle(weight, italic), postscript: '' },
+      key: figmaFontName(fontName, family, weight, italic),
       fontLineHeight: 1.2,
       fontDigest: digestMap.get(key),
       fontStyle: italic ? 'ITALIC' : 'NORMAL',
       fontWeight: weight
     })
   }
-  addFont(node.fontFamily, node.fontWeight, node.italic)
+  addFont(node.fontFamily, node.fontWeight, node.italic, node.fontName)
   for (const run of node.styleRuns) {
     addFont(
       run.style.fontFamily ?? node.fontFamily,
       run.style.fontWeight ?? node.fontWeight,
-      run.style.italic ?? node.italic
+      run.style.italic ?? node.italic,
+      runFontName(node, run.style)
     )
   }
   return fonts

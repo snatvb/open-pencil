@@ -1,6 +1,6 @@
-import type { SceneGraph } from '@open-pencil/scene-graph'
+import { fontFaceStyle, runFontName, type SceneGraph } from '@open-pencil/scene-graph'
 
-import { fontManager, weightToStyle } from '#core/text/fonts'
+import { fontManager } from '#core/text/fonts'
 
 const fontDigestCache = new Map<string, Uint8Array>()
 
@@ -28,13 +28,14 @@ function documentFontKeys(graph: SceneGraph): Set<string> {
   const fontKeys = new Set<string>()
   for (const node of graph.getAllNodes()) {
     if (node.type !== 'TEXT') continue
-    const baseStyle = weightToStyle(node.fontWeight, node.italic)
+    const baseStyle = fontFaceStyle(node.fontName, node.fontFamily, node.fontWeight, node.italic)
     fontKeys.add(`${node.fontFamily}|${baseStyle}`)
     for (const run of node.styleRuns) {
       const family = run.style.fontFamily ?? node.fontFamily
       const weight = run.style.fontWeight ?? node.fontWeight
       const italic = run.style.italic ?? node.italic
-      fontKeys.add(`${family}|${weightToStyle(weight, italic)}`)
+      const style = fontFaceStyle(runFontName(node, run.style), family, weight, italic)
+      fontKeys.add(`${family}|${style}`)
     }
   }
   return fontKeys

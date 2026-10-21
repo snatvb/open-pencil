@@ -1,8 +1,7 @@
-import type { SceneNode } from '@open-pencil/scene-graph'
+import { fontFaceStyle, runFontName, type SceneNode } from '@open-pencil/scene-graph'
 
 import { DEFAULT_FONT_FAMILY } from '#core/constants'
 import { cjkFallbackScriptForLanguage, type FontFallbackScript } from '#core/text/fallbacks'
-import { weightToStyle } from '#core/text/font/style'
 import { fontGlyphCoverageSync } from '#core/text/opentype'
 
 const CJK_IDEOGRAPH_CHAR_RE = /\p{Script=Han}/u
@@ -56,6 +55,7 @@ function styleForCharacter(
   let family = baseFamily
   let weight = node.fontWeight
   let italic = node.italic
+  let fontName = node.fontName
   let language = node.textLanguage
 
   const run = node.styleRuns.find((item) => index >= item.start && index < item.start + item.length)
@@ -63,10 +63,11 @@ function styleForCharacter(
     family = run.style.fontFamily ?? family
     weight = run.style.fontWeight ?? weight
     italic = run.style.italic ?? italic
+    fontName = runFontName(node, run.style)
     language = run.style.textLanguage ?? language
   }
 
-  return { family, style: weightToStyle(weight, italic), language }
+  return { family, style: fontFaceStyle(fontName, family, weight, italic), language }
 }
 
 /**

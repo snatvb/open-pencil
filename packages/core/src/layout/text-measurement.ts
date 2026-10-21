@@ -1,6 +1,5 @@
-import type { SceneNode } from '@open-pencil/scene-graph'
+import { fontFaceStyle, type SceneNode } from '@open-pencil/scene-graph'
 
-import { weightToStyle } from '#core/text/fonts'
 import { measureTextWithOpenType } from '#core/text/opentype'
 
 export type TextMeasurer = (
@@ -18,7 +17,7 @@ export function estimateTextSize(
 ): { width: number; height: number } {
   const fontSize = node.fontSize || 14
   const family = node.fontFamily || 'Inter'
-  const style = weightToStyle(node.fontWeight || 400, node.italic)
+  const style = fontFaceStyle(node.fontName, family, node.fontWeight || 400, node.italic)
   const text = node.text || ''
 
   const explicitLineH = (node.lineHeight ?? 0) > 0 ? (node.lineHeight as number) : undefined

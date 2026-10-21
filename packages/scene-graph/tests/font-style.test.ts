@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   authoredFontName,
+  fontFaceStyle,
   parseFontStyle,
   runFontName,
   SceneGraph,
-  type SceneNode,
-  weightToStyle
+  type SceneNode
 } from '@open-pencil/scene-graph'
 
 const COMPRESSED_MEDIUM = {
@@ -61,6 +61,19 @@ describe('runFontName', () => {
   })
 })
 
+describe('fontFaceStyle', () => {
+  test('names a face weight and slant cannot by its authored style', () => {
+    expect(fontFaceStyle(COMPRESSED_MEDIUM, 'Acme Sans', 500, false)).toBe('Compressed Medium')
+  })
+
+  test('names faces of plain weights the way it always has', () => {
+    const semiBold = { family: 'Acme Sans', style: 'Semi Bold', postScriptName: '' }
+    expect(fontFaceStyle(semiBold, 'Acme Sans', 600, false)).toBe('SemiBold')
+    expect(fontFaceStyle(COMPRESSED_MEDIUM, 'Acme Sans', 700, false)).toBe('Bold')
+    expect(fontFaceStyle(null, 'Acme Sans', 400, true)).toBe('Regular Italic')
+  })
+})
+
 describe('a change of face', () => {
   function compressedMediumText(overrides: Partial<SceneNode> = {}) {
     const graph = new SceneGraph()
@@ -74,14 +87,7 @@ describe('a change of face', () => {
     })
     const faceStyle = () => {
       const node = graph.getNode(text.id)
-      if (!node) {
-        return ''
-      }
-      const { fontName, fontFamily, fontWeight, italic } = node
-      return (
-        authoredFontName(fontName, fontFamily, fontWeight, italic)?.style ??
-        weightToStyle(fontWeight, italic)
-      )
+      return node ? fontFaceStyle(node.fontName, node.fontFamily, node.fontWeight, node.italic) : ''
     }
     return { graph, id: text.id, faceStyle }
   }

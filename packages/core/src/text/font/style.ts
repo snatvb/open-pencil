@@ -32,7 +32,7 @@ export function fontWeightMatchOrder(weight: number): number[] {
 
 /**
  * A local font for a family and style. A style asked for is matched exactly, by name or by
- * weight and slant, since the face is registered as that style; without one, the face CSS
+ * weight, slant, and width, since the face is registered as that style; without one, the face CSS
  * font matching would pick for the regular style.
  */
 export function chooseLocalFontMatch<T extends FontFamilyStyle>(
@@ -54,7 +54,11 @@ export function chooseLocalFontMatch<T extends FontFamilyStyle>(
     const candidates = fonts.filter((font) => font.family === candidateFamily)
     const sameStyle = candidates.find((font) => {
       const parsed = parseFontStyle(font.style)
-      return parsed.weight === requested.weight && parsed.italic === requested.italic
+      return (
+        parsed.weight === requested.weight &&
+        parsed.italic === requested.italic &&
+        parsed.width === requested.width
+      )
     })
     if (sameStyle) return sameStyle
     if (style) continue

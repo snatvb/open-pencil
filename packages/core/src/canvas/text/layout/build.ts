@@ -1,10 +1,12 @@
 import type { Paragraph } from 'canvaskit-wasm'
 
 import {
+  fontFaceStyle,
   hasParagraphSpacing,
   hasTextList,
   paragraphSpacingAt,
   paragraphStyleAt,
+  runFontName,
   textListItems,
   textParagraphRanges,
   topLevelNumberDigits,
@@ -29,7 +31,6 @@ import type { TextRenderer } from '#core/canvas/text/renderer'
 import { utf8Length } from '#core/canvas/text/utf8'
 import { DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE } from '#core/constants'
 import { shownText } from '#core/text/case'
-import { weightToStyle } from '#core/text/fonts'
 import { glyphAdvanceSync } from '#core/text/opentype'
 
 /** A list item's indent per level, in ems of the list's first character. */
@@ -157,7 +158,12 @@ function listStyle(node: ParagraphNode, firstCharacter: number): ListStyle {
   return {
     em: override?.fontSize ?? (node.fontSize || DEFAULT_FONT_SIZE),
     family: override?.fontFamily ?? (node.fontFamily || DEFAULT_FONT_FAMILY),
-    style: weightToStyle(override?.fontWeight ?? node.fontWeight, override?.italic ?? node.italic),
+    style: fontFaceStyle(
+      override ? runFontName(node, override) : node.fontName,
+      override?.fontFamily ?? (node.fontFamily || DEFAULT_FONT_FAMILY),
+      override?.fontWeight ?? node.fontWeight,
+      override?.italic ?? node.italic
+    ),
     override
   }
 }
@@ -172,6 +178,7 @@ function markerNode(node: ParagraphNode, item: TextListItem, style: ListStyle): 
     fontSize: style.em,
     fontFamily: style.family,
     fontWeight: override?.fontWeight ?? node.fontWeight,
+    fontName: override ? runFontName(node, override) : node.fontName,
     italic: override?.italic ?? node.italic,
     letterSpacing: override?.letterSpacing ?? node.letterSpacing,
     lineHeight: override?.lineHeight !== undefined ? override.lineHeight : node.lineHeight,

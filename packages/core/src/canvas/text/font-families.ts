@@ -8,16 +8,30 @@ import { fontManager, fontWeightMatchOrder, weightToStyle } from '#core/text/fon
 
 const familiesCache = new ResourceCache<string, string[]>({ maxEntries: 256 })
 
+export interface LoadedFace extends FamilyFace {
+  style: string
+}
+
 /**
  * The loaded face of a family that text asking for a style is drawn in: that style, or the
  * nearest loaded weight in the same slant, then the other, as font matching picks it; `null`
  * when the family has none loaded.
  */
-export function loadedFace(family: string, weight: number, italic: boolean): FamilyFace | null {
+export function loadedFace(
+  family: string,
+  weight: number,
+  italic: boolean,
+  style = weightToStyle(weight, italic)
+): LoadedFace | null {
+  if (fontManager.isStyleLoaded(family, style)) {
+    return { weight, italic, style }
+  }
   for (const slant of [italic, !italic]) {
     for (const candidate of fontWeightMatchOrder(weight)) {
-      if (fontManager.isStyleLoaded(family, weightToStyle(candidate, slant)))
-        return { weight: candidate, italic: slant }
+      const candidateStyle = weightToStyle(candidate, slant)
+      if (fontManager.isStyleLoaded(family, candidateStyle)) {
+        return { weight: candidate, italic: slant, style: candidateStyle }
+      }
     }
   }
   return null
