@@ -26,6 +26,7 @@ export interface InstanceOccurrence {
   propertyClaims: InstancePropertyClaim[]
   bindingClaims: BoundPropertyClaim[]
   derivedSize?: Vector
+  derivedPosition?: boolean
   /** Cumulative scale for unresolved layout-distance variable values. */
   layoutScale?: number
   /** Per-field declaration-space multipliers, composed as owners expand. */

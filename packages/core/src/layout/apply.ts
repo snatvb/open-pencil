@@ -3,7 +3,7 @@ import type { Node as YogaNode } from 'yoga-layout'
 import { enforcedAspectRatio, type SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
 import { layoutConstrainedChildRect } from '@open-pencil/scene-graph/resize'
 
-import { keepsSavedLayout, usesDetachedDerivedLayout } from './derived'
+import { keepsSavedLayout, markResizedByLayout, usesDetachedDerivedLayout } from './derived'
 
 export type ComputeLayoutFn = (graph: SceneGraph, frameId: string) => void
 
@@ -100,7 +100,10 @@ function constrainChildren(
       true
     )
     const resized = child.width !== size.width || child.height !== size.height
-    if (resized && child.layoutMode !== 'NONE') computeLayout(graph, child.id)
+    if (resized && child.layoutMode !== 'NONE') {
+      markResizedByLayout(graph, child.id)
+      computeLayout(graph, child.id)
+    }
   }
 }
 
@@ -169,7 +172,9 @@ function computedChildPosition(
 ): number {
   if (preservesImportedGeometry) return child[axis]
   const computed = axis === 'x' ? yogaChild.getComputedLeft() : yogaChild.getComputedTop()
-  if (child.type === 'INSTANCE' || !keepsSaved) return computed
+  if (!keepsSaved) {
+    return computed
+  }
   return child.derivedLayout?.[axis] ?? computed
 }
 
@@ -215,6 +220,7 @@ function updateChildFromYoga(
   if (!child.visible || child.layoutPositioning === 'ABSOLUTE') return
 
   const savedFig = keepsSaved && child.source.format === 'fig'
+  const { width, height } = child
   const preservesImportedFrameGeometry =
     savedFig && frame.source.format === 'fig' && (child.type === 'FRAME' || child.type === 'LINE')
   const preservesImportedPosition =
@@ -242,6 +248,10 @@ function updateChildFromYoga(
     },
     computeLayout
   )
+  const resized = child.width !== width || child.height !== height
+  if (resized && !keepsSaved && child.layoutMode !== 'NONE') {
+    markResizedByLayout(graph, child.id)
+  }
 }
 
 function preservesImportedInstanceInternals(child: SceneNode): boolean {

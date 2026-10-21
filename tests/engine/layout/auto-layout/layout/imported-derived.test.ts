@@ -532,7 +532,7 @@ describe('imported auto-layout bounds', () => {
     })
   })
 
-  test('uses Yoga positions for imported instances while preserving imported size', () => {
+  test('keeps the saved place of an imported instance until its row is edited', () => {
     const graph = new SceneGraph()
     const page = graph.getPages()[0]
     const row = graph.createNode('FRAME', page.id, {
@@ -553,7 +553,10 @@ describe('imported auto-layout bounds', () => {
     })
 
     computeAllLayouts(graph)
+    expect(graph.getNode(instance.id)).toMatchObject({ x: 0, y: 0, width: 40, height: 20 })
 
+    graph.updateNode(row.id, { itemSpacing: 4 })
+    computeAllLayouts(graph)
     expect(graph.getNode(instance.id)).toMatchObject({ x: 160, y: 10, width: 40, height: 20 })
   })
 })

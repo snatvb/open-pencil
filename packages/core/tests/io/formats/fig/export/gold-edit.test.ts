@@ -45,6 +45,7 @@ test('Gold document exposes effective Boolean assignments and supports editor un
   const originalInput = graph.getNode(inputId)
   if (!originalInput) throw new Error('Missing original input')
   const originalInputSize = { width: originalInput.width, height: originalInput.height }
+  const hiddenAvatarSpan = avatar.width + first.itemSpacing
   const editor = createEditor({ graph })
   editor.setInstanceComponentProperty(first.id, '4270:0', 'false')
   expect(avatar.visible).toBe(false)
@@ -95,8 +96,7 @@ test('Gold document exposes effective Boolean assignments and supports editor un
       return avatar?.componentId ? restored.getNode(avatar.componentId)?.name : undefined
     })
   ).toEqual(originalComponents)
-  // Setting the property lays the instance out again, which may move the size by float error.
-  expect(input.width).toBeCloseTo(originalInputSize.width, 3)
+  expect(input.width).toBeCloseTo(originalInputSize.width - hiddenAvatarSpan, 3)
   expect(input.height).toBeCloseTo(originalInputSize.height, 3)
   expect(
     restoredContents.map((node) => {

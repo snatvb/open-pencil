@@ -64,6 +64,22 @@ function shareUnchanged(node: SceneNode, source: SceneNode): void {
     node.source.fig.layout = originalLayout
 }
 
+function savedLayout(
+  current: InstanceOccurrence,
+  converted: ReturnType<typeof nodeChangeToProps>
+): NonNullable<SceneNode['derivedLayout']> {
+  const layout: NonNullable<SceneNode['derivedLayout']> = { ...converted.derivedLayout }
+  if (current.derivedPosition) {
+    layout.x = converted.x
+    layout.y = converted.y
+  }
+  if (current.derivedSize) {
+    layout.width = current.derivedSize.x
+    layout.height = current.derivedSize.y
+  }
+  return layout
+}
+
 export interface MaterializedInstance {
   root: SceneNode
   /** Occurrence object identity distinguishes repeated uses of a source node. */
@@ -111,8 +127,8 @@ export function materializeInstance(
   const validate = (current: InstanceOccurrence): void => {
     if (prepared.has(current)) throw new Error('Repeated or cyclic instance occurrence')
     const converted = nodeChangeToProps(current.properties, blobs, 'occurrence')
-    if (converted.nodeType === 'TEXT' && current.derivedSize) {
-      converted.derivedLayout = { width: current.derivedSize.x, height: current.derivedSize.y }
+    if (current.derivedSize || current.derivedPosition) {
+      converted.derivedLayout = savedLayout(current, converted)
     }
     assertMaterializableType(converted.nodeType)
     const existing = existingNodes.get(current)
