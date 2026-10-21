@@ -244,6 +244,17 @@ function copyArcData(a: ArcData): ArcData {
  */
 export type NodeCloneMode = 'deep' | 'fig-import'
 
+function cloneBindingProps(src: SceneNode): Partial<SceneNode> {
+  return {
+    boundVariables: { ...src.boundVariables },
+    variantBindings: { ...src.variantBindings },
+    variableBindingScales: { ...src.variableBindingScales },
+    variableAssignmentScales: { ...src.variableAssignmentScales },
+    variableModes: { ...src.variableModes },
+    instanceOverrides: cloneInstanceOverrideState(src.instanceOverrides)
+  }
+}
+
 export function cloneNodeProps(
   src: SceneNode,
   componentId: string | null,
@@ -255,11 +266,7 @@ export function cloneNodeProps(
       ...rest,
       ...(componentId !== null ? { componentId } : {}),
       source: createDefaultSourceMetadata(),
-      boundVariables: { ...src.boundVariables },
-      variableBindingScales: { ...src.variableBindingScales },
-      variableAssignmentScales: { ...src.variableAssignmentScales },
-      variableModes: { ...src.variableModes },
-      instanceOverrides: cloneInstanceOverrideState(src.instanceOverrides),
+      ...cloneBindingProps(src),
       componentPropertyAssignments: { ...src.componentPropertyAssignments },
 
       componentPropertyValues: { ...src.componentPropertyValues }
@@ -268,11 +275,7 @@ export function cloneNodeProps(
   return {
     ...rest,
     ...(componentId !== null ? { componentId } : {}),
-    boundVariables: { ...src.boundVariables },
-    variableBindingScales: { ...src.variableBindingScales },
-    variableAssignmentScales: { ...src.variableAssignmentScales },
-    variableModes: { ...src.variableModes },
-    instanceOverrides: cloneInstanceOverrideState(src.instanceOverrides),
+    ...cloneBindingProps(src),
     fills: copyOpt(src.fills, (value) => markCopySource(value, copyFills(value))),
 
     strokes: copyOpt(src.strokes, (value) => markCopySource(value, copyStrokes(value))),

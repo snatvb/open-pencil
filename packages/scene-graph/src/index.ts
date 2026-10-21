@@ -118,6 +118,7 @@ import { withGeneratedFrameSize } from './generated'
 import * as HitTest from './hit-test'
 export type { DropTargetOptions } from './hit-test'
 import * as Instances from './instances'
+import { dropKeptTargets, noteDeletedNode } from './instances/kept-copies'
 import { LayoutWrites } from './layout/writes'
 import Matrix, { type Mat3 } from './matrix'
 import { CONTAINER_TYPES, createDefaultNode } from './node-defaults'
@@ -916,6 +917,7 @@ export class SceneGraph {
       this.instanceIndex.get(node.componentId)?.delete(id)
     }
     this.connectorIds.delete(id)
+    noteDeletedNode(this, id)
     this.sharedStyleIndex.removed(node)
     this.nodes.delete(id)
     this.emitter.emit('node:deleted', id, node.parentId)
@@ -977,6 +979,7 @@ export class SceneGraph {
     props.source = { ...(props.source as SourceMetadata), id: null, orderKey: null }
     // A copy is a new design nobody has reviewed: Figma's duplicate and clone() drop the status.
     props.status = null
+    dropKeptTargets(this, props.instanceOverrides)
     const clone = this.createNode(src.type, parentId, { ...props, ...overrides })
     if (src.status) markSourceFieldsEdited(clone, ['status'])
 

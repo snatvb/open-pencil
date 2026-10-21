@@ -26,6 +26,7 @@ import {
 } from './variables/fields'
 
 export * from './variables/resolution'
+export { collectionsReachedBy } from './variables/reach'
 
 export function addVariable(graph: SceneGraph, variable: Variable): void {
   graph.variables.set(variable.id, variable)

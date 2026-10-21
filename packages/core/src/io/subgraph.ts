@@ -144,6 +144,7 @@ function collectReferencedResources(source: SceneGraph, graph: SceneGraph) {
     }
     const bound = [
       ...Object.values(node.boundVariables),
+      ...Object.values(node.variantBindings),
       ...styleRunReferences(node.styleRuns).variables
     ]
     for (const variableId of bound) collectVariableClosure(source, variableId, variableIds)

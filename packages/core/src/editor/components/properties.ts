@@ -4,6 +4,7 @@ import {
   componentPropertyDefinitions,
   findComponentPropertyTargets,
   findInstanceAncestor,
+  reapplyComponentPropertyAssignments,
   recordAssignmentOverride,
   resolveComponentPropertyValue,
   setInstanceOverride
@@ -16,7 +17,7 @@ import type {
 
 import { assertNodeEditable } from '#core/editor/capabilities'
 import type { EditorContext } from '#core/editor/types'
-import { textAutoResizeChanges } from '#core/layout/text-auto-resize'
+import { measurePropertyText } from '#core/layout/property-text'
 
 function definitionsForInstance(
   ctx: Pick<EditorContext, 'graph'>,
@@ -35,20 +36,6 @@ function targetValue(target: ComponentPropertyTarget | null): string {
   if (target.field === 'VISIBLE') return String(target.node.visible)
   return target.source.componentId ?? target.node.componentId ?? ''
 }
-/** Measures text a property gave new characters, when it sizes itself to them, as Figma does. */
-export function measurePropertyText(
-  ctx: Pick<EditorContext, 'graph'>,
-  instanceId: string,
-  definition: ComponentPropertyDefinition
-): void {
-  const instance = ctx.graph.getNode(instanceId)
-  if (definition.type !== 'TEXT' || !instance) return
-  for (const target of findComponentPropertyTargets(ctx.graph, instance, definition.id)) {
-    if (target.field !== 'TEXT') continue
-    const changes = textAutoResizeChanges(target.node, { text: target.node.text })
-    if (Object.keys(changes).length > 0) ctx.graph.updateNode(target.node.id, changes)
-  }
-}
 
 function applyPropertyValue(
   ctx: Pick<EditorContext, 'graph'>,
@@ -57,7 +44,7 @@ function applyPropertyValue(
   value: string
 ): boolean {
   const result = applyComponentPropertyValue(ctx.graph, instanceId, definition, value)
-  measurePropertyText(ctx, instanceId, definition)
+  measurePropertyText(ctx.graph, instanceId, definition)
   return definition.type !== 'INSTANCE_SWAP' || result !== null
 }
 
@@ -65,16 +52,8 @@ export function reapplyInstanceComponentProperties(
   ctx: Pick<EditorContext, 'graph'>,
   instanceId: string
 ): void {
-  const instance = ctx.graph.getNode(instanceId)
-  if (instance?.type !== 'INSTANCE') return
-  const definitions = new Map(
-    definitionsForInstance(ctx, instance).map((definition) => [definition.id, definition])
-  )
-  for (const [propertyId, value] of Object.entries(instance.componentPropertyAssignments)) {
-    const definition = definitions.get(propertyId)
-    if (definition && definition.type !== 'VARIANT') {
-      applyPropertyValue(ctx, instanceId, definition, value)
-    }
+  for (const definition of reapplyComponentPropertyAssignments(ctx.graph, instanceId)) {
+    measurePropertyText(ctx.graph, instanceId, definition)
   }
 }
 
@@ -173,7 +152,7 @@ export function createComponentPropertyActions(
           restoredTargets.forEach((target, index) =>
             restoreTarget(live, target, previousValues[index] ?? '')
           )
-          measurePropertyText(ctx, instanceId, definition)
+          measurePropertyText(ctx.graph, instanceId, definition)
           ctx.runLayoutForNode(instanceId)
         }
         ctx.requestRender()

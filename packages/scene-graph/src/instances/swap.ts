@@ -7,7 +7,8 @@ import {
 } from '../components/properties'
 import { hasInstanceOverride, setInstanceOverride } from '../instance-overrides'
 import { ownsSlotContent, slotPropertyId } from '../slots/frames'
-import { ownsSelfFillField } from './main-component'
+import { keepCopy, takeKeptCopy } from './kept-copies'
+import { findInstanceAncestor, ownsSelfFillField, showsBoundVariant } from './main-component'
 import {
   bindingProtection,
   cloneChildInCoordinates,
@@ -26,6 +27,7 @@ interface CopiesByLayer {
 
 interface Swap {
   graph: SceneGraph
+  keepsRemoved: boolean
   instance: SceneNode
   owners: SceneNode[]
   changedOwners: Set<SceneNode>
@@ -148,8 +150,68 @@ function forgetOverrides(swap: Swap, node: SceneNode): void {
   }
 }
 
+function subtreeOf(graph: SceneGraph, node: SceneNode): SceneNode[] {
+  return [node, ...graph.getChildren(node.id).flatMap((child) => subtreeOf(graph, child))]
+}
+
+function copiedLayer(graph: SceneGraph, node: SceneNode): SceneNode | undefined {
+  const owner = node.parentId ? findInstanceAncestor(graph, node.parentId) : undefined
+  if (!owner) {
+    return undefined
+  }
+  const linked = owner.instanceOverrides.descendants.get(node.id)?.get('sourceComponentId')
+  const layerId = typeof linked === 'string' ? linked : node.componentId
+  return layerId ? graph.getNode(layerId) : undefined
+}
+
+function shownLayerId(graph: SceneGraph, layer: SceneNode): string {
+  const seen = new Set<string>()
+  let current = layer
+  for (let next = copiedLayer(graph, current); next && !seen.has(next.id);) {
+    seen.add(current.id)
+    current = next
+    next = copiedLayer(graph, current)
+  }
+  return current.id
+}
+
+function keepRemovedCopy(swap: Swap, copy: SceneNode): void {
+  const layer = sourceLayer(swap, copy)
+  if (layer) {
+    const ownerIds = swap.owners.map((owner) => owner.id)
+    keepCopy(swap.graph, shownLayerId(swap.graph, layer), subtreeOf(swap.graph, copy), ownerIds)
+  }
+}
+
+function restoreKeptCopy(
+  swap: Swap,
+  instParent: SceneNode,
+  layer: SceneNode
+): SceneNode | undefined {
+  const { graph } = swap
+  const nodes = swap.keepsRemoved
+    ? takeKeptCopy(graph, instParent.id, shownLayerId(graph, layer))
+    : undefined
+  const root = nodes?.[0]
+  if (!nodes || !root) {
+    return undefined
+  }
+  for (const node of nodes) {
+    const { id, type, parentId, childIds: _childIds, ...props } = node
+    graph.createNodeWithId(
+      id,
+      type,
+      id === root.id ? instParent.id : (parentId ?? instParent.id),
+      props
+    )
+  }
+  return graph.getNode(root.id)
+}
+
 function removeCopy(swap: Swap, copy: SceneNode): void {
-  if (swap.owners.some((owner) => owner.instanceOverrides.descendants.size > 0)) {
+  if (swap.keepsRemoved) {
+    keepRemovedCopy(swap, copy)
+  } else if (swap.owners.some((owner) => owner.instanceOverrides.descendants.size > 0)) {
     forgetOverrides(swap, copy)
   }
   swap.graph.deleteNode(copy.id)
@@ -340,19 +402,20 @@ function followLayers(swap: Swap, compParent: SceneNode, instParent: SceneNode):
     if (!layer) {
       return
     }
-    const copy = matched[index] ?? cloneLayer(swap, compParent, instParent, layer)
+    const following = matched[index] ?? restoreKeptCopy(swap, instParent, layer)
+    const copy = following ?? cloneLayer(swap, compParent, instParent, layer)
     if (instParent.childIds[index] !== copy.id) {
       graph.insertChildAt(copy.id, instParent.id, index)
     }
-    if (copy === matched[index]) {
-      followCopy(swap, { compParent, instParent, compChild: layer, instChild: copy })
+    if (following) {
+      followCopy(swap, { compParent, instParent, compChild: layer, instChild: following })
     }
   })
 }
 
 function followCopy(swap: Swap, match: MatchedCopy): void {
   const { compChild: layer, instChild: copy } = match
-  const swapped = isSwappedCopy(swap, copy)
+  const swapped = isSwappedCopy(swap, copy) || showsBoundVariant(swap.graph, layer, copy)
   const replaced = sourceLayer(swap, copy) !== layer
   const linkedLayerId = linkCopy(swap, copy, layer, swapped)
   syncCopy(swap.graph, match, copyProtection(swap, copy), linkedLayerId)
@@ -384,10 +447,11 @@ export function followComponentLayers(
   graph: SceneGraph,
   instance: SceneNode,
   component: SceneNode,
-  parked: ReadonlySet<string>
+  { parked, keepsRemoved }: { parked: ReadonlySet<string>; keepsRemoved: boolean }
 ): void {
   const swap: Swap = {
     graph,
+    keepsRemoved,
     instance,
     owners: enclosingInstances(graph, instance),
     changedOwners: new Set(),

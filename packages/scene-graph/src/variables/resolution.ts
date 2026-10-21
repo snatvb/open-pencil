@@ -216,18 +216,46 @@ export type NodeVariableResolver = (
   variableId: string
 ) => VariableLiteral | undefined
 
+interface ModeContext {
+  modes: string[]
+  memo: Map<string, VariableLiteral>
+}
+
 /** One read/reconcile operation only: equal mode contexts share results, edits start a new cache. */
-export function createBatchVariableResolver(graph: SceneGraph): NodeVariableResolver {
+export type BatchVariableResolver = NodeVariableResolver & { forgetNodeModes: () => void }
+
+export function createBatchVariableResolver(graph: SceneGraph): BatchVariableResolver {
   const collections = [...graph.variableCollections.keys()]
-  const contexts = new Map<string, Map<string, VariableLiteral>>()
-  return (nodeId, variableId) => {
-    const modes = collections.map((id) => getNodeVariableModeId(graph, nodeId, id))
+  const contexts = new Map<string, ModeContext>()
+  const nodeContexts = new Map<string, ModeContext>()
+  function contextFor(modes: string[]): ModeContext {
     const key = JSON.stringify(modes)
-    let memo = contexts.get(key)
-    if (!memo) {
-      memo = new Map()
-      contexts.set(key, memo)
+    let context = contexts.get(key)
+    if (!context) {
+      context = { modes, memo: new Map() }
+      contexts.set(key, context)
     }
+    return context
+  }
+  const rootContext = contextFor(collections.map((id) => getActiveModeId(graph, id)))
+  function contextOf(nodeId: string | undefined): ModeContext {
+    const node = nodeId ? graph.nodes.get(nodeId) : undefined
+    if (!node) {
+      return rootContext
+    }
+    const cached = nodeContexts.get(node.id)
+    if (cached) {
+      return cached
+    }
+    const inherited = contextOf(node.parentId ?? undefined)
+    const context = collections.some((id) => node.variableModes[id])
+      ? contextFor(collections.map((id, index) => node.variableModes[id] || inherited.modes[index]))
+      : inherited
+    nodeContexts.set(node.id, context)
+    return context
+  }
+  const resolve: NodeVariableResolver = (nodeId, variableId) => {
+    const { modes, memo } = contextOf(nodeId)
     return resolveInModes(
       graph,
       variableId,
@@ -236,6 +264,7 @@ export function createBatchVariableResolver(graph: SceneGraph): NodeVariableReso
       memo
     )
   }
+  return Object.assign(resolve, { forgetNodeModes: () => nodeContexts.clear() })
 }
 
 export function resolveColorVariable(graph: SceneGraph, variableId: string): Color | undefined {

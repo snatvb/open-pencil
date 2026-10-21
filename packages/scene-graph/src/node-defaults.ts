@@ -205,6 +205,7 @@ export function createDefaultNode(
     symbolLinks: [],
     variantPropSpecs: [],
     boundVariables: {},
+    variantBindings: {},
     variableBindingScales: {},
     variableAssignmentScales: {},
     componentScale: 1,

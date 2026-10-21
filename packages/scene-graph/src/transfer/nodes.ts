@@ -1,3 +1,5 @@
+import { mapValues } from 'es-toolkit/object'
+
 import { cloneNodeProps } from '../copy'
 import { remapInstanceOverrideState } from '../instance-overrides'
 import { remapStyleRunReferences, styleRunReferences } from '../text/references'
@@ -10,6 +12,7 @@ export function semanticTransferReferences(node: SceneNode): string[] {
   return [
     ...(node.componentId ? [node.componentId] : []),
     ...Object.values(node.boundVariables),
+    ...Object.values(node.variantBindings),
     ...runs.variables,
     ...runs.styles,
     ...[
@@ -78,6 +81,7 @@ export function prepareNodeTransfer(
   result.boundVariables = Object.fromEntries(
     Object.entries(source.boundVariables).map(([field, id]) => [field, variable(id)])
   )
+  result.variantBindings = mapValues(source.variantBindings, (id) => variable(id))
   result.variableModes = Object.fromEntries(
     Object.entries(source.variableModes).map(([collection, mode]) => [
       required(refs.collections, collection, 'collection'),

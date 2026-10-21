@@ -17,10 +17,12 @@ import type { GUID, Vector } from '@open-pencil/scene-graph/primitives'
 
 import { instanceExportAddress } from '../instance/geometry'
 import { mergeVariableConsumptionMaps, overrideVariableBindingEntry } from '../variable/bindings'
+import { variantBindingsClaimEntry } from '../variable/variants'
 import {
   createFillPaints,
   createStrokePaints,
   getOrCreateNodeGuid,
+  getOrCreatePropertyGuid,
   exportedStyleReference,
   instanceGuidResolver,
   isDescendantOf,
@@ -36,6 +38,18 @@ function unscaledRootSize(instance: SceneNode, target: SceneNode): Vector {
   const scale = instance.componentScale
   if (!Number.isFinite(scale) || scale <= 0) throw new Error('Invalid instance uniform scale')
   return { x: target.width / scale, y: target.height / scale }
+}
+
+function variantBindingsClaim(
+  context: SceneNodeToKiwiContext,
+  target: SceneNode,
+  path: GUID[],
+  counter: { value: number }
+): KiwiSymbolOverridePayload | undefined {
+  const entry = variantBindingsClaimEntry(target, context.graph, context.varIdToGuid, (id) =>
+    getOrCreatePropertyGuid(context, id, counter)
+  )
+  return entry && { guidPath: { guids: path }, parameterConsumptionMap: { entries: [entry] } }
 }
 
 function exportedSwapOverride(
@@ -236,6 +250,9 @@ function overrideClaim(
     return record
   }
   const input: ClaimInput = { ...claimed, target, nodeFields }
+  if (field === 'variantBindings') {
+    return variantBindingsClaim(input.context, input.target, path, counter)
+  }
   if (field === 'componentId')
     return exportedSwapOverride(input.context, input.target, path, counter)
   const assignedPropertyId = overriddenAssignmentId(field)

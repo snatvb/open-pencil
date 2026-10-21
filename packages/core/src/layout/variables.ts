@@ -6,12 +6,22 @@ import {
 
 import { computeLayout, computeSubtreeLayouts } from '#core/layout'
 
+import { measurePropertyText } from './property-text'
+
 /**
  * Binding evaluation is derived work, not an additional history entry. The scope names what
  * changed, so only the layers that change can reach are resolved and laid out again.
  */
 export function reconcileVariableLayouts(graph: SceneGraph, scope: BindingScope): void {
-  const changed = new Set(reconcileVariableBindings(graph, scope))
+  const changed = new Set(
+    reconcileVariableBindings(graph, scope, {
+      onVariantSwap: (instanceId, reapplied) => {
+        for (const definition of reapplied) {
+          measurePropertyText(graph, instanceId, definition)
+        }
+      }
+    })
+  )
   if (changed.size === 0) {
     return
   }

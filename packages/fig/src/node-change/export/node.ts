@@ -57,6 +57,7 @@ import {
 import { exportedNode } from './resolved-bindings'
 import { slotDefinitionFields } from './slots'
 import { serializeText } from './text'
+import { applyVariantBindings } from './variant-bindings'
 
 export type { KiwiNodeChange, SceneNodeToKiwiContext } from './context'
 
@@ -1002,6 +1003,7 @@ export function sceneNodeToKiwiWithContext(
   context.serializeGeometry(nodeForGeometryExport(node), nc, context.blobs)
   context.serializeVariableBindings(node, nc, context.graph, context.varIdToGuid)
   mergeParameterBindings(nc)
+  applyVariantBindings(context, node, nc, localIdCounter)
   applyRawFigmaNodeFields(context, node, nc)
   applyVariableModes(context, node, nc)
 

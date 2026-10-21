@@ -72,4 +72,7 @@ export function visitVariableReferences(
   for (const argument of data?.value?.expressionValue?.expressionArguments ?? []) {
     visitVariableReferences(argument, visit, depth + 1)
   }
+  for (const item of data?.value?.mapValue?.values ?? []) {
+    visitVariableReferences(item.value, visit, depth + 1)
+  }
 }
