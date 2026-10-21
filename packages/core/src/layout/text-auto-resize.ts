@@ -1,16 +1,23 @@
 import { TEXT_METRIC_FIELDS, type SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
 
-import { measureTextForLayout } from './text-measurement'
+import { autoWidthWrapWidth, measureTextForLayout } from './text-measurement'
+
+const WRAP_WIDTH_KEYS = ['minWidth', 'maxWidth'] as const satisfies readonly (keyof SceneNode)[]
 
 export const TEXT_AUTO_RESIZE_KEYS = new Set<keyof SceneNode>([
   ...TEXT_METRIC_FIELDS,
+  ...WRAP_WIDTH_KEYS,
   'lineHeight',
   'textAutoResize',
   'width',
   'maxLines'
 ])
 
-const TEXT_AUTO_WIDTH_KEYS = new Set<keyof SceneNode>([...TEXT_METRIC_FIELDS, 'textAutoResize'])
+const TEXT_AUTO_WIDTH_KEYS = new Set<keyof SceneNode>([
+  ...TEXT_METRIC_FIELDS,
+  ...WRAP_WIDTH_KEYS,
+  'textAutoResize'
+])
 
 export function hasTextAutoResizeChange(changes: Partial<SceneNode>): boolean {
   return Object.keys(changes).some((key) => TEXT_AUTO_RESIZE_KEYS.has(key as keyof SceneNode))
@@ -37,7 +44,7 @@ export function textAutoResizeChanges(
   const mode = next.textAutoResize
   if (mode !== 'HEIGHT' && mode !== 'WIDTH_AND_HEIGHT') return {}
 
-  const maxWidth = mode === 'HEIGHT' ? next.width : undefined
+  const maxWidth = mode === 'HEIGHT' ? next.width : autoWidthWrapWidth(next)
   const measured = measureTextForLayout(next, maxWidth)
   const resized: Partial<
     Pick<SceneNode, 'width' | 'height' | 'derivedLayout' | 'derivedTextGlyphs'>
