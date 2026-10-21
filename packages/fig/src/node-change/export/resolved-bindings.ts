@@ -1,9 +1,11 @@
 import type { SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 import {
+  createTextStyleLookup,
   resolvedNumericBindings,
   resolvedPaintBindings,
   resolvedRunBindings,
-  resolvedValueBindings
+  resolvedValueBindings,
+  type TextStyleLookup
 } from '@open-pencil/scene-graph/variables'
 
 /**
@@ -13,12 +15,16 @@ import {
  * A node without an explicit mode takes its collection's default: the mode the editor happens
  * to show is not saved, and Figma opens the file in the default.
  */
-export function nodeWithResolvedBindings(graph: SceneGraph, node: SceneNode): SceneNode {
+export function nodeWithResolvedBindings(
+  graph: SceneGraph,
+  node: SceneNode,
+  styles: TextStyleLookup
+): SceneNode {
   const changes = {
-    ...resolvedNumericBindings(graph, node, 'default'),
+    ...resolvedNumericBindings(graph, node, 'default', styles),
     ...resolvedPaintBindings(graph, node, 'default'),
     ...resolvedValueBindings(graph, node, 'default'),
-    ...resolvedRunBindings(graph, node, 'default')
+    ...resolvedRunBindings(graph, node, 'default', styles)
   }
   return Object.keys(changes).length > 0 ? { ...node, ...changes } : node
 }
@@ -28,13 +34,18 @@ export function nodeWithResolvedBindings(graph: SceneGraph, node: SceneNode): Sc
  * is written, and an instance's overrides claim the same layers once per overridden field.
  */
 export function exportedNode(
-  context: { graph: SceneGraph; resolvedNodes?: WeakMap<SceneNode, SceneNode> },
+  context: {
+    graph: SceneGraph
+    resolvedNodes?: WeakMap<SceneNode, SceneNode>
+    textStyles?: TextStyleLookup
+  },
   node: SceneNode
 ): SceneNode {
   context.resolvedNodes ??= new WeakMap()
   let resolved = context.resolvedNodes.get(node)
   if (!resolved) {
-    resolved = nodeWithResolvedBindings(context.graph, node)
+    context.textStyles ??= createTextStyleLookup(context.graph)
+    resolved = nodeWithResolvedBindings(context.graph, node, context.textStyles)
     context.resolvedNodes.set(node, resolved)
   }
   return resolved

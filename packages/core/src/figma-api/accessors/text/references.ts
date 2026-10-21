@@ -41,7 +41,7 @@ export function installTextReferenceMethods(
         throw invalid(method, `Expected string, received ${received(styleId)}`, 'styleId')
       }
       assertTextRange(method, node, start, end)
-      const patch = rangeSharedStylePatch(graph(this, internals), kind, styleId)
+      const patch = rangeSharedStylePatch(graph(this, internals), node, kind, styleId)
       updateNode(this, internals, { styleRuns: styleRunsWithPatch(node, start, end, patch) })
     }
     methods[method] = {

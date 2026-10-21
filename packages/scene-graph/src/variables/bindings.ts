@@ -1,4 +1,5 @@
-import { isEqual } from 'es-toolkit/predicate'
+import { uniq } from 'es-toolkit/array'
+import { isEmptyObject, isEqual } from 'es-toolkit/predicate'
 
 import type { VariableModeFallback } from '.'
 import { copyFills, copyStrokes } from '../copy'
@@ -6,8 +7,25 @@ import type { SceneGraph } from '../graph'
 import { hasInstanceOverride } from '../instances'
 import type { Color } from '../primitives'
 import { pixelLength } from '../text/lengths'
-import type { Fill, SceneNode, Stroke, StyleRun, TextLength } from '../types'
+import type {
+  CharacterStyleOverride,
+  Fill,
+  SceneNode,
+  Stroke,
+  StyleRun,
+  TextLength
+} from '../types'
 import { NUMERIC_FIELDS, isNumericVariableBindingField, paintBindingTarget } from './fields'
+import {
+  createTextStyleLookup,
+  effectiveBoundVariables,
+  effectiveRunBoundVariables,
+  inheritedRunStyleBindings,
+  inheritedTextStyleBindings,
+  textStyleConsumers,
+  type TextStyleLookup,
+  type VariableBindings
+} from './style-bindings'
 import { variableText, variableTruthy } from './text'
 import { variableValueReferences } from './value'
 export {
@@ -58,10 +76,20 @@ export function boundNumberValue(field: string, value: number): number | TextLen
 export function resolvedNumericBindings(
   graph: SceneGraph,
   node: SceneNode,
-  fallback: VariableModeFallback = 'active'
+  fallback: VariableModeFallback = 'active',
+  styles: TextStyleLookup = createTextStyleLookup(graph)
+): Partial<SceneNode> {
+  return resolvedNumbers(graph, node, effectiveBoundVariables(node, styles), fallback)
+}
+
+function resolvedNumbers(
+  graph: SceneGraph,
+  node: SceneNode,
+  bindings: VariableBindings,
+  fallback: VariableModeFallback
 ): Partial<SceneNode> {
   const updates: Partial<SceneNode> = {}
-  for (const [field, variableId] of Object.entries(node.boundVariables)) {
+  for (const [field, variableId] of Object.entries(bindings)) {
     if (!NUMERIC_FIELDS.has(field)) continue
     if ((field === 'width' || field === 'height') && hasInstanceOverride(graph, node.id, field))
       continue
@@ -115,11 +143,20 @@ const NUMERIC_RUN_FIELDS = ['fontSize', 'fontWeight', 'letterSpacing', 'lineHeig
 export function resolvedRunBindings(
   graph: SceneGraph,
   node: SceneNode,
-  fallback: VariableModeFallback = 'active'
+  fallback: VariableModeFallback = 'active',
+  styles: TextStyleLookup = createTextStyleLookup(graph)
+): Pick<Partial<SceneNode>, 'styleRuns'> {
+  return resolvedRuns(graph, node, (run) => effectiveRunBoundVariables(run, styles), fallback)
+}
+
+function resolvedRuns(
+  graph: SceneGraph,
+  node: SceneNode,
+  runBindings: (run: StyleRun) => VariableBindings,
+  fallback: VariableModeFallback
 ): Pick<Partial<SceneNode>, 'styleRuns'> {
   const styleRuns = node.styleRuns.map((run): StyleRun => {
-    const bound = run.style.boundVariables
-    if (!bound) return run
+    const bound = runBindings(run)
     let style = run.style
     for (const field of NUMERIC_RUN_FIELDS) {
       const variableId = bound[field]
@@ -136,11 +173,26 @@ export function resolvedRunBindings(
   return changed ? { styleRuns } : {}
 }
 
-/** The variables a node binds, its own and its characters'. */
-function boundVariableIds(node: SceneNode): string[] {
+export function resolvedTextStyleBindings(
+  graph: SceneGraph,
+  node: SceneNode,
+  fallback: VariableModeFallback,
+  styles: TextStyleLookup
+): Partial<SceneNode> {
+  if (node.type !== 'TEXT') {
+    return {}
+  }
+  return {
+    ...resolvedNumbers(graph, node, inheritedTextStyleBindings(node, styles), fallback),
+    ...resolvedRuns(graph, node, (run) => inheritedRunStyleBindings(run, styles), fallback)
+  }
+}
+
+/** The variables a node binds, its own, its characters', and those its text styles bind. */
+function boundVariableIds(node: SceneNode, styles: TextStyleLookup): string[] {
   return [
-    ...Object.values(node.boundVariables),
-    ...node.styleRuns.flatMap((run) => Object.values(run.style.boundVariables ?? {}))
+    ...Object.values(effectiveBoundVariables(node, styles)),
+    ...node.styleRuns.flatMap((run) => Object.values(effectiveRunBoundVariables(run, styles)))
   ].filter((id): id is string => typeof id === 'string')
 }
 
@@ -224,7 +276,8 @@ function subtreeNodes(graph: SceneGraph, roots: Iterable<string>): SceneNode[] {
  * those the bound variables alias, so a mode set on the subtrees can change what they show.
  */
 export function collectionsBoundIn(graph: SceneGraph, roots: Iterable<string>): Set<string> {
-  const pending = subtreeNodes(graph, roots).flatMap(boundVariableIds)
+  const styles = createTextStyleLookup(graph)
+  const pending = subtreeNodes(graph, roots).flatMap((node) => boundVariableIds(node, styles))
   const seen = new Set<string>()
   const collections = new Set<string>()
   for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
@@ -243,17 +296,146 @@ export function collectionsBoundIn(graph: SceneGraph, roots: Iterable<string>): 
  * The layers a change to these variables reaches: those binding one of them, or a variable that
  * aliases one, on the layer itself or on its characters.
  */
-export function layersUsingVariables(graph: SceneGraph, ids: Iterable<string>): SceneNode[] {
+export function layersUsingVariables(
+  graph: SceneGraph,
+  ids: Iterable<string>,
+  styles: TextStyleLookup = createTextStyleLookup(graph)
+): SceneNode[] {
   const variables = variablesResolvingThrough(graph, ids)
   return [...graph.getAllNodes()].filter((node) =>
-    boundVariableIds(node).some((id) => variables.has(id))
+    boundVariableIds(node, styles).some((id) => variables.has(id))
   )
 }
 
-function scopedNodes(graph: SceneGraph, scope: BindingScope | undefined): Iterable<SceneNode> {
-  if (!scope) return graph.getAllNodes()
-  if ('subtrees' in scope) return subtreeNodes(graph, scope.subtrees)
-  return layersUsingVariables(graph, scope.variables)
+interface ScopedLayers {
+  nodes: Iterable<SceneNode>
+  restyled: ReadonlySet<string>
+}
+
+const NO_RESTYLED: ReadonlySet<string> = new Set()
+
+function scopedLayers(
+  graph: SceneGraph,
+  scope: BindingScope | undefined,
+  styles: TextStyleLookup
+): ScopedLayers {
+  if (!scope) {
+    return { nodes: graph.getAllNodes(), restyled: NO_RESTYLED }
+  }
+  if ('subtrees' in scope) {
+    return withTextStyleConsumers(graph, subtreeNodes(graph, scope.subtrees))
+  }
+  return { nodes: layersUsingVariables(graph, scope.variables, styles), restyled: NO_RESTYLED }
+}
+
+function withTextStyleConsumers(graph: SceneGraph, nodes: SceneNode[]): ScopedLayers {
+  const styleIds = new Set<string>()
+  for (const node of nodes) {
+    if (node.sharedStyleType === 'TEXT' && node.source.id) {
+      styleIds.add(node.source.id)
+    }
+  }
+  if (styleIds.size === 0) {
+    return { nodes, restyled: NO_RESTYLED }
+  }
+  return { nodes: uniq([...nodes, ...textStyleConsumers(graph, styleIds)]), restyled: styleIds }
+}
+
+type NumericTextValues = Pick<CharacterStyleOverride, (typeof NUMERIC_RUN_FIELDS)[number]>
+
+function unboundStyleValues(
+  style: SceneNode,
+  current: NumericTextValues,
+  bound: VariableBindings
+): NumericTextValues | undefined {
+  let values: NumericTextValues | undefined
+  for (const field of NUMERIC_RUN_FIELDS) {
+    if (!(field in bound) && !isEqual(current[field], style[field])) {
+      values = { ...values, [field]: style[field] }
+    }
+  }
+  return values
+}
+
+function restyledValues(
+  graph: SceneGraph,
+  styleId: string | null | undefined,
+  current: NumericTextValues,
+  bound: VariableBindings,
+  restyled: ReadonlySet<string>
+): NumericTextValues | undefined {
+  if (!styleId || !restyled.has(styleId)) {
+    return undefined
+  }
+  const style = graph.getSharedStyleNode(styleId, 'TEXT')
+  return style ? unboundStyleValues(style, current, bound) : undefined
+}
+
+function restyledRuns(
+  graph: SceneGraph,
+  node: SceneNode,
+  restyled: ReadonlySet<string>,
+  styles: TextStyleLookup
+): Pick<Partial<SceneNode>, 'styleRuns'> {
+  const styleRuns = node.styleRuns.map((run): StyleRun => {
+    const bound = effectiveRunBoundVariables(run, styles)
+    const values = restyledValues(graph, run.style.textStyleId, run.style, bound, restyled)
+    return values ? { ...run, style: { ...run.style, ...values } } : run
+  })
+  const changed = styleRuns.some((run, index) => run !== node.styleRuns[index])
+  return changed ? { styleRuns } : {}
+}
+
+function styleOwnValues(
+  graph: SceneGraph,
+  node: SceneNode,
+  restyled: ReadonlySet<string>,
+  styles: TextStyleLookup
+): Partial<SceneNode> {
+  if (restyled.size === 0) {
+    return {}
+  }
+  const bound = effectiveBoundVariables(node, styles)
+  return {
+    ...restyledValues(graph, node.textStyleId, node, bound, restyled),
+    ...restyledRuns(graph, node, restyled, styles)
+  }
+}
+
+function hasEntries(record: object): boolean {
+  for (const key in record) {
+    if (Object.hasOwn(record, key)) {
+      return true
+    }
+  }
+  return false
+}
+
+function runReadsVariables({ style }: StyleRun): boolean {
+  return (
+    Boolean(style.textStyleId) ||
+    (style.boundVariables !== undefined && hasEntries(style.boundVariables))
+  )
+}
+
+function readsVariables(node: SceneNode): boolean {
+  return (
+    hasEntries(node.boundVariables) ||
+    Boolean(node.textStyleId) ||
+    node.styleRuns.some(runReadsVariables)
+  )
+}
+
+function resolvedOwnBindings(
+  graph: SceneGraph,
+  node: SceneNode,
+  styles: TextStyleLookup
+): Partial<SceneNode> {
+  return {
+    ...resolvedNumbers(graph, node, node.boundVariables, 'active'),
+    ...resolvedValueBindings(graph, node),
+    ...resolvedRunBindings(graph, node, 'active', styles)
+  }
 }
 
 /**
@@ -263,14 +445,26 @@ function scopedNodes(graph: SceneGraph, scope: BindingScope | undefined): Iterab
  */
 export function reconcileVariableBindings(graph: SceneGraph, scope?: BindingScope): string[] {
   const changed: string[] = []
-  for (const node of scopedNodes(graph, scope)) {
-    const updates = {
-      ...resolvedNumericBindings(graph, node),
-      ...resolvedValueBindings(graph, node),
-      ...resolvedRunBindings(graph, node)
+  const styles = createTextStyleLookup(graph)
+  const { nodes, restyled } = scopedLayers(graph, scope, styles)
+  for (const node of nodes) {
+    if (!readsVariables(node)) {
+      continue
     }
-    if (Object.keys(updates).length === 0) continue
-    graph.updateNode(node.id, updates)
+    const unbound = styleOwnValues(graph, node, restyled, styles)
+    if (!isEmptyObject(unbound)) {
+      graph.updateNode(node.id, unbound)
+    }
+    const resolved = {
+      ...resolvedNumbers(graph, node, inheritedTextStyleBindings(node, styles), 'active'),
+      ...resolvedOwnBindings(graph, node, styles)
+    }
+    if (isEmptyObject(unbound) && isEmptyObject(resolved)) {
+      continue
+    }
+    if (!isEmptyObject(resolved)) {
+      graph.updateNode(node.id, resolved)
+    }
     changed.push(node.id)
   }
   return changed

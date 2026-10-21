@@ -9,6 +9,7 @@ import type {
   SceneNode
 } from '@open-pencil/scene-graph'
 import type { Color, GUID, Matrix } from '@open-pencil/scene-graph/primitives'
+import type { TextStyleLookup } from '@open-pencil/scene-graph/variables'
 
 import { variableAlias } from '../variable/bindings'
 
@@ -113,6 +114,7 @@ export interface SceneNodeToKiwiContext {
   pluginDataOverrides?: ReadonlyMap<string, PluginDataEntry[]>
   /** Nodes with their bindings resolved, kept for the length of one export. */
   resolvedNodes?: WeakMap<SceneNode, SceneNode>
+  textStyles?: TextStyleLookup
   fractionalPosition: (index: number) => string
   mapToFigmaType: (type: SceneNode['type']) => string
   fillToKiwiPaint: (fill: SceneNode['fills'][number]) => Paint

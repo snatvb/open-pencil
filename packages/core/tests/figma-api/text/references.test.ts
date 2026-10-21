@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 import { FigmaAPI } from '@open-pencil/core/figma-api'
 import { SceneGraph } from '@open-pencil/scene-graph'
 import type { Color } from '@open-pencil/scene-graph/primitives'
+import { reconcileVariableBindings } from '@open-pencil/scene-graph/variables'
 
 import { registerTestFont } from '#core-tests/helpers/figma-api'
 
@@ -167,6 +168,43 @@ describe('style ranges', () => {
 
     text.setRangeTextStyleId(0, 5, '')
     expect(text.getRangeTextStyleId(0, 11)).toBe('')
+  })
+
+  test('give a range the value a style binds in the mode of the text', () => {
+    const { api, text } = styledText()
+    const graph = api.graph
+    const collection = graph.createCollection('Type scale')
+    const roomy = graph.createMode(collection.id, 'Roomy') ?? ''
+    const size = graph.createVariable('Body size', 'FLOAT', collection.id, 14)
+    size.valuesByMode[roomy] = 20
+    textStyle(api, '1:20', { fontSize: 14, boundVariables: { fontSize: size.id } })
+    graph.updateNode(text.id, { variableModes: { [collection.id]: roomy } })
+
+    text.setRangeTextStyleId(0, 5, '1:20')
+
+    expect(text.getRangeFontSize(0, 5)).toBe(20)
+    expect(text.getRangeTextStyleId(0, 5)).toBe('1:20')
+    expect(text.getRangeBoundVariable(0, 5, 'fontSize')).toBeNull()
+  })
+
+  test('leave the style where a text binds a field the style gives it, as Figma does', () => {
+    const { api, text } = styledText()
+    const graph = api.graph
+    const collection = graph.createCollection('Type scale')
+    const roomy = graph.createMode(collection.id, 'Roomy') ?? ''
+    const size = graph.createVariable('Body size', 'FLOAT', collection.id, 14)
+    size.valuesByMode[roomy] = 20
+    const caption = graph.createVariable('Caption size', 'FLOAT', collection.id, 11)
+    caption.valuesByMode[roomy] = 12
+    textStyle(api, '1:20', { fontSize: 14, boundVariables: { fontSize: size.id } })
+    text.setRangeTextStyleId(0, 11, '1:20')
+
+    text.setBoundVariable('fontSize', caption)
+    graph.updateNode(text.id, { variableModes: { [collection.id]: roomy } })
+    reconcileVariableBindings(graph, { subtrees: [text.id] })
+
+    expect(text.getRangeTextStyleId(0, 11)).toBe('')
+    expect(text.getRangeFontSize(0, 11)).toBe(12)
   })
 
   test('give a range a fill style and its paints, and detach it when filled', async () => {

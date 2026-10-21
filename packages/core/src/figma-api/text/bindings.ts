@@ -11,6 +11,7 @@ import {
 } from '@open-pencil/scene-graph'
 import { copyFills } from '@open-pencil/scene-graph/copy'
 import { getSharedStyles, SHARED_TEXT_STYLE_FIELDS } from '@open-pencil/scene-graph/shared-styles'
+import { textStyleBoundVariables } from '@open-pencil/scene-graph/variables'
 
 import { variableAlias, type FigmaVariableAlias } from '#core/figma-api/variables/values'
 import { styleRunsWithPatch } from '#core/text/character-style'
@@ -35,6 +36,7 @@ function isParagraphField(
  */
 export function rangeSharedStylePatch(
   graph: SceneGraph,
+  node: SceneNode,
   kind: 'text' | 'fill',
   styleId: string
 ): CharacterStyleOverride {
@@ -44,7 +46,30 @@ export function rangeSharedStylePatch(
   const style = found ? graph.getNode(found.nodeId) : undefined
   if (!style) return { [key]: styleId }
   if (kind === 'fill') return { fillStyleId: styleId, fills: copyFills(style.fills) }
-  return { textStyleId: styleId, ...structuredClone(pick(style, SHARED_TEXT_STYLE_FIELDS)) }
+  return {
+    textStyleId: styleId,
+    ...structuredClone(pick(style, SHARED_TEXT_STYLE_FIELDS)),
+    ...styleBoundValues(graph, node, style)
+  }
+}
+
+function isTextBindableField(field: string): field is TextBindableField {
+  return (TEXT_BINDABLE_FIELDS as readonly string[]).includes(field)
+}
+
+function styleBoundValues(
+  graph: SceneGraph,
+  node: SceneNode,
+  style: SceneNode
+): CharacterStyleOverride {
+  const values: CharacterStyleOverride = {}
+  for (const [field, variableId] of Object.entries(textStyleBoundVariables(style))) {
+    const variable = graph.variables.get(variableId)
+    if (variable && isTextBindableField(field)) {
+      Object.assign(values, boundValue(graph, node, field, variable))
+    }
+  }
+  return values
 }
 
 /** Figma's message for a text field it cannot bind. */
