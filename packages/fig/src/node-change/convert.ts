@@ -18,6 +18,7 @@ import { parseVariantName } from '@open-pencil/scene-graph/variant-name'
 import { importCanvasGuides } from './canvas-guides'
 import { convertFigmaDerivedTextGlyphs } from './derived-text/glyphs'
 import { convertFontFeatures } from './font/features'
+import { importFontName, isItalicFigmaFont } from './font/style'
 import { convertFontVariations } from './font/variations'
 import { convertEffects, convertFills, convertStrokeAlign, convertStrokes } from './paint'
 import { expandPathTextLayoutBox } from './path/text-layout'
@@ -347,6 +348,7 @@ type TextProps = Pick<
   | 'fontSize'
   | 'fontFamily'
   | 'fontWeight'
+  | 'fontName'
   | 'italic'
   | 'textAlignHorizontal'
   | 'textAlignVertical'
@@ -437,7 +439,8 @@ function convertTextProps(nc: NodeChange, blobs: Uint8Array[]): TextProps {
     fontSize: nc.fontSize ?? 14,
     fontFamily: nc.fontName?.family ?? DEFAULT_FONT_FAMILY,
     fontWeight: styleToWeight(nc.fontName?.style ?? ''),
-    italic: nc.fontName?.style.toLowerCase().includes('italic') ?? false,
+    italic: isItalicFigmaFont(nc.fontName),
+    fontName: importFontName(nc.fontName),
     textAlignHorizontal: (nc.textAlignHorizontal ?? 'LEFT') as
       | 'LEFT'
       | 'CENTER'

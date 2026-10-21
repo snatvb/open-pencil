@@ -1,6 +1,5 @@
 import {
   DEFAULT_STROKE_WEIGHT,
-  normalizeFontFamily,
   OPEN_PENCIL_PLUGIN_DATA,
   withPluginData
 } from '@open-pencil/scene-graph'
@@ -12,7 +11,7 @@ import { buildNodeDerivedTextData } from './derived-text/build'
 import { fillsOwnSizingAxis } from './export/fill-sizing'
 import { EMPTY_EXPORT_RUNTIME, type FigNodeChangeExportRuntime } from './export/runtime'
 import { applyFontFeaturesToKiwi } from './font/features'
-import { weightToFigmaStyle } from './font/style'
+import { figmaFontName } from './font/style'
 import { fillToKiwiPaint, safeColor } from './paint'
 import {
   exportedVariableConsumptionEntries,
@@ -103,11 +102,7 @@ function serializeTextProps(
     node.textDirection
   )
   nc.fontSize = node.fontSize
-  nc.fontName = {
-    family: normalizeFontFamily(node.fontFamily),
-    style: weightToFigmaStyle(node.fontWeight, node.italic),
-    postscript: ''
-  }
+  nc.fontName = figmaFontName(node.fontName, node.fontFamily, node.fontWeight, node.italic)
   nc.textData = exportTextData(node, fillToKiwiPaint)
   if (node.fontVariations.length > 0) {
     nc.fontVariations = node.fontVariations.map(fontVariationToKiwi)

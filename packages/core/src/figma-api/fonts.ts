@@ -1,4 +1,8 @@
-import type { FontFamilyStyle } from '@open-pencil/scene-graph'
+import {
+  parseFontStyle,
+  type CharacterStyleOverride,
+  type FontFamilyStyle
+} from '@open-pencil/scene-graph'
 
 import { FONT_WEIGHT_NAMES } from '#core/text/fonts'
 
@@ -10,18 +14,19 @@ export function weightToStyleName(weight: number, italic: boolean): string {
   return italic ? `${base} Italic` : base
 }
 
-const STYLE_NAME_TO_WEIGHT: Record<string, number> = Object.fromEntries([
-  ...Object.entries(FONT_WEIGHT_NAMES).map(([w, name]) => [name.toLowerCase(), Number(w)]),
-  ['ultra light', 200],
-  ['', 400],
-  ['demi bold', 600],
-  ['ultra bold', 800],
-  ['heavy', 900]
-])
-
 export function styleNameToWeight(style: string): { weight: number; italic: boolean } {
-  const lower = style.toLowerCase()
-  const italic = lower.includes('italic')
-  const clean = lower.replace(/italic/i, '').trim()
-  return { weight: STYLE_NAME_TO_WEIGHT[clean] ?? 400, italic }
+  const { weight, italic } = parseFontStyle(style)
+  return { weight, italic }
+}
+
+export function fontNameFields(
+  fontName: FigmaFontName
+): Pick<CharacterStyleOverride, 'fontFamily' | 'fontWeight' | 'italic' | 'fontName'> {
+  const { weight, italic } = parseFontStyle(fontName.style)
+  return {
+    fontFamily: fontName.family,
+    fontWeight: weight,
+    italic,
+    fontName: { family: fontName.family, style: fontName.style, postScriptName: '' }
+  }
 }

@@ -2,6 +2,7 @@ import { mapValues, pickBy } from 'es-toolkit/object'
 import { isEqual } from 'es-toolkit/predicate'
 
 import {
+  authoredFontName,
   paragraphIndexAt,
   paragraphSpacingAt,
   paragraphStyleAt,
@@ -86,7 +87,9 @@ const FIELD_READERS: Record<TextSegmentField, (context: FieldContext) => unknown
   fontSize: ({ style }) => style.fontSize,
   fontName: ({ style }) => ({
     family: style.fontFamily,
-    style: weightToStyleName(style.fontWeight, style.italic)
+    style:
+      authoredFontName(style.fontName, style.fontFamily, style.fontWeight, style.italic)?.style ??
+      weightToStyleName(style.fontWeight, style.italic)
   }),
   fontWeight: ({ style }) => style.fontWeight,
   fontStyle: ({ style }) => (style.italic ? 'ITALIC' : 'REGULAR'),

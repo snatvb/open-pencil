@@ -97,6 +97,7 @@ export function createDefaultNode(
     fontFamily: DEFAULT_FONT_FAMILY,
     fontWeight: 400,
     italic: false,
+    fontName: null,
     textAlignHorizontal: 'LEFT',
     textDirection: 'AUTO',
     textLanguage: null,

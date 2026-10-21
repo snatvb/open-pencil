@@ -22,9 +22,11 @@ const LORA = [
   'Bold Italic'
 ]
 const OSWALD = ['ExtraLight', 'Light', 'Regular', 'Medium', 'SemiBold', 'Bold']
+const ACME_SANS = ['Light', 'Regular', 'Medium', 'Bold', 'Compressed Medium', 'Compressed Bold']
 const CATALOG = [
   { family: 'Lora', styles: LORA },
-  { family: 'Oswald', styles: OSWALD }
+  { family: 'Oswald', styles: OSWALD },
+  { family: 'Acme Sans', styles: ACME_SANS }
 ]
 
 beforeAll(() => {
@@ -68,6 +70,42 @@ test('a weight waits for its face, then changes the layers selected when it was 
   await applied
   expect(first.fontWeight).toBe(700)
   expect(second.fontWeight).toBe(400)
+})
+
+test('a weight keeps the width the text was authored in where its family has it', async () => {
+  const editor = createEditor()
+  const compressedMedium = {
+    family: 'Acme Sans',
+    style: 'Compressed Medium',
+    postScriptName: 'AcmeSans-CompressedMedium'
+  }
+  const text = editor.graph.createNode('TEXT', editor.state.currentPageId, {
+    text: 'a',
+    fontFamily: 'Acme Sans',
+    fontWeight: 500,
+    fontName: compressedMedium
+  })
+  const loaded: string[] = []
+  const actions = createTypographyActions({
+    editor,
+    nodes: computed(() => [text]),
+    activeFormatting: computed(() => []),
+    supports: () => true,
+    options: {
+      fontLoader: {
+        load: async (_family, style) => {
+          loaded.push(style)
+        }
+      }
+    }
+  })
+  await actions.setWeight(700)
+  expect(text.fontWeight).toBe(700)
+  expect(text.fontName?.style).toBe('Compressed Bold')
+  await actions.setWeight(300)
+  expect(text.fontWeight).toBe(300)
+  expect(text.fontName).toBeNull()
+  expect(loaded).toEqual(['Compressed Bold', 'Light'])
 })
 
 test('a later choice wins over an earlier one whose face loads after it', async () => {

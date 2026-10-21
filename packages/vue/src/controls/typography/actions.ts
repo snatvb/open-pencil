@@ -6,10 +6,12 @@ import {
   FONT_WEIGHT_NAMES,
   fontManager,
   nearestFamilyFace,
+  styleAtWidth,
   weightToStyle
 } from '@open-pencil/core/text'
-import { shapeWithTextLabel } from '@open-pencil/scene-graph'
+import { authoredFontName, shapeWithTextLabel } from '@open-pencil/scene-graph'
 import type {
+  FontName,
   SceneNode,
   TextDecoration,
   TextListType,
@@ -214,14 +216,30 @@ export function createTypographyActions({
     )
   }
 
+  function sameWidthFontName(target: SceneNode, weight: number): FontName | null {
+    const authored = authoredFontName(
+      target.fontName,
+      target.fontFamily,
+      target.fontWeight,
+      target.italic
+    )
+    if (!authored) {
+      return null
+    }
+    const style = styleAtWidth(fontManager.familyStyles(target.fontFamily), authored.style, weight)
+    return style ? { family: target.fontFamily, style, postScriptName: '' } : null
+  }
+
   /** Loads the face first, as for a family, so the text is laid out once with it. */
   async function setWeight(weight: number, targets = nodes.value) {
     await updateAfterLoading(
       'Change font weight',
       ['fontWeight'],
       async (target) => {
-        await options.fontLoader?.load(target.fontFamily, weightToStyle(weight, target.italic))
-        return { fontWeight: weight }
+        const fontName = sameWidthFontName(target, weight)
+        const style = fontName?.style ?? weightToStyle(weight, target.italic)
+        await options.fontLoader?.load(target.fontFamily, style)
+        return fontName ? { fontWeight: weight, fontName } : { fontWeight: weight }
       },
       targets
     )

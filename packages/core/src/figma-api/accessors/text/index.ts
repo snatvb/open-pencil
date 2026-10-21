@@ -13,7 +13,7 @@ import {
   type NodeProxyInternals,
   type ProxyThis
 } from '#core/figma-api/accessor-utils'
-import { styleNameToWeight, type FigmaFontName } from '#core/figma-api/fonts'
+import { fontNameFields, type FigmaFontName } from '#core/figma-api/fonts'
 import {
   getParagraphSpacing,
   letterSpacingValue,
@@ -103,10 +103,9 @@ export function installTextNodeProxyAccessors(
         updateNode(this, internals, { text: value, textParagraphs })
       }
     },
-    fontName: characterStyle<FigmaFontName>(internals, 'fontName', mixed, (_node, value) => {
-      const { weight, italic } = styleNameToWeight(value.style)
-      return { fontFamily: value.family, fontWeight: weight, italic }
-    }),
+    fontName: characterStyle<FigmaFontName>(internals, 'fontName', mixed, (_node, value) =>
+      fontNameFields(value)
+    ),
     fontSize: characterStyle<number>(internals, 'fontSize', mixed, (_node, fontSize) => ({
       fontSize
     })),

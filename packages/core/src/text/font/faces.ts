@@ -1,6 +1,6 @@
 import { uniqBy } from 'es-toolkit'
 
-import { parseFontStyle } from '@open-pencil/scene-graph'
+import { NORMAL_FONT_WIDTH, parseFontStyle } from '@open-pencil/scene-graph'
 
 /** One face a font family has: a weight, upright or italic. */
 export interface FamilyFace {
@@ -11,7 +11,10 @@ export interface FamilyFace {
 /** The faces named by a family's style names, such as "Bold Italic" or "SemiBold". */
 export function facesFromStyles(styles: readonly string[]): FamilyFace[] {
   return uniqBy(
-    styles.map((style) => parseFontStyle(style)),
+    styles.map((style) => {
+      const { weight, italic } = parseFontStyle(style)
+      return { weight, italic }
+    }),
     (face) => `${face.weight}${face.italic ? 'i' : ''}`
   )
 }
@@ -40,4 +43,21 @@ export function nearestFamilyFace(
       nearest = face
   }
   return nearest
+}
+
+export function styleAtWidth(
+  styles: readonly string[],
+  style: string,
+  weight: number
+): string | null {
+  const { italic, width } = parseFontStyle(style)
+  if (width === NORMAL_FONT_WIDTH) {
+    return null
+  }
+  return (
+    styles.find((candidate) => {
+      const face = parseFontStyle(candidate)
+      return face.weight === weight && face.italic === italic && face.width === width
+    }) ?? null
+  )
 }

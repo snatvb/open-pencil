@@ -48,6 +48,7 @@ export function sharedStylePatch(
     Object.assign(patch, {
       fontFamily: style.fontFamily,
       fontWeight: style.fontWeight,
+      fontName: structuredClone(style.fontName),
       italic: style.italic,
       fontSize: style.fontSize,
       lineHeight: style.lineHeight,

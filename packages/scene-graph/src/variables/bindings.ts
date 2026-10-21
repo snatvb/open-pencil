@@ -1,4 +1,5 @@
 import { copyFills, copyStrokes } from '../copy'
+import { isFontFaceField } from '../font-style'
 import type { SceneGraph } from '../index'
 import { hasInstanceOverride } from '../instances'
 import type { Color } from '../primitives'
@@ -110,7 +111,9 @@ export function resolvedRunBindings(
       if (!variableId) continue
       const value = graph.resolveNumberVariableForNode(node.id, variableId, fallback)
       if (value === undefined || !Number.isFinite(value) || style[field] === value) continue
-      style = { ...style, [field]: value }
+      style = isFontFaceField(field)
+        ? { ...style, [field]: value, fontName: null }
+        : { ...style, [field]: value }
     }
     return style === run.style ? run : { ...run, style }
   })

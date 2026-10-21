@@ -21,7 +21,7 @@ import {
   type ProxyThis
 } from '#core/figma-api/accessor-utils'
 import { figmaPaintToFill, type FigmaPaint } from '#core/figma-api/accessors/visual'
-import { styleNameToWeight, type FigmaFontName } from '#core/figma-api/fonts'
+import { fontNameFields, type FigmaFontName } from '#core/figma-api/fonts'
 import {
   getRangeIndentation,
   getRangeListOptions,
@@ -136,8 +136,7 @@ function fontNameStyle(method: string, value: unknown): CharacterStyleOverride {
   const style = fontName.style ?? 'Regular'
   const problem = stringProblem(fontName.family, '.family') ?? stringProblem(style, '.style')
   if (problem) throw invalid(method, problem)
-  const { weight, italic } = styleNameToWeight(style as string)
-  return { fontFamily: fontName.family as string, fontWeight: weight, italic }
+  return fontNameFields({ family: fontName.family as string, style: style as string })
 }
 
 /** A number from 0 to 1, as Figma takes colour channels and opacity. */

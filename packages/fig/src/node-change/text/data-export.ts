@@ -1,9 +1,9 @@
 import type { NodeChange, Paint } from '@open-pencil/kiwi/fig/codec'
-import { normalizeFontFamily } from '@open-pencil/scene-graph'
+import { runFontName } from '@open-pencil/scene-graph'
 import type { CharacterStyleOverride, SceneNode } from '@open-pencil/scene-graph'
 
 import { applyFontFeaturesToKiwi } from '../font/features'
-import { weightToFigmaStyle } from '../font/style'
+import { figmaFontName } from '../font/style'
 import { stringToFigmaAxisTag } from '../font/variations'
 import { exportTextLines } from './lines'
 import { FIGMA_AUTO_LINE_HEIGHT } from './values'
@@ -42,13 +42,12 @@ function textStyleOverrideToKiwi(
   fillToKiwiPaint: (fill: SceneNode['fills'][number]) => Paint
 ): NodeChange {
   const override: Record<string, unknown> = { styleID: id }
-  const weight = style.fontWeight ?? node.fontWeight
-  const italic = style.italic ?? node.italic
-  override.fontName = {
-    family: normalizeFontFamily(style.fontFamily ?? node.fontFamily),
-    style: weightToFigmaStyle(weight, italic),
-    postscript: ''
-  }
+  override.fontName = figmaFontName(
+    runFontName(node, style),
+    style.fontFamily ?? node.fontFamily,
+    style.fontWeight ?? node.fontWeight,
+    style.italic ?? node.italic
+  )
   if (style.fontSize !== undefined) override.fontSize = style.fontSize
   if (style.fontVariations && style.fontVariations.length > 0) {
     override.fontVariations = style.fontVariations.map(fontVariationToKiwi)

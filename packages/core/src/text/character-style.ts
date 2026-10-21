@@ -18,6 +18,7 @@ export type CharacterStyle = Required<
     CharacterStyleOverride,
     | 'fontFamily'
     | 'fontWeight'
+    | 'fontName'
     | 'italic'
     | 'fontSize'
     | 'letterSpacing'
@@ -44,6 +45,7 @@ export type TextStyleKey = (typeof TEXT_STYLE_KEYS)[number]
 export const TEXT_STYLE_KEYS = [
   'fontFamily',
   'fontWeight',
+  'fontName',
   'italic',
   'fontSize',
   'letterSpacing',
@@ -75,6 +77,7 @@ export function nodeStyle(node: SceneNode): CharacterStyle {
   return {
     fontFamily: node.fontFamily,
     fontWeight: node.fontWeight,
+    fontName: node.fontName,
     italic: node.italic,
     fontSize: node.fontSize,
     letterSpacing: node.letterSpacing,
@@ -161,6 +164,8 @@ function detachedStyles(
   if (!style) return {}
   const styled = {
     ...node,
+    ...definedOverrides(current),
+    styleRuns: [],
     textStyleId: current.textStyleId !== undefined ? current.textStyleId : node.textStyleId,
     fillStyleId: current.fillStyleId !== undefined ? current.fillStyleId : node.fillStyleId
   }
@@ -168,7 +173,7 @@ function detachedStyles(
   const detached = styleDetachmentChanges(styled, changes)
   return pick(
     detached,
-    (['textStyleId', 'fillStyleId'] as const).filter(
+    (['textStyleId', 'fillStyleId', 'fontName'] as const).filter(
       (key) => !Object.hasOwn(changes, key) && Object.hasOwn(detached, key)
     )
   )

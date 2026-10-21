@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- scene node contracts are kept together as the public graph type surface */
 
 import type { ExportFormatId } from './export-format'
+import type { FontName } from './font-style'
 import type { CanvasGuide } from './guides'
 import type { InstanceOverrideState } from './instance-overrides'
 import type { Color, Matrix, Rect, Vector } from './primitives'
@@ -337,6 +338,7 @@ export type TextBoundVariables = Partial<Record<TextBindableField, string>>
 export interface CharacterStyleOverride {
   fontWeight?: number
   italic?: boolean
+  fontName?: FontName | null
   textDecoration?: TextDecoration
   textDecorationStyle?: TextDecorationStyle
   textDecorationThickness?: number | null
@@ -617,6 +619,7 @@ export interface SceneNode {
   fontFamily: string
   fontWeight: number
   italic: boolean
+  fontName: FontName | null
   textAlignHorizontal: 'LEFT' | 'CENTER' | 'RIGHT' | 'JUSTIFIED'
   textDirection: TextDirection
   textLanguage: string | null

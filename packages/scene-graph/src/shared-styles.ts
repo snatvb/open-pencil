@@ -1,3 +1,4 @@
+import { fontNameDetachmentChanges } from './font-style'
 import type { SceneGraph, SceneNode, SharedStyle, SharedStyleKind, SharedStyleType } from './index'
 
 const STYLE_REF_KEYS = {
@@ -23,6 +24,7 @@ const STYLE_TYPES = {
 export const SHARED_TEXT_STYLE_FIELDS = [
   'fontFamily',
   'fontWeight',
+  'fontName',
   'italic',
   'fontSize',
   'lineHeight',
@@ -75,5 +77,5 @@ export function styleDetachmentChanges(
   if (changesTextStyle && !('textStyleId' in changes) && node.textStyleId) {
     next.textStyleId = null
   }
-  return next
+  return fontNameDetachmentChanges(node, next)
 }

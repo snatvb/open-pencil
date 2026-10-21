@@ -213,17 +213,35 @@ export class FontManager {
     return () => this.familyFacesListeners.delete(listener)
   }
 
-  private async loadFamilyFaces(family: string): Promise<FamilyFace[] | null> {
-    const installed =
+  familyStyles(family: string): readonly string[] {
+    const installed = this.installedStyles(family)
+    return installed.length > 0 ? installed : this.bundledStyles(family)
+  }
+
+  private installedStyles(family: string): readonly string[] {
+    return (
       this.hostStyles.get(family) ??
       this.localFonts?.filter((font) => font.family === family).map((font) => font.style) ??
       []
-    if (installed.length > 0) return facesFromStyles(installed)
-    const web = await this.webFonts.familyFaces(family)
-    if (web.length > 0) return web
-    const bundled = Object.keys(BUNDLED_FONTS)
+    )
+  }
+
+  private bundledStyles(family: string): string[] {
+    return Object.keys(BUNDLED_FONTS)
       .filter((key) => key.startsWith(`${family}|`))
       .map((key) => key.slice(family.length + 1))
+  }
+
+  private async loadFamilyFaces(family: string): Promise<FamilyFace[] | null> {
+    const installed = this.installedStyles(family)
+    if (installed.length > 0) {
+      return facesFromStyles(installed)
+    }
+    const web = await this.webFonts.familyFaces(family)
+    if (web.length > 0) {
+      return web
+    }
+    const bundled = this.bundledStyles(family)
     return bundled.length > 0 ? facesFromStyles(bundled) : null
   }
 

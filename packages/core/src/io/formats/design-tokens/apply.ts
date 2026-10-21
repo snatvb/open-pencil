@@ -62,6 +62,7 @@ export interface TokenImportResult {
 const TEXT_STYLE_FIELDS = [
   'fontFamily',
   'fontWeight',
+  'fontName',
   'italic',
   'fontSize',
   'lineHeight',

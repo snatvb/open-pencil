@@ -48,6 +48,7 @@ export const TEXT_STYLE_FIELDS = [
   'fontFamily',
   'fontSize',
   'fontWeight',
+  'fontName',
   'italic',
   'lineHeight',
   'letterSpacing',
