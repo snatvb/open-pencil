@@ -341,17 +341,16 @@ function derivedMainAxisFitsParent(
   child: SceneNode,
   axis: 'width' | 'height'
 ): boolean {
-  if (!keepsSavedLayout(graph, parent)) return false
+  if (child.derivedLayout?.[axis] === undefined) {
+    return false
+  }
   const children = graph
     .getChildren(parent.id)
     .filter((candidate) => candidate.visible && candidate.layoutPositioning !== 'ABSOLUTE')
   if (children.length === 0) return false
 
   const sizes = children.map((candidate) => candidate.derivedLayout?.[axis])
-  return (
-    sizesFitParent(parent, children.length, sizes, axis) &&
-    child.derivedLayout?.[axis] !== undefined
-  )
+  return sizesFitParent(parent, children.length, sizes, axis) && keepsSavedLayout(graph, parent)
 }
 
 function configureAutoLayoutChildSizing(

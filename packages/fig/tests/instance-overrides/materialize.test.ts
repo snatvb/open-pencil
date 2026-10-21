@@ -139,3 +139,48 @@ test('an instance of a deleted component stays a childless instance when acknowl
   expect(node.componentId).toBeNull()
   expect(node.childIds).toEqual([])
 })
+
+test('a layer keeps as its saved layout only the bounds its instance saved for it', () => {
+  const changes: NodeChange[] = [
+    { guid: guid(1), type: 'SYMBOL' },
+    {
+      guid: guid(2),
+      type: 'FRAME',
+      parentIndex: { guid: guid(1), position: '!' },
+      size: { x: 20, y: 20 },
+      transform: { m00: 1, m01: 0, m02: 10, m10: 0, m11: 1, m12: 10 }
+    },
+    {
+      guid: guid(3),
+      type: 'FRAME',
+      parentIndex: { guid: guid(1), position: '"' },
+      size: { x: 20, y: 20 },
+      transform: { m00: 1, m01: 0, m02: 40, m10: 0, m11: 1, m12: 10 }
+    },
+    {
+      guid: guid(4),
+      type: 'RECTANGLE',
+      parentIndex: { guid: guid(1), position: '#' },
+      size: { x: 20, y: 20 }
+    },
+    {
+      guid: guid(5),
+      type: 'INSTANCE',
+      symbolData: { symbolID: guid(1) },
+      derivedSymbolData: [
+        { guidPath: { guids: [guid(2)] }, size: { x: 30, y: 20 } },
+        {
+          guidPath: { guids: [guid(3)] },
+          transform: { m00: 1, m01: 0, m02: 50, m10: 0, m11: 1, m12: 10 }
+        }
+      ]
+    }
+  ]
+  const graph = new SceneGraph()
+  const page = graph.getPages()[0]
+  const component = graph.createNode('COMPONENT', page.id)
+  const occurrence = interpretInstance(changes, '1:5', { derivedBounds: true })
+  const { root } = materializeInstance(graph, page.id, occurrence, new Map([['1:1', component.id]]))
+  const layouts = graph.getChildren(root.id).map((layer) => layer.derivedLayout)
+  expect(layouts).toEqual([{ width: 30, height: 20 }, { x: 50, y: 10 }, null])
+})

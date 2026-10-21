@@ -21,6 +21,7 @@ Renderer, layout, editor, Figma API, tools, clipboard, vector conversion, and do
 - The first Hug/Fill dimension mutation switches only that axis to Fixed; focus is non-destructive, and mode/value changes share one undo transaction.
 - Arranging layers runs through `packages/core/src/layout/arrange/`: `arrangeBoxes` runs an ELK layout (spread, compact, pack, flow, tree, radial, network), loaded on first use, `applyArrangement` moves the layers that draw it and joins their connectors, routing them when they flow, and `arrangeLayers` does both for layers already on a page, finding the connectors between them; importers and tools that arrange layers go through them, and connectors that pass through stored bend points use `bendConnectorThrough` (`packages/core/tests/layout/arrange/layers.test.ts`).
 - A shape with text fits itself to its label before its auto layout runs: it grows from its given size only while the label needs room, and layout never changes that given size (`packages/core/tests/layout/generated/shape-with-text.test.ts`).
+- A `.fig` file's saved geometry, including the bounds an instance's `derivedSymbolData` gives its layers as `derivedLayout`, is what layout keeps until `keepsSavedLayout` (`packages/core/src/layout/derived.ts`) sees the frame or its flow edited, restructured, or resized by the layout around an edit. Layout as a page opens or its fonts arrive keeps it, and an edit lays out live only the frames it reaches (`packages/core/tests/layout/auto-layout/saved-instance-geometry.test.ts`).
 
 ## Components and instances
 

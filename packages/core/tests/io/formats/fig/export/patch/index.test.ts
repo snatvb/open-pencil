@@ -1,6 +1,12 @@
 import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 
 import { expectDefined } from '#core-tests/helpers/assert'
+import {
+  archiveWithSavedLayout,
+  openLaidOut,
+  rowComponent,
+  ROW_SAVED_WITH_WIDER_LEAD
+} from '#core-tests/helpers/fig/saved-instance-layout'
 import { isEqual } from 'es-toolkit/predicate'
 import { deflateSync } from 'fflate'
 
@@ -10,6 +16,7 @@ import {
   populateAllFigPages,
   populateFigPage
 } from '@open-pencil/core/io/formats/fig'
+import { computeAllLayouts } from '@open-pencil/core/layout'
 import { compressFigDataSync, parseFigBuffer } from '@open-pencil/fig'
 import {
   initCodec,
@@ -105,6 +112,17 @@ test('an archive whose images Figma cannot read is written whole, every image by
     expect(photos.map((record) => paintImageName(record))).toEqual([PHOTO_NAME, PHOTO_NAME])
     expect(parsed.images.map(([name]) => name)).toEqual([PHOTO_NAME])
   }
+})
+
+test('an opened file saved unedited keeps the layout Figma saved for its instances', async () => {
+  const source = new SceneGraph()
+  const page = source.getPages()[0]
+  const row = rowComponent(source, page.id, 'Row', 20)
+  source.createInstance(row.id, page.id, { name: 'Placed', y: 100 })
+  const bytes = await archiveWithSavedLayout(source, { Placed: ROW_SAVED_WITH_WIDER_LEAD })
+  const graph = await openLaidOut(bytes)
+  computeAllLayouts(graph)
+  expect(recordsOf(await exportFigFile(graph))).toEqual(recordsOf(bytes))
 })
 
 const PHOTO = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 7, 7, 7])
@@ -417,8 +435,9 @@ describe('writing an edited document into its archive', () => {
     const before = recordsOf(bytes)
     const after = recordsOf(patched)
     expect([...after.keys()].toSorted()).toEqual([...before.keys()].toSorted())
-    for (const [guid, record] of before)
+    for (const [guid, record] of before) {
       expect(after.get(guid)?.parentIndex).toEqual(record.parentIndex)
+    }
   })
 
   test('keeps layers on unopened pages bound to a variable whose value changes', async () => {
