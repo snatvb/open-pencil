@@ -6,6 +6,7 @@ import {
   paragraphStyleAt,
   paragraphStylesAfterEdit,
   paragraphStylesInRange,
+  percentOfFontSize,
   recordInstanceOverride,
   sharedParagraphSpacing,
   textParagraphRanges,
@@ -15,6 +16,7 @@ import {
   withParagraphSpacing
 } from '@open-pencil/scene-graph'
 import type {
+  CharacterStyleOverride,
   SceneGraph,
   SceneNode,
   TextParagraphSpacingField,
@@ -31,26 +33,41 @@ export interface FigmaLetterSpacing {
   value: number
 }
 
-/** The node keeps sizes in pixels; a percent is of its font size when set, as Figma resolves it. */
-function pixels(value: { unit: 'PIXELS' | 'PERCENT'; value: number }, fontSize: number) {
-  return value.unit === 'PERCENT' ? (value.value / 100) * fontSize : value.value
+export function letterSpacingStyle(
+  value: FigmaLetterSpacing,
+  fontSize: number
+): Required<Pick<CharacterStyleOverride, 'letterSpacing' | 'letterSpacingPercent'>> {
+  return value.unit === 'PERCENT'
+    ? { letterSpacing: percentOfFontSize(value.value, fontSize), letterSpacingPercent: value.value }
+    : { letterSpacing: value.value, letterSpacingPercent: null }
+}
+
+export function lineHeightStyle(
+  value: FigmaLineHeight,
+  fontSize: number
+): Required<Pick<CharacterStyleOverride, 'lineHeight' | 'lineHeightPercent'>> {
+  if (value.unit === 'AUTO') {
+    return { lineHeight: null, lineHeightPercent: null }
+  }
+  return value.unit === 'PERCENT'
+    ? { lineHeight: percentOfFontSize(value.value, fontSize), lineHeightPercent: value.value }
+    : { lineHeight: value.value, lineHeightPercent: null }
 }
 
 /**
  * Accepts Figma's object, or a bare number of pixels or `null` for automatic, as earlier
  * OpenPencil scripts wrote it.
  */
-export function lineHeightValue(
-  node: SceneNode,
-  value: FigmaLineHeight | number | null
-): number | null {
-  if (value === null || typeof value === 'number') return value
-  return value.unit === 'AUTO' ? null : pixels(value, node.fontSize)
+export function figmaLineHeight(value: FigmaLineHeight | number | null): FigmaLineHeight {
+  if (value === null) {
+    return { unit: 'AUTO' }
+  }
+  return typeof value === 'number' ? { unit: 'PIXELS', value } : value
 }
 
 /** Accepts Figma's object, or a bare number of pixels as earlier OpenPencil scripts wrote it. */
-export function letterSpacingValue(node: SceneNode, value: FigmaLetterSpacing | number): number {
-  return typeof value === 'number' ? value : pixels(value, node.fontSize)
+export function figmaLetterSpacing(value: FigmaLetterSpacing | number): FigmaLetterSpacing {
+  return typeof value === 'number' ? { unit: 'PIXELS', value } : value
 }
 
 export function insertCharacters(

@@ -5,6 +5,7 @@ import {
   findInstanceAncestor,
   cloneInstanceOverrideState,
   recordInstanceOverride,
+  withPairedTextLengthKeys,
   type SceneNode
 } from '@open-pencil/scene-graph'
 
@@ -86,7 +87,7 @@ export function createNodeActions(ctx: EditorContext) {
       : undefined
     const previous = pick(
       node,
-      Object.keys(nextChanges) as (keyof SceneNode)[]
+      withPairedTextLengthKeys(Object.keys(nextChanges) as (keyof SceneNode)[])
     ) as Partial<SceneNode>
     ctx.graph.updateNode(id, nextChanges)
     recordInstanceOverride(ctx.graph, id, Object.keys(nextChanges))

@@ -2,6 +2,7 @@ import { copyFills, copyStrokes } from '../copy'
 import type { SceneGraph } from '../index'
 import { hasInstanceOverride } from '../instances'
 import type { Color } from '../primitives'
+import { textLengthPercentKey, type TextLengthPercentKey } from '../text/lengths'
 import type { Fill, SceneNode, Stroke, StyleRun } from '../types'
 import type { VariableModeFallback } from '../variables'
 import { NUMERIC_FIELDS, isNumericVariableBindingField } from './fields'
@@ -58,7 +59,10 @@ export function resolvedNumericBindings(
     const effective = value * scale
     if (!Number.isFinite(effective)) continue
     const next = field === 'opacity' ? Math.max(0, Math.min(1, effective)) : effective
-    if (node[field as keyof SceneNode] !== next) Object.assign(updates, { [field]: next })
+    const cleared = clearedPercent(field, node)
+    if (node[field as keyof SceneNode] !== next || cleared) {
+      Object.assign(updates, { [field]: next }, cleared)
+    }
   }
   return updates
 }
@@ -89,6 +93,16 @@ export function resolvedValueBindings(
   return updates
 }
 
+function clearedPercent(
+  field: string,
+  text: Partial<Record<TextLengthPercentKey, number | null>>
+): Partial<Record<TextLengthPercentKey, null>> | undefined {
+  const percent = textLengthPercentKey(field)
+  return percent !== undefined && typeof text[percent] === 'number'
+    ? { [percent]: null }
+    : undefined
+}
+
 /** Fields of a range of characters a bound number gives its value; the rest need fonts loaded. */
 const NUMERIC_RUN_FIELDS = ['fontSize', 'fontWeight', 'letterSpacing', 'lineHeight'] as const
 
@@ -109,8 +123,14 @@ export function resolvedRunBindings(
       const variableId = bound[field]
       if (!variableId) continue
       const value = graph.resolveNumberVariableForNode(node.id, variableId, fallback)
-      if (value === undefined || !Number.isFinite(value) || style[field] === value) continue
-      style = { ...style, [field]: value }
+      if (value === undefined || !Number.isFinite(value)) {
+        continue
+      }
+      const cleared = clearedPercent(field, style)
+      if (style[field] === value && !cleared) {
+        continue
+      }
+      style = { ...style, [field]: value, ...cleared }
     }
     return style === run.style ? run : { ...run, style }
   })

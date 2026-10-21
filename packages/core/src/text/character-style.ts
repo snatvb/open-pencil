@@ -2,9 +2,13 @@ import { omit, pick } from 'es-toolkit/object'
 import { isEqual } from 'es-toolkit/predicate'
 
 import {
+  PERCENT_TEXT_LENGTHS,
+  runLetterSpacing,
+  runLineHeight,
   SHARED_TEXT_STYLE_FIELDS,
   styleDetachmentChanges,
   TEXT_BINDABLE_FIELDS,
+  withPixelLengths,
   type CharacterStyleOverride,
   type HyperlinkTarget,
   type SceneNode,
@@ -31,6 +35,8 @@ export type CharacterStyle = Required<
   >
 > & {
   lineHeight: number | null
+  letterSpacingPercent: number | null
+  lineHeightPercent: number | null
   textDecorationThickness: number | null
   textUnderlineOffset: number | null
   hyperlink: HyperlinkTarget | null
@@ -47,7 +53,9 @@ export const TEXT_STYLE_KEYS = [
   'italic',
   'fontSize',
   'letterSpacing',
+  'letterSpacingPercent',
   'lineHeight',
+  'lineHeightPercent',
   'fills',
   'textDecoration',
   'textDecorationStyle',
@@ -78,7 +86,9 @@ export function nodeStyle(node: SceneNode): CharacterStyle {
     italic: node.italic,
     fontSize: node.fontSize,
     letterSpacing: node.letterSpacing,
+    letterSpacingPercent: node.letterSpacingPercent,
     lineHeight: node.lineHeight,
+    lineHeightPercent: node.lineHeightPercent,
     fills: node.fills,
     textDecoration: node.textDecoration,
     textDecorationStyle: node.textDecorationStyle,
@@ -102,11 +112,23 @@ export function characterStyles(node: SceneNode, start: number, end: number): Ch
   for (const run of node.styleRuns) {
     const from = Math.max(start, run.start)
     const to = Math.min(end, run.start + run.length)
+    if (to <= from) {
+      continue
+    }
+    const overrides = runOverrides(run.style, node)
     for (let index = from; index < to; index++) {
-      styles[index - start] = { ...styles[index - start], ...definedOverrides(run.style) }
+      styles[index - start] = { ...styles[index - start], ...overrides }
     }
   }
   return styles
+}
+
+function runOverrides(style: CharacterStyleOverride, node: SceneNode): Partial<CharacterStyle> {
+  return {
+    ...definedOverrides(withPixelLengths(style)),
+    letterSpacing: runLetterSpacing(style, node),
+    lineHeight: runLineHeight(style, node)
+  }
 }
 
 function definedOverrides(style: CharacterStyleOverride): Partial<CharacterStyle> {
@@ -117,17 +139,30 @@ function definedOverrides(style: CharacterStyleOverride): Partial<CharacterStyle
   return defined as Partial<CharacterStyle>
 }
 
+function redundantOverrides(
+  style: CharacterStyleOverride,
+  base: CharacterStyle
+): (keyof CharacterStyle)[] {
+  const redundant = new Set(
+    CHARACTER_STYLE_KEYS.filter((key) => style[key] !== undefined && isEqual(style[key], base[key]))
+  )
+  for (const { length, percent } of PERCENT_TEXT_LENGTHS) {
+    const repeatsText =
+      isEqual(style[length], base[length]) && (style[percent] ?? null) === base[percent]
+    if (style[length] !== undefined && !repeatsText) {
+      redundant.delete(length)
+      redundant.delete(percent)
+    }
+  }
+  return [...redundant]
+}
+
 /** Style runs with no override that only repeats the text's own value. */
 function withoutRedundantOverrides(node: SceneNode, runs: StyleRun[]): StyleRun[] {
   const base = nodeStyle(node)
   const result: StyleRun[] = []
   for (const run of runs) {
-    const style = omit(
-      run.style,
-      CHARACTER_STYLE_KEYS.filter(
-        (key) => run.style[key] !== undefined && isEqual(run.style[key], base[key])
-      )
-    )
+    const style = omit(run.style, redundantOverrides(run.style, base))
     if (Object.keys(style).length === 0) continue
     const previous = result.at(-1)
     if (
@@ -189,9 +224,10 @@ export function styleRunsWithPatch(
     }
   }
   const sized = typeof patch === 'function' ? patch : null
+  const fixed = sized ? undefined : withPixelLengths(patch as CharacterStyleOverride)
   const patches = new Map<number, CharacterStyleOverride>()
   for (let index = start; index < end; index++) {
-    let style = sized ? undefined : (patch as CharacterStyleOverride)
+    let style = fixed
     if (sized) {
       const fontSize = chars[index].fontSize ?? node.fontSize
       style = patches.get(fontSize) ?? sized(fontSize)

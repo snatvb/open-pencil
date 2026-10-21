@@ -47,7 +47,7 @@ import {
   type KiwiNodeChange
 } from './export/node'
 import { exportTextData, fontVariationToKiwi } from './text/data-export'
-import { FIGMA_AUTO_LINE_HEIGHT } from './text/values'
+import { authoredLineHeightUnits, letterSpacingToKiwi, lineHeightToKiwi } from './text/values'
 import { toKiwiWindingRule } from './vector/geometry'
 
 function serializeCornerRadii(node: SceneNode, nc: KiwiNodeChange): void {
@@ -143,11 +143,12 @@ function serializeTextProps(
     })
   }
   if (node.leadingTrim !== 'NONE') nc.leadingTrim = node.leadingTrim
-  nc.lineHeight =
-    node.lineHeight === null
-      ? { ...FIGMA_AUTO_LINE_HEIGHT }
-      : { value: node.lineHeight, units: 'PIXELS' }
-  nc.letterSpacing = { value: node.letterSpacing, units: 'PIXELS' }
+  nc.lineHeight = lineHeightToKiwi(
+    node.lineHeight,
+    node.lineHeightPercent,
+    authoredLineHeightUnits(node)
+  )
+  nc.letterSpacing = letterSpacingToKiwi(node.letterSpacing, node.letterSpacingPercent)
   if (node.textDecoration !== 'NONE') {
     nc.textDecoration = node.textDecoration === 'UNDERLINE' ? 'UNDERLINE' : 'STRIKETHROUGH'
   }

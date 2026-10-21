@@ -1,6 +1,6 @@
 import { isEqual, pick, uniq } from 'es-toolkit'
 
-import type { SceneNode } from '@open-pencil/scene-graph'
+import { withPairedTextLengthKeys, type SceneNode } from '@open-pencil/scene-graph'
 
 import { assertNodeEditable } from './capabilities'
 import type { EditorContext } from './types'
@@ -41,7 +41,7 @@ export function createNodePreviewActions(
         markEdited(node, changes)
       }
       const previous = originals.get(node.id) ?? {}
-      const keys = (Object.keys(changes) as (keyof SceneNode)[]).filter(
+      const keys = withPairedTextLengthKeys(Object.keys(changes) as (keyof SceneNode)[]).filter(
         (key) => !Object.hasOwn(previous, key)
       )
       if (keys.length) Object.assign(previous, structuredClone(pick(node, keys)))

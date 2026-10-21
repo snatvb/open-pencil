@@ -12,6 +12,7 @@ import {
 } from '../instance-overrides'
 import { scaleNodeChanges } from '../scaling/node'
 import { ownsSlotContent, slotPropertyId } from '../slots/frames'
+import { isDerivedTextLength } from '../text/lengths'
 import { scaleVariableBindingUnits } from '../variables/units'
 import { applyEnclosingAssignments, assignedFieldValues, propertyDrivenFields } from './assignments'
 import { keepOwnContentSize, remeasureChangedText, type SyncedPlacement } from './content-size'
@@ -147,7 +148,9 @@ function copySyncedFields(
   for (const key of INSTANCE_SYNC_FIELDS) {
     if (key === 'boundVariables') continue
     if (placedByLayout && (key === 'x' || key === 'y')) continue
-    if (skip(key)) continue
+    if (skip(key) || isDerivedTextLength(source, key)) {
+      continue
+    }
     const owner = INSTANCE_SYNC_FIELD_OWNERS[key]
     if (owner && skip(owner)) continue
     const from = PLACEMENT_FIELDS.has(key) ? placed : source

@@ -51,7 +51,9 @@ export function sharedStylePatch(
       italic: style.italic,
       fontSize: style.fontSize,
       lineHeight: style.lineHeight,
+      lineHeightPercent: style.lineHeightPercent,
       letterSpacing: style.letterSpacing,
+      letterSpacingPercent: style.letterSpacingPercent,
       textDecoration: style.textDecoration,
       textCase: style.textCase
     })

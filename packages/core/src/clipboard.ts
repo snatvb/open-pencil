@@ -137,15 +137,6 @@ async function writeFigmaClipboardHTML(
     makeCanvasNodeChange(canvasGuid, docGuid, '!', 'Page 1')
   ]
 
-  const exportedTextNodes: SceneNode[] = []
-  const collectTextNodes = (node: SceneNode) => {
-    if (node.type === 'TEXT') exportedTextNodes.push(node)
-    for (const childId of node.childIds) {
-      const child = graph.getNode(childId)
-      if (child) collectTextNodes(child)
-    }
-  }
-
   const nodeIdToGuid = new Map<string, GUID>()
   const assignedGuidValues = new Set<string>()
   const blobs: Uint8Array[] = []
@@ -167,7 +158,6 @@ async function writeFigmaClipboardHTML(
   )
   const slotContentRecords: KiwiNodeChange[] = []
   for (let i = 0; i < nodes.length; i++) {
-    collectTextNodes(nodes[i])
     nodeChanges.push(
       ...sceneNodeToKiwi(nodes[i], canvasGuid, i, localIdCounter, graph, blobs, {
         nodeIdToGuid,
@@ -216,7 +206,6 @@ async function writeFigmaClipboardHTML(
       internalOnly: true
     })
   for (const component of dependencies.values()) {
-    collectTextNodes(component)
     nodeChanges.push(
       ...sceneNodeToKiwi(component, dependencyCanvas, 0, localIdCounter, graph, blobs, {
         nodeIdToGuid,
@@ -238,23 +227,6 @@ async function writeFigmaClipboardHTML(
   ).length
   placeSlotContent(slotContentRecords, dependencyCanvas, written, fractionalPosition)
   nodeChanges.push(...slotContentRecords)
-  // Pair each text record with the node it was written from; instance content and slot
-  // content are not emitted in traversal order.
-  const textById = new Map(exportedTextNodes.map((node) => [node.id, node]))
-  const sourceByGuid = new Map<string, SceneNode>()
-  for (const [id, guid] of nodeIdToGuid) {
-    const node = textById.get(id)
-    if (node) sourceByGuid.set(`${guid.sessionID}:${guid.localID}`, node)
-  }
-  for (const change of nodeChanges) {
-    if (change.type !== 'TEXT' || !change.guid) continue
-    const source = sourceByGuid.get(`${change.guid.sessionID}:${change.guid.localID}`)
-    if (!source) continue
-    change.lineHeight = {
-      value: source.lineHeight ?? 100,
-      units: source.lineHeight ? 'PIXELS' : 'PERCENT'
-    }
-  }
   embedClipboardImages(nodeChanges, blobs, graph.images)
   return encodeFigmaClipboard(nodeChanges, blobs, randomInt(), assetType)
 }

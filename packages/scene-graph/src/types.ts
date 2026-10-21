@@ -346,7 +346,9 @@ export interface CharacterStyleOverride {
   fontSize?: number
   fontFamily?: string
   letterSpacing?: number
+  letterSpacingPercent?: number | null
   lineHeight?: number | null
+  lineHeightPercent?: number | null
   fills?: Fill[]
   fontVariations?: FontVariation[]
   fontFeatures?: FontFeature[]
@@ -631,7 +633,9 @@ export interface SceneNode {
   textUnderlineOffset: number | null
   leadingTrim: LeadingTrim
   lineHeight: number | null
+  lineHeightPercent: number | null
   letterSpacing: number
+  letterSpacingPercent: number | null
   maxLines: number | null
   /**
    * One entry per paragraph of `text`, in order. Missing entries are plain paragraphs, so text

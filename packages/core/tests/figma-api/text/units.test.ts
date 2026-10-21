@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 
+import { expectDefined } from '#core-tests/helpers/assert'
+
 import { FigmaAPI } from '@open-pencil/core/figma-api'
 import { SceneGraph } from '@open-pencil/scene-graph'
-
-import { expectDefined } from '#core-tests/helpers/assert'
 
 function text() {
   const graph = new SceneGraph()
@@ -24,6 +24,7 @@ describe('text units in the plugin API', () => {
 
     node.lineHeight = { unit: 'PERCENT', value: 150 }
     expect(expectDefined(graph.getNode(node.id)).lineHeight).toBe(30)
+    expect(node.lineHeight).toEqual({ unit: 'PERCENT', value: 150 })
 
     node.lineHeight = { unit: 'AUTO' }
     expect(expectDefined(graph.getNode(node.id)).lineHeight).toBeNull()
@@ -34,7 +35,49 @@ describe('text units in the plugin API', () => {
     const { graph, node } = text()
     node.letterSpacing = { unit: 'PERCENT', value: 10 }
     expect(expectDefined(graph.getNode(node.id)).letterSpacing).toBe(2)
-    expect(node.letterSpacing).toEqual({ unit: 'PIXELS', value: 2 })
+    expect(node.letterSpacing).toEqual({ unit: 'PERCENT', value: 10 })
+
+    node.letterSpacing = { unit: 'PIXELS', value: 3 }
+    expect(node.letterSpacing).toEqual({ unit: 'PIXELS', value: 3 })
+  })
+
+  test('a percent follows the font size set after it', () => {
+    const { graph, node } = text()
+    node.letterSpacing = { unit: 'PERCENT', value: 25 }
+    node.lineHeight = { unit: 'PERCENT', value: 150 }
+
+    node.fontSize = 40
+
+    expect(expectDefined(graph.getNode(node.id))).toMatchObject({
+      letterSpacing: 10,
+      lineHeight: 60
+    })
+    expect(node.letterSpacing).toEqual({ unit: 'PERCENT', value: 25 })
+  })
+
+  test('a range in percent keeps it through a font size set on the range', () => {
+    const { graph, node } = text()
+    node.characters = 'Acme Sans'
+    node.setRangeLetterSpacing(0, 4, { unit: 'PERCENT', value: 50 })
+
+    node.setRangeFontSize(0, 4, 30)
+
+    expect(node.getRangeLetterSpacing(0, 4)).toEqual({ unit: 'PERCENT', value: 50 })
+    expect(expectDefined(graph.getNode(node.id)).styleRuns[0].style.letterSpacing).toBe(15)
+  })
+
+  test('a range with its own pixels reads pixels over a text in percent', () => {
+    const { graph, node } = text()
+    node.characters = 'Acme Sans'
+    node.letterSpacing = { unit: 'PERCENT', value: 25 }
+    node.lineHeight = { unit: 'PERCENT', value: 150 }
+    graph.updateNode(node.id, {
+      styleRuns: [{ start: 0, length: 4, style: { letterSpacing: 2, lineHeight: 24 } }]
+    })
+
+    expect(node.getRangeLetterSpacing(0, 4)).toEqual({ unit: 'PIXELS', value: 2 })
+    expect(node.getRangeLineHeight(0, 4)).toEqual({ unit: 'PIXELS', value: 24 })
+    expect(node.getRangeLetterSpacing(5, 9)).toEqual({ unit: 'PERCENT', value: 25 })
   })
 
   // Plugin typings allow only the object; untyped eval scripts may still pass a number.

@@ -15,9 +15,11 @@ import {
 } from '#core/figma-api/accessor-utils'
 import { styleNameToWeight, type FigmaFontName } from '#core/figma-api/fonts'
 import {
+  figmaLetterSpacing,
+  figmaLineHeight,
   getParagraphSpacing,
-  letterSpacingValue,
-  lineHeightValue,
+  letterSpacingStyle,
+  lineHeightStyle,
   paragraphStylesForCharacters,
   spacingProblem,
   type FigmaLetterSpacing,
@@ -69,13 +71,6 @@ function characterStyle<T>(
   }
 }
 
-/** A length given in percent of the font size, which characters of each size resolve. */
-function percentOf(value: unknown): number | null {
-  if (!value || typeof value !== 'object') return null
-  const length = value as { unit?: unknown; value?: unknown }
-  return length.unit === 'PERCENT' && typeof length.value === 'number' ? length.value / 100 : null
-}
-
 /** Getter/setter pair for a text property stored verbatim on the node. */
 function field<Field extends keyof SceneNode>(internals: NodeProxyInternals, name: Field) {
   return {
@@ -125,20 +120,24 @@ export function installTextNodeProxyAccessors(
       internals,
       'letterSpacing',
       mixed,
-      (node, value) => ({ letterSpacing: letterSpacingValue(node, value) }),
+      (node, value) => letterSpacingStyle(figmaLetterSpacing(value), node.fontSize),
       (value) => {
-        const percent = percentOf(value)
-        return percent === null ? undefined : (fontSize) => ({ letterSpacing: percent * fontSize })
+        const length = figmaLetterSpacing(value)
+        return length.unit === 'PERCENT'
+          ? (fontSize) => letterSpacingStyle(length, fontSize)
+          : undefined
       }
     ),
     lineHeight: characterStyle<FigmaLineHeight | number | null>(
       internals,
       'lineHeight',
       mixed,
-      (node, value) => ({ lineHeight: lineHeightValue(node, value) }),
+      (node, value) => lineHeightStyle(figmaLineHeight(value), node.fontSize),
       (value) => {
-        const percent = percentOf(value)
-        return percent === null ? undefined : (fontSize) => ({ lineHeight: percent * fontSize })
+        const length = figmaLineHeight(value)
+        return length.unit === 'PERCENT'
+          ? (fontSize) => lineHeightStyle(length, fontSize)
+          : undefined
       }
     ),
     textCase: characterStyle<TextCase>(internals, 'textCase', mixed, (_node, textCase) => ({

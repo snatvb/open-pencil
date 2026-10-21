@@ -13,7 +13,13 @@ import type {
 import { convertFontFeatures } from '../font/features'
 import { convertFontVariations } from '../font/variations'
 import { convertFills } from '../paint'
-import { convertLetterSpacing, convertLineHeight, mapTextDecoration } from '../text/values'
+import {
+  convertLetterSpacing,
+  convertLineHeight,
+  letterSpacingPercent,
+  lineHeightPercent,
+  mapTextDecoration
+} from '../text/values'
 import { textRunVariableBindings } from '../variable/bindings'
 import { styleRefId } from './refs'
 
@@ -88,10 +94,18 @@ function convertStyleOverride(override: NodeChange, text: NodeChange): Character
       override.letterSpacing,
       override.fontSize ?? fallbackFontSize
     )
+    const percent = letterSpacingPercent(override.letterSpacing)
+    if (percent !== null) {
+      style.letterSpacingPercent = percent
+    }
   }
   if (override.lineHeight) {
     // A run in auto lines up at its own font's height, even in text with a fixed one.
     style.lineHeight = convertLineHeight(override.lineHeight, override.fontSize ?? fallbackFontSize)
+    const percent = lineHeightPercent(override.lineHeight)
+    if (percent !== null) {
+      style.lineHeightPercent = percent
+    }
   }
   applyTextDecorationOverride(style, override)
   if (override.fillPaints) {

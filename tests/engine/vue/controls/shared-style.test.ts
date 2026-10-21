@@ -90,6 +90,33 @@ describe('shared style model', () => {
     })
   })
 
+  test('applies a text style in the unit each of its lengths is in', () => {
+    const graph = makeSceneGraph()
+    const pageId = firstPageId(graph)
+    const target = graph.createNode('TEXT', pageId, {
+      fontSize: 20,
+      letterSpacing: 5,
+      letterSpacingPercent: 25
+    })
+    const textStyle = graph.createNode('TEXT', pageId, {
+      fontFamily: 'Acme Sans',
+      fontSize: 16,
+      letterSpacing: 2,
+      lineHeight: 24,
+      lineHeightPercent: 150
+    })
+
+    graph.updateNode(target.id, sharedStylePatch('text', target, '1:24', textStyle))
+    graph.updateNode(target.id, { fontSize: 32 })
+
+    expect(target).toMatchObject({
+      letterSpacing: 2,
+      letterSpacingPercent: null,
+      lineHeight: 48,
+      lineHeightPercent: 150
+    })
+  })
+
   test('detaching a reference invalidates only its effective Figma fallback', () => {
     const graph = makeSceneGraph()
     const target = graph.createNode('RECTANGLE', firstPageId(graph), {

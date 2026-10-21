@@ -5,6 +5,8 @@ import {
   hasTextList,
   paragraphSpacingAt,
   paragraphStyleAt,
+  runLetterSpacing,
+  runLineHeight,
   textListItems,
   textParagraphRanges,
   topLevelNumberDigits,
@@ -72,7 +74,7 @@ function lineHeightRuns(node: ParagraphNode, lead: number): LineHeightRun[] {
   let position = 0
   for (const run of node.styleRuns) {
     if (position < run.start) add(position + lead, run.start + lead, own)
-    const lineHeight = run.style.lineHeight !== undefined ? run.style.lineHeight || null : own
+    const lineHeight = runLineHeight(run.style, node) || null
     add(run.start + lead, run.start + run.length + lead, lineHeight)
     position = run.start + run.length
   }
@@ -173,8 +175,8 @@ function markerNode(node: ParagraphNode, item: TextListItem, style: ListStyle): 
     fontFamily: style.family,
     fontWeight: override?.fontWeight ?? node.fontWeight,
     italic: override?.italic ?? node.italic,
-    letterSpacing: override?.letterSpacing ?? node.letterSpacing,
-    lineHeight: override?.lineHeight !== undefined ? override.lineHeight : node.lineHeight,
+    letterSpacing: runLetterSpacing(override, node),
+    lineHeight: runLineHeight(override, node),
     fontVariations: override?.fontVariations ?? node.fontVariations,
     fontFeatures:
       item.listType === 'ORDERED' ? [...features, { tag: 'TNUM', enabled: true }] : features,
