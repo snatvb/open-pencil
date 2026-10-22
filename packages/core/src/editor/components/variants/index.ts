@@ -3,7 +3,13 @@ import { buildVariantName, parseVariantName } from '@open-pencil/scene-graph/var
 
 import { assertNodeEditable } from '#core/editor/capabilities'
 import { reapplyInstanceComponentProperties } from '#core/editor/components/properties'
-import { restoreSubtree, snapshotSubtree } from '#core/editor/history/subtree'
+import {
+  restoreInstance,
+  restoreSubtree,
+  snapshotInstance,
+  snapshotSubtree,
+  type InstanceSnapshot
+} from '#core/editor/history/subtree'
 import type { EditorContext } from '#core/editor/types'
 
 import { addVariant, appendVariant } from './add'
@@ -98,17 +104,26 @@ export function createVariantActions(ctx: EditorContext) {
     if (!target) return { kind: 'unavailable', requested }
     if (target.id === instance.componentId) return { kind: 'unchanged', componentId: target.id }
 
-    const previousComponentId = instance.componentId
-    const applyComponent = (componentId: string) => {
-      ctx.graph.swapInstanceComponent(instanceId, componentId)
-      reapplyInstanceComponentProperties(ctx, instanceId)
+    const before = snapshotInstance(ctx.graph, instanceId)
+    ctx.graph.swapInstanceComponent(instanceId, target.id)
+    reapplyInstanceComponentProperties(ctx, instanceId)
+    ctx.requestRender()
+    let redone: InstanceSnapshot | undefined
+    const show = (snapshot: InstanceSnapshot) => {
+      restoreInstance(ctx.graph, snapshot)
       ctx.requestRender()
     }
-    applyComponent(target.id)
     ctx.undo.push({
       label: 'Switch variant',
-      forward: () => applyComponent(target.id),
-      inverse: () => applyComponent(previousComponentId)
+      forward: () => {
+        if (redone) {
+          show(redone)
+        }
+      },
+      inverse: () => {
+        redone = snapshotInstance(ctx.graph, instanceId)
+        show(before)
+      }
     })
     return { kind: 'changed', componentId: target.id }
   }

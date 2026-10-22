@@ -40,6 +40,7 @@ export interface InstanceOccurrence {
    */
   slotContentId?: string
   defaultInstanceName?: string
+  ownerAssignedProperties?: string[]
 }
 
 export interface InstancePathDiagnostic {
