@@ -7,6 +7,7 @@ import { compact } from 'es-toolkit'
 
 import {
   forEachInstanceOverride,
+  overriddenAssignmentId,
   ownsSlotContent,
   scaleNodeChanges,
   type SceneGraph,
@@ -28,6 +29,7 @@ import {
   type SceneNodeToKiwiContext
 } from './context'
 import { fillsOwnSizingAxis } from './fill-sizing'
+import { exportedPropertyAssignment } from './property-values'
 import { exportedNode } from './resolved-bindings'
 
 function unscaledRootSize(instance: SceneNode, target: SceneNode): Vector {
@@ -45,6 +47,29 @@ function exportedSwapOverride(
   if (!path || target.type !== 'INSTANCE' || !target.componentId) return undefined
   const component = getOrCreateNodeGuid(context, target.componentId, counter)
   return component ? { guidPath: { guids: path }, overriddenSymbolID: component } : undefined
+}
+
+function assignmentOverride(
+  context: SceneNodeToKiwiContext,
+  target: SceneNode,
+  propertyId: string,
+  path: GUID[],
+  counter: { value: number }
+): KiwiSymbolOverridePayload | undefined {
+  const assigned =
+    target.type === 'INSTANCE' && Object.hasOwn(target.componentPropertyAssignments, propertyId)
+  const assignment = assigned
+    ? exportedPropertyAssignment(
+        context,
+        target,
+        propertyId,
+        target.componentPropertyAssignments[propertyId],
+        counter
+      )
+    : null
+  return assignment
+    ? { guidPath: { guids: path }, componentPropAssignments: [assignment] }
+    : undefined
 }
 
 /**
@@ -213,6 +238,10 @@ function overrideClaim(
   const input: ClaimInput = { ...claimed, target, nodeFields }
   if (field === 'componentId')
     return exportedSwapOverride(input.context, input.target, path, counter)
+  const assignedPropertyId = overriddenAssignmentId(field)
+  if (assignedPropertyId !== undefined) {
+    return assignmentOverride(input.context, input.target, assignedPropertyId, path, counter)
+  }
   const claim = field.startsWith('boundVariables/')
     ? bindingClaim(input, field)
     : registryClaim(field as keyof SceneNode, input)
@@ -272,6 +301,30 @@ function overridePathKey(payload: KiwiSymbolOverridePayload): string | null {
     : null
 }
 
+function assignmentKey(assignment: unknown): string {
+  const defID =
+    typeof assignment === 'object' && assignment !== null && 'defID' in assignment
+      ? assignment.defID
+      : undefined
+  return JSON.stringify(defID ?? assignment)
+}
+
+function mergedAssignments(
+  earlier: KiwiSymbolOverridePayload,
+  later: KiwiSymbolOverridePayload
+): KiwiSymbolOverridePayload {
+  const before = earlier.componentPropAssignments
+  const after = later.componentPropAssignments
+  if (!Array.isArray(before) || !Array.isArray(after)) {
+    return {}
+  }
+  const byProperty = new Map<string, unknown>()
+  for (const assignment of [...before, ...after]) {
+    byProperty.set(assignmentKey(assignment), assignment)
+  }
+  return { componentPropAssignments: [...byProperty.values()] }
+}
+
 export function mergeOverrides(
   symbolOverrides: KiwiSymbolOverridePayload[],
   newOverrides: KiwiSymbolOverridePayload[]
@@ -292,7 +345,8 @@ export function mergeOverrides(
       symbolOverrides[existingIndex] = {
         ...symbolOverrides[existingIndex],
         ...override,
-        ...mergeVariableConsumptionMaps(symbolOverrides[existingIndex], override)
+        ...mergeVariableConsumptionMaps(symbolOverrides[existingIndex], override),
+        ...mergedAssignments(symbolOverrides[existingIndex], override)
       }
   }
 }

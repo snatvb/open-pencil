@@ -1,4 +1,9 @@
-import type { SceneGraph, SceneNode } from '@open-pencil/scene-graph'
+import {
+  cloneInstanceOverrideState,
+  type InstanceOverrideState,
+  type SceneGraph,
+  type SceneNode
+} from '@open-pencil/scene-graph'
 
 export function collectSubtrees(graph: SceneGraph, rootIds: string[]): SceneNode[] {
   const result: SceneNode[] = []
@@ -35,5 +40,51 @@ export function restoreSubtree(
   for (const childId of childIds) {
     const child = index.get(childId)
     if (child) restoreSubtree(graph, child, snapshot.id, index)
+  }
+}
+
+export interface InstanceSnapshot {
+  instanceId: string
+  nodes: Map<string, SceneNode>
+  owners: Map<string, InstanceOverrideState>
+}
+
+export function snapshotInstance(graph: SceneGraph, instanceId: string): InstanceSnapshot {
+  const owners = new Map<string, InstanceOverrideState>()
+  const instance = graph.getNode(instanceId)
+  if (instance?.parentId) {
+    graph.closest(instance.parentId, (node) => {
+      if (node.type === 'INSTANCE') {
+        owners.set(node.id, cloneInstanceOverrideState(node.instanceOverrides))
+      }
+      return false
+    })
+  }
+  return { instanceId, nodes: snapshotSubtree(graph, instanceId), owners }
+}
+
+export function restoreInstance(graph: SceneGraph, snapshot: InstanceSnapshot): void {
+  const live = graph.getNode(snapshot.instanceId)
+  const saved = snapshot.nodes.get(snapshot.instanceId)
+  if (!live || !saved) {
+    return
+  }
+  const nodes = new Map<string, SceneNode>()
+  for (const [id, node] of snapshot.nodes) {
+    nodes.set(id, structuredClone(node))
+  }
+  for (const childId of live.childIds.slice()) {
+    graph.deleteNode(childId)
+  }
+  const { id: _id, parentId: _parentId, childIds, ...props } = structuredClone(saved)
+  graph.updateNode(snapshot.instanceId, props)
+  for (const childId of childIds) {
+    const child = nodes.get(childId)
+    if (child) {
+      restoreSubtree(graph, child, snapshot.instanceId, nodes)
+    }
+  }
+  for (const [ownerId, overrides] of snapshot.owners) {
+    graph.updateNode(ownerId, { instanceOverrides: cloneInstanceOverrideState(overrides) })
   }
 }
