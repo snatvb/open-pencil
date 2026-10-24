@@ -7,7 +7,7 @@ import {
   reapplyComponentPropertyAssignments,
   recordAssignmentOverride,
   resolveComponentPropertyValue,
-  setInstanceOverride
+  unbindSwapPropertyTargets
 } from '@open-pencil/scene-graph'
 import type {
   ComponentPropertyDefinition,
@@ -16,6 +16,7 @@ import type {
 } from '@open-pencil/scene-graph'
 
 import { assertNodeEditable } from '#core/editor/capabilities'
+import { restoreInstance, snapshotInstance } from '#core/editor/history/subtree'
 import type { EditorContext } from '#core/editor/types'
 import { measurePropertyText } from '#core/layout/property-text'
 
@@ -43,6 +44,7 @@ function applyPropertyValue(
   definition: ComponentPropertyDefinition,
   value: string
 ): boolean {
+  unbindSwapPropertyTargets(ctx.graph, instanceId, definition, value)
   const result = applyComponentPropertyValue(ctx.graph, instanceId, definition, value)
   measurePropertyText(ctx.graph, instanceId, definition)
   return definition.type !== 'INSTANCE_SWAP' || result !== null
@@ -80,23 +82,11 @@ export function createComponentPropertyActions(
     return definition.type === 'INSTANCE_SWAP' ? (swapTargetId(ctx, value) ?? value) : value
   }
 
-  function restoreTarget(instance: SceneNode, target: ComponentPropertyTarget, value: string) {
+  function restoreTarget(target: ComponentPropertyTarget, value: string) {
     if (target.field === 'TEXT' && target.node.type === 'TEXT') {
       ctx.graph.updateNode(target.node.id, { text: value })
     } else if (target.field === 'VISIBLE') {
       ctx.graph.updateNode(target.node.id, { visible: value === 'true' })
-    } else if (target.field === 'INSTANCE_SWAP' && target.node.type === 'INSTANCE') {
-      const componentId = swapTargetId(ctx, value)
-      if (!componentId) return
-      ctx.graph.swapInstanceComponent(target.node.id, componentId)
-      setInstanceOverride(
-        instance.instanceOverrides,
-        instance.id,
-        target.node.id,
-        'sourceComponentId',
-        target.source.id
-      )
-      ctx.graph.updateNode(instance.id, { instanceOverrides: instance.instanceOverrides })
     }
   }
 
@@ -117,13 +107,12 @@ export function createComponentPropertyActions(
     const previousOwnerOverrides = owner && cloneInstanceOverrideState(owner.instanceOverrides)
 
     // A property can drive several layers; undo restores each one to what it showed.
-    const assignedValue = instance.componentPropertyAssignments[propertyId]
-    const previousValues = findComponentPropertyTargets(ctx.graph, instance, propertyId).map(
-      (target) =>
-        definition.type === 'INSTANCE_SWAP' && assignedValue
-          ? (swapTargetId(ctx, assignedValue) ?? assignedValue)
-          : targetValue(target)
-    )
+    const targets = findComponentPropertyTargets(ctx.graph, instance, propertyId)
+    const previousValues = targets.map(targetValue)
+    const swappedLayers =
+      definition.type === 'INSTANCE_SWAP'
+        ? targets.map(({ node }) => snapshotInstance(ctx.graph, node.id))
+        : []
 
     if (!applyPropertyValue(ctx, instanceId, definition, value)) return
     recordAssignmentOverride(ctx.graph, instanceId, propertyId)
@@ -150,8 +139,11 @@ export function createComponentPropertyActions(
             })
           }
           restoredTargets.forEach((target, index) =>
-            restoreTarget(live, target, previousValues[index] ?? '')
+            restoreTarget(target, previousValues[index] ?? '')
           )
+          for (const layer of swappedLayers) {
+            restoreInstance(ctx.graph, layer)
+          }
           measurePropertyText(ctx.graph, instanceId, definition)
           ctx.runLayoutForNode(instanceId)
         }

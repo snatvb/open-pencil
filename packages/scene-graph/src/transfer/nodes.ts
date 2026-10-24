@@ -11,6 +11,7 @@ export function semanticTransferReferences(node: SceneNode): string[] {
   const runs = styleRunReferences(node.styleRuns)
   return [
     ...(node.componentId ? [node.componentId] : []),
+    ...(node.source.fig.savedComponentId ? [node.source.fig.savedComponentId] : []),
     ...Object.values(node.boundVariables),
     ...Object.values(node.variantBindings),
     ...runs.variables,
@@ -74,6 +75,13 @@ export function prepareNodeTransfer(
     )
   const result = cloneNodeProps(source, null)
   result.componentId = source.componentId ? node(source.componentId) : null
+  const saved = source.source.fig.savedComponentId
+  if (saved && result.source) {
+    result.source = {
+      ...result.source,
+      fig: { ...result.source.fig, savedComponentId: refs.nodes.get(saved) ?? null }
+    }
+  }
   result.instanceOverrides = remapInstanceOverrideState(source.instanceOverrides, {
     node,
     variable

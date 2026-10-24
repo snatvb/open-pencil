@@ -15,7 +15,8 @@ import {
   createComponentPropertyId,
   exposedInstances,
   instanceExposureIssue,
-  resolveComponentPropertyValue
+  resolveComponentPropertyValue,
+  unbindSwapPropertyTargets
 } from '@open-pencil/scene-graph'
 import { cloneNodeProps } from '@open-pencil/scene-graph/copy'
 
@@ -316,6 +317,7 @@ function applyProperty(
   value: string | boolean
 ): void {
   const scene = graph(target, internals)
+  unbindSwapPropertyTargets(scene, node.id, definition, String(value))
   const result = applyComponentPropertyValue(scene, node.id, definition, String(value))
   if (!result) throw new Error(`Unable to apply component property: ${propertyName(definition)}`)
   recordAssignmentOverride(scene, node.id, definition.id)

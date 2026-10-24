@@ -24,6 +24,7 @@ import {
   TEXT_CONTENT_VARIABLE_TYPES,
   VISIBILITY_VARIABLE_TYPES
 } from './variables/fields'
+import { unbindRemovedVariables } from './variables/variant-bindings'
 
 export * from './variables/resolution'
 export { collectionsReachedBy } from './variables/reach'
@@ -37,6 +38,11 @@ export function addVariable(graph: SceneGraph, variable: Variable): void {
 }
 
 export function removeVariable(graph: SceneGraph, id: string): void {
+  forgetVariable(graph, id)
+  unbindRemovedVariables(graph, new Set([id]))
+}
+
+function forgetVariable(graph: SceneGraph, id: string): void {
   const variable = graph.variables.get(id)
   if (!variable) return
   graph.variables.delete(id)
@@ -129,9 +135,11 @@ export function createCollection(
 export function removeCollection(graph: SceneGraph, id: string): void {
   const collection = graph.variableCollections.get(id)
   if (collection) {
-    for (const varId of Array.from(collection.variableIds)) {
-      removeVariable(graph, varId)
+    const variableIds = new Set(collection.variableIds)
+    for (const varId of variableIds) {
+      forgetVariable(graph, varId)
     }
+    unbindRemovedVariables(graph, variableIds)
   }
   graph.variableCollections.delete(id)
   graph.activeMode.delete(id)

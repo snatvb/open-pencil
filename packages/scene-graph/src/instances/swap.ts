@@ -5,7 +5,10 @@ import {
   overriddenAssignmentId,
   reapplyComponentPropertyAssignments
 } from '../components/properties'
+import { copyDerivedGlyphs, markCopySource } from '../copy'
+import { TEXT_SHAPING_FIELDS } from '../fields/text'
 import { hasInstanceOverride, setInstanceOverride } from '../instance-overrides'
+import { resizedChildRect } from '../resize'
 import { ownsSlotContent, slotPropertyId } from '../slots/frames'
 import { keepCopy, takeKeptCopy } from './kept-copies'
 import { findInstanceAncestor, ownsSelfFillField, showsBoundVariant } from './main-component'
@@ -25,9 +28,17 @@ interface CopiesByLayer {
   unlinked: Map<string, SceneNode[]>
 }
 
+export type KeepsBoundVariant = (
+  copy: SceneNode,
+  layer: SceneNode,
+  protectedField: (field: string) => boolean
+) => boolean
+
 interface Swap {
   graph: SceneGraph
   keepsRemoved: boolean
+  keepsBoundVariant: KeepsBoundVariant
+  followsSavedLayout: boolean
   instance: SceneNode
   owners: SceneNode[]
   changedOwners: Set<SceneNode>
@@ -272,6 +283,54 @@ function followReplacedLayerFields(graph: SceneGraph, copy: SceneNode, layer: Sc
   }
 }
 
+const SAVED_TEXT_BOX_FIELDS = ['width', 'height', 'textAutoResize', 'maxLines', 'textTruncation']
+
+function changedFields(copy: SceneNode, wanted: Partial<SceneNode>): Partial<SceneNode> {
+  return Object.fromEntries(
+    Object.entries(wanted).filter(([key, value]) => !isEqual(copy[key as keyof SceneNode], value))
+  ) as Partial<SceneNode>
+}
+
+function savedTextBox(
+  copy: SceneNode,
+  layer: SceneNode,
+  protectedField: (field: string) => boolean
+): Partial<SceneNode> | undefined {
+  const shapedAlike =
+    copy.type === 'TEXT' &&
+    layer.type === 'TEXT' &&
+    copy.textAutoResize === layer.textAutoResize &&
+    TEXT_SHAPING_FIELDS.every((field) => isEqual(copy[field], layer[field]))
+  if (!shapedAlike || SAVED_TEXT_BOX_FIELDS.some(protectedField)) {
+    return undefined
+  }
+  const glyphs = layer.derivedTextGlyphs
+  return {
+    ...resizedChildRect(copy, layer, copy.horizontalConstraint, copy.verticalConstraint),
+    derivedLayout: layer.derivedLayout ? { ...layer.derivedLayout } : null,
+    derivedTextGlyphs: glyphs ? markCopySource(glyphs, copyDerivedGlyphs(glyphs) ?? []) : null
+  }
+}
+
+function followSavedLayout(
+  graph: SceneGraph,
+  copy: SceneNode,
+  layer: SceneNode,
+  protectedField: (field: string) => boolean
+): void {
+  if (copy.componentScale !== layer.componentScale) {
+    return
+  }
+  const wanted =
+    copy.type === 'TEXT'
+      ? savedTextBox(copy, layer, protectedField)
+      : { derivedLayout: layer.derivedLayout ? { ...layer.derivedLayout } : null }
+  const changes = wanted ? changedFields(copy, wanted) : {}
+  if (Object.keys(changes).length > 0) {
+    graph.updateNode(copy.id, changes)
+  }
+}
+
 function userAssignedIds(swap: Swap, copy: SceneNode): Set<string> {
   const ids = new Set<string>()
   for (const owner of swap.owners) {
@@ -415,12 +474,18 @@ function followLayers(swap: Swap, compParent: SceneNode, instParent: SceneNode):
 
 function followCopy(swap: Swap, match: MatchedCopy): void {
   const { compChild: layer, instChild: copy } = match
-  const swapped = isSwappedCopy(swap, copy) || showsBoundVariant(swap.graph, layer, copy)
+  const protection = copyProtection(swap, copy)
+  const swapped =
+    isSwappedCopy(swap, copy) ||
+    (showsBoundVariant(swap.graph, layer, copy) && swap.keepsBoundVariant(copy, layer, protection))
   const replaced = sourceLayer(swap, copy) !== layer
   const linkedLayerId = linkCopy(swap, copy, layer, swapped)
-  syncCopy(swap.graph, match, copyProtection(swap, copy), linkedLayerId)
+  syncCopy(swap.graph, match, protection, linkedLayerId)
   if (replaced) {
     followReplacedLayerFields(swap.graph, copy, layer)
+  }
+  if (replaced && !swapped && swap.followsSavedLayout) {
+    followSavedLayout(swap.graph, copy, layer, protection)
   }
   if (swapped || ownsSlotContent(swap.graph, copy, slotPropertyId(layer))) {
     return
@@ -443,15 +508,29 @@ function enclosingInstances(graph: SceneGraph, instance: SceneNode): SceneNode[]
   return owners.reverse()
 }
 
+const KEEPS_BOUND_VARIANT: KeepsBoundVariant = () => true
+
 export function followComponentLayers(
   graph: SceneGraph,
   instance: SceneNode,
   component: SceneNode,
-  { parked, keepsRemoved }: { parked: ReadonlySet<string>; keepsRemoved: boolean }
+  {
+    parked,
+    keepsRemoved,
+    keepsBoundVariant = KEEPS_BOUND_VARIANT,
+    followsSavedLayout = false
+  }: {
+    parked: ReadonlySet<string>
+    keepsRemoved: boolean
+    keepsBoundVariant?: KeepsBoundVariant
+    followsSavedLayout?: boolean
+  }
 ): void {
   const swap: Swap = {
     graph,
     keepsRemoved,
+    keepsBoundVariant,
+    followsSavedLayout,
     instance,
     owners: enclosingInstances(graph, instance),
     changedOwners: new Set(),

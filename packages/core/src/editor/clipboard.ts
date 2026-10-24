@@ -20,6 +20,7 @@ import { importClipboardDependenciesWithUndo } from './clipboard/dependencies'
 import { createClipboardExportActions } from './clipboard/export'
 import { createClipboardFontActions } from './clipboard/fonts'
 import { deleteIds, recreateSnapshots, restoreDeletedEntries } from './clipboard/history'
+import { pastedReferences } from './clipboard/paste/references'
 import type { PasteHistoryOperation } from './clipboard/paste/replace'
 import { replaceTargetsWithCreated, selectedReplacementTargets } from './clipboard/paste/replace'
 import {
@@ -282,17 +283,7 @@ export function createClipboardActions(ctx: EditorContext) {
     for (const id of copiedIds.values()) {
       const node = ctx.graph.getNode(id)
       if (!node) continue
-      const componentId = node.componentId ? copiedIds.get(node.componentId) : undefined
-      const instanceOverrides = {
-        self: node.instanceOverrides.self,
-        descendants: new Map(
-          [...node.instanceOverrides.descendants].map(([target, fields]) => [
-            copiedIds.get(target) ?? target,
-            fields
-          ])
-        )
-      }
-      ctx.graph.updateNode(id, { componentId: componentId ?? node.componentId, instanceOverrides })
+      ctx.graph.updateNode(id, pastedReferences(node, copiedIds))
     }
     if (dependencyRootIds.length > 0) {
       const snapshots = collectSubtrees(ctx.graph, dependencyRootIds)

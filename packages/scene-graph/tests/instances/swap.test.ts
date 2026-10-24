@@ -319,3 +319,59 @@ describe('a matched copy', () => {
     )
   })
 })
+
+function labelledSwitch(label: Partial<SceneNode> = {}) {
+  const graph = new SceneGraph()
+  const pageId = graph.getPages()[0].id
+  const set = graph.createNode('COMPONENT_SET', pageId, { name: 'Switch' })
+  const variant = (name: string, width: number) => {
+    const component = graph.createNode('COMPONENT', set.id, { name, width: 300, height: 50 })
+    graph.createNode('TEXT', component.id, {
+      name: 'Label',
+      text: 'Hi',
+      textAutoResize: 'NONE',
+      width,
+      height: 20,
+      derivedLayout: { width, height: 20 },
+      derivedTextGlyphs: [{ commandsBlob: new Uint8Array([1]), x: 0, y: 9, fontSize: 12 }],
+      ...label
+    })
+    return component
+  }
+  const off = variant('State=Off', 100)
+  const on = variant('State=On', 80)
+  const instance = must(graph.createInstance(off.id, pageId))
+  const copy = () => graph.getChildren(instance.id)[0]
+  return { graph, instance, on, copy }
+}
+
+describe('a switch that relinks text copies', () => {
+  test('keeps a width the user set on the copy', () => {
+    const { graph, instance, on, copy } = labelledSwitch()
+    graph.updateNode(copy().id, { width: 200 })
+    recordInstanceOverride(graph, copy().id, ['width'])
+    graph.swapInstanceComponent(instance.id, on.id)
+
+    expect(copy().width).toBe(200)
+  })
+
+  test('keeps the truncation the user set and takes no glyphs drawn without it', () => {
+    const { graph, instance, on, copy } = labelledSwitch({ derivedTextGlyphs: null })
+    graph.updateNode(copy().id, { maxLines: 1, textTruncation: 'ENDING', height: 10 })
+    recordInstanceOverride(graph, copy().id, ['maxLines', 'textTruncation', 'height'])
+    graph.swapInstanceComponent(instance.id, on.id)
+
+    expect([copy().height, copy().derivedTextGlyphs]).toEqual([10, null])
+  })
+
+  test('marks only the component as edited', () => {
+    const { graph, instance, on, copy } = labelledSwitch({
+      width: 100,
+      derivedLayout: { width: 100, height: 20 }
+    })
+    graph.updateNode(copy().id, { source: { ...copy().source, editedFields: [] } })
+    graph.swapInstanceComponent(instance.id, on.id)
+
+    expect(copy().source.editedFields).toEqual(['componentId'])
+  })
+})

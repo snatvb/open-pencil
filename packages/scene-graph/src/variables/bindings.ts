@@ -1,22 +1,13 @@
-import { partition, uniq } from 'es-toolkit/array'
+import { uniq } from 'es-toolkit/array'
 import { isEmptyObject } from 'es-toolkit/predicate'
 
-import { createVariantLookup, instanceVariant, type VariantLookup } from '../components/variants'
 import { copyFills, copyStrokes } from '../copy'
 import type { SceneGraph } from '../index'
 import { hasInstanceOverride } from '../instances'
 import type { Color } from '../primitives'
-import type {
-  CharacterStyleOverride,
-  ComponentPropertyDefinition,
-  Fill,
-  SceneNode,
-  Stroke,
-  StyleRun
-} from '../types'
+import type { CharacterStyleOverride, Fill, SceneNode, Stroke, StyleRun } from '../types'
 import type { VariableModeFallback } from '../variables'
 import { NUMERIC_FIELDS, isNumericVariableBindingField } from './fields'
-import { createBatchVariableResolver, type BatchVariableResolver } from './resolution'
 import {
   createTextStyleLookup,
   effectiveBoundVariables,
@@ -29,13 +20,23 @@ import {
 } from './style-bindings'
 import { variableText, variableTruthy } from './text'
 import { variableValueReferences } from './value'
+import { hasVariantBindings } from './variant-bindings'
 import {
-  boundVariantTarget,
-  followOccurrences,
-  hasVariantBindings,
-  showVariant
+  boundInstancesFirst,
+  createVariantWalk,
+  subtreeNodes,
+  walkBoundVariants,
+  type ReconcileOptions
+} from './variant-reconcile'
+export type { ReconcileOptions } from './variant-reconcile'
+export {
+  savedVariantIds,
+  savedVariantUnderBinding,
+  unbindSwapPropertyTargets,
+  unbindVariantProperty,
+  unbindVariantsForSwap
 } from './variant-bindings'
-export { unbindVariantProperty, unbindVariantsForSwap } from './variant-bindings'
+export { showBoundVariants } from './variant-reconcile'
 export {
   isNumericVariableBindingField,
   TEXT_CONTENT_VARIABLE_TYPES,
@@ -256,18 +257,6 @@ export function variablesResolvingThrough(graph: SceneGraph, ids: Iterable<strin
   return found
 }
 
-function subtreeNodes(graph: SceneGraph, roots: Iterable<string>): SceneNode[] {
-  const nodes: SceneNode[] = []
-  const pending = [...roots]
-  for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
-    const node = graph.getNode(id)
-    if (!node) continue
-    nodes.push(node)
-    pending.push(...node.childIds)
-  }
-  return nodes
-}
-
 /**
  * The collections whose variables the layers in these subtrees resolve: those they bind, and
  * those the bound variables alias, so a mode set on the subtrees can change what they show.
@@ -439,87 +428,11 @@ function resolvedOwnBindings(
   }
 }
 
-export interface ReconcileOptions {
-  onVariantSwap?: (instanceId: string, reapplied: ComponentPropertyDefinition[]) => void
-}
-
-interface VariantBindingContext extends ReconcileOptions {
-  resolve: BatchVariableResolver
-  lookup: VariantLookup
-  styles: TextStyleLookup
-  restyled: ReadonlySet<string>
-  reconciledInsideSwaps?: Set<string>
-}
-
-function nodeDepth(graph: SceneGraph, node: SceneNode): number {
-  let depth = 0
-  for (let id: string | null | undefined = node.parentId; id; id = graph.getNode(id)?.parentId) {
-    depth++
-  }
-  return depth
-}
-
-function hasBoundAncestor(graph: SceneGraph, node: SceneNode, boundIds: Set<string>): boolean {
-  for (let id: string | null | undefined = node.parentId; id; id = graph.getNode(id)?.parentId) {
-    if (boundIds.has(id)) {
-      return true
-    }
-  }
-  return false
-}
-
-function* withoutVariantBindings(nodes: Iterable<SceneNode>): Iterable<SceneNode> {
-  for (const node of nodes) {
-    if (!hasVariantBindings(node)) {
-      yield node
-    }
-  }
-}
-
-function boundInstancesFirst(graph: SceneGraph, scoped: Iterable<SceneNode>): Iterable<SceneNode> {
-  const bound: SceneNode[] = []
-  for (const node of scoped) {
-    if (hasVariantBindings(node)) {
-      bound.push(node)
-    }
-  }
-  if (bound.length === 0) {
-    return scoped
-  }
-  const boundIds = new Set(bound.map((node) => node.id))
-  const [outermost, nested] = partition(bound, (node) => !hasBoundAncestor(graph, node, boundIds))
-  const nestedAncestorsFirst = nested
-    .map((node) => ({ node, depth: nodeDepth(graph, node) }))
-    .sort((left, right) => left.depth - right.depth)
-    .map(({ node }) => node)
-  return [...outermost, ...nestedAncestorsFirst, ...withoutVariantBindings(scoped)]
-}
-
-function swapToBoundVariant(
-  graph: SceneGraph,
-  node: SceneNode,
-  variants: VariantBindingContext
-): SceneNode[] | undefined {
-  const variant = boundVariantTarget(graph, node, variants.resolve, variants.lookup)
-  if (!variant) {
-    return undefined
-  }
-  const shown = instanceVariant(graph, node)?.component
-  showVariant(graph, node, variant, variants.onVariantSwap)
-  const followed = shown
-    ? followOccurrences(graph, node, (occurrence) =>
-        showVariant(graph, occurrence, shown, variants.onVariantSwap)
-      )
-    : []
-  variants.reconciledInsideSwaps ??= new Set()
-  variants.resolve.forgetNodeModes()
-  return followed
-}
-
 function applyResolvedBindings(
   graph: SceneGraph,
   node: SceneNode,
-  { styles, restyled }: VariantBindingContext
+  styles: TextStyleLookup,
+  restyled: ReadonlySet<string>
 ): boolean {
   if (!readsVariables(node)) {
     return false
@@ -542,38 +455,6 @@ function applyResolvedBindings(
   return unboundChanged || styleChanged || ownChanged
 }
 
-function reconcileNodes(
-  graph: SceneGraph,
-  nodes: Iterable<SceneNode>,
-  variants: VariantBindingContext,
-  changed: string[],
-  insideSwap = false
-): void {
-  for (const node of nodes) {
-    const reconciled = variants.reconciledInsideSwaps
-    if (reconciled && (reconciled.has(node.id) || graph.getNode(node.id) !== node)) {
-      continue
-    }
-    if (insideSwap) {
-      reconciled?.add(node.id)
-    }
-    const followed = swapToBoundVariant(graph, node, variants)
-    const updated = applyResolvedBindings(graph, node, variants)
-    if (followed || updated) {
-      changed.push(node.id)
-    }
-    if (followed) {
-      reconcileNodes(graph, subtreeNodes(graph, node.childIds), variants, changed, true)
-    }
-    for (const occurrence of followed ?? []) {
-      changed.push(occurrence.id)
-      variants.reconciledInsideSwaps?.delete(occurrence.id)
-      reconcileNodes(graph, [occurrence], variants, changed, true)
-      reconcileNodes(graph, subtreeNodes(graph, occurrence.childIds), variants, changed, true)
-    }
-  }
-}
-
 /**
  * Resolve live numeric, text, and visibility bindings, numbers in scene units, without authoring
  * instance overrides. A scope limits it to the layers a change can reach, so layers whose saved
@@ -587,13 +468,12 @@ export function reconcileVariableBindings(
   const changed: string[] = []
   const styles = createTextStyleLookup(graph)
   const { nodes, restyled } = scopedLayers(graph, scope, styles)
-  const variants = {
-    resolve: createBatchVariableResolver(graph),
-    lookup: createVariantLookup(graph),
-    styles,
-    restyled,
-    onVariantSwap
-  }
-  reconcileNodes(graph, boundInstancesFirst(graph, nodes), variants, changed)
+  walkBoundVariants(
+    graph,
+    boundInstancesFirst(graph, nodes),
+    createVariantWalk(graph, { onVariantSwap }),
+    (node) => applyResolvedBindings(graph, node, styles, restyled),
+    changed
+  )
   return changed
 }

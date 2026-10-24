@@ -1,4 +1,9 @@
-import { styleRunReferences, type SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
+import {
+  savedVariantIds,
+  styleRunReferences,
+  type SceneGraph,
+  type SceneNode
+} from '@open-pencil/scene-graph'
 
 import { clipboardPlacement, type ClipboardPlacement } from './placement'
 import { captureClipboardVariables, type ClipboardVariables } from './variables'
@@ -64,6 +69,9 @@ export function captureClipboardSnapshot(
   }
   function visitReferences(node: ClipboardNodeTree) {
     if (node.componentId) captureComponent(node.componentId)
+    for (const id of savedVariantIds(node)) {
+      captureComponent(id)
+    }
     for (const child of node.children ?? []) visitReferences(child)
   }
   for (const node of nodes) visitReferences(node)

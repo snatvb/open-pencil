@@ -6,12 +6,14 @@ import { deflateSync } from 'fflate'
 import { exportFigFile, parseFigFile } from '@open-pencil/core/io'
 import { initCodec } from '@open-pencil/core/kiwi'
 import { compressFigDataSync, materializeDocument, parseFigBuffer } from '@open-pencil/fig'
+import { symbolOverridesOf } from '@open-pencil/fig/instance-overrides'
 import {
   getCompiledSchema,
   getSchemaBytes,
   type NodeChange,
   type VariableConsumptionEntry
 } from '@open-pencil/kiwi/fig/codec'
+import { guidToString } from '@open-pencil/kiwi/fig/guid'
 import {
   reconcileVariableBindings,
   SceneGraph,
@@ -224,4 +226,94 @@ test('a nested binding removed in a saved file stays removed when written again'
   const written = reopen(await exportFigFile(read))
 
   expect(occurrenceChip(written).variantBindings).toEqual({})
+})
+
+function badgeFile() {
+  const graph = new SceneGraph()
+  const page = graph.getPages()[0].id
+  const collection = graph.createCollection('Density')
+  const roomy = graph.createMode(collection.id, 'Roomy') ?? ''
+  const size = graph.createVariable('Size', 'STRING', collection.id, 'small')
+  size.valuesByMode[roomy] = 'large'
+  const set = graph.createNode('COMPONENT_SET', page, {
+    name: 'Badge',
+    componentPropertyDefinitions: [
+      { id: '8:1', name: 'Size', type: 'VARIANT', defaultValue: 'small' }
+    ]
+  })
+  const variant = (value: string, fontSize: number, modes: Record<string, string>) => {
+    const component = graph.createNode('COMPONENT', set.id, {
+      name: `Size=${value}`,
+      width: fontSize,
+      height: fontSize,
+      componentPropertyValues: { Size: value },
+      variableModes: modes
+    })
+    graph.createNode('TEXT', component.id, { name: 'Digit', text: '1', fontSize })
+    return component
+  }
+  const small = variant('small', 12, {})
+  const medium = variant('medium', 16, {})
+  variant('large', 20, { [collection.id]: roomy })
+  const panel = graph.createNode('COMPONENT', page, { name: 'Panel', x: 200 })
+  expectDefined(
+    graph.createInstance(medium.id, panel.id, {
+      name: 'Badge',
+      variantBindings: { '8:1': size.id }
+    })
+  )
+  const host = graph.createNode('FRAME', page, {
+    name: 'Roomy host',
+    x: 400,
+    variableModes: { [collection.id]: roomy }
+  })
+  const occurrence = expectDefined(
+    graph.createInstance(panel.id, host.id, { name: 'Panel occurrence' })
+  )
+  const badge = expectDefined(graph.getNode(expectDefined(occurrence.childIds[0])))
+  graph.swapInstanceComponent(badge.id, small.id)
+  return { graph, host }
+}
+
+function shownBadge(graph: SceneGraph): SceneNode {
+  const occurrence = named(graph, 'Panel occurrence')
+  return expectDefined(graph.getNode(expectDefined(occurrence.childIds[0])))
+}
+
+function shownVariantName(graph: SceneGraph): string | undefined {
+  const componentId = shownBadge(graph).componentId
+  return componentId ? graph.getNode(componentId)?.name : undefined
+}
+
+function savedSwap(file: Uint8Array): string | undefined {
+  const changes = records(file).nodeChanges
+  const occurrence = expectDefined(changes.find((record) => record.name === 'Panel occurrence'))
+  const swapped = symbolOverridesOf(occurrence).find(
+    (override) => override.overriddenSymbolID
+  )?.overriddenSymbolID
+  return changes.find(
+    (record) => swapped && record.guid && guidToString(record.guid) === guidToString(swapped)
+  )?.name
+}
+
+test('opening a file shows the variant a string variable picks for a nested instance', async () => {
+  const file = await exportFigFile(badgeFile().graph)
+  expect(savedSwap(file)).toBe('Size=small')
+
+  const opened = await parseFigFile(file.slice().buffer)
+
+  expect(shownVariantName(opened)).toBe('Size=large')
+  const digit = expectDefined(opened.getNode(expectDefined(shownBadge(opened).childIds[0])))
+  expect(digit.fontSize).toBe(20)
+})
+
+test('exporting a variant a variable picked writes the variant authored for the instance', async () => {
+  const { graph, host } = badgeFile()
+  reconcileVariableBindings(graph, { subtrees: [host.id] })
+  expect(shownVariantName(graph)).toBe('Size=large')
+
+  const file = await exportFigFile(graph)
+
+  expect(savedSwap(file)).toBe('Size=small')
+  expect(shownVariantName(reopen(file))).toBe('Size=large')
 })

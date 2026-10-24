@@ -15,6 +15,7 @@ import {
   DEFAULT_STROKE_WEIGHT,
   isGeneratedFrame,
   OPEN_PENCIL_PLUGIN_DATA,
+  savedVariantUnderBinding,
   withPluginData
 } from '@open-pencil/scene-graph'
 import { layoutGridCount } from '@open-pencil/scene-graph/layout'
@@ -459,9 +460,10 @@ function applyInstancePayload(
   localIdCounter: { value: number }
 ): void {
   if (node.type !== 'INSTANCE' || !node.componentId) return
+  const saved = savedVariantUnderBinding(context.graph, node, node.source.fig.savedComponentId)
   const symbolID = getOrCreateNodeGuid(
     context,
-    resolveInstanceComponentId(context, node.componentId),
+    resolveInstanceComponentId(context, saved?.id ?? node.componentId),
     localIdCounter
   )
   if (symbolID) {

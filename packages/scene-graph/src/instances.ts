@@ -16,7 +16,7 @@ import { canCreateInstance } from './instances/cycles'
 import { INSTANCE_OVERRIDE_FIELDS, INSTANCE_SYNC_PROPS } from './instances/fields'
 import { forgetKeptCopiesWithin, subtreeIds } from './instances/kept-copies'
 import { findInstanceAncestor, instanceMainComponent } from './instances/main-component'
-import { followComponentLayers } from './instances/swap'
+import { followComponentLayers, type KeepsBoundVariant } from './instances/swap'
 import {
   bindingProtection,
   cloneChildrenWithMapping,
@@ -109,9 +109,11 @@ function recordNestedSwap(
   instance: SceneNode,
   componentId: string,
   authored: boolean
-): void {
+): boolean {
   const owner = instance.parentId ? findInstanceAncestor(graph, instance.parentId) : undefined
-  if (!owner) return
+  if (!owner) {
+    return false
+  }
   graph.willChangeNode(owner)
   const existing = getInstanceOverride(
     owner.instanceOverrides,
@@ -131,6 +133,21 @@ function recordNestedSwap(
     setInstanceOverride(owner.instanceOverrides, owner.id, instance.id, 'componentId', componentId)
   }
   graph.updateNode(owner.id, { instanceOverrides: owner.instanceOverrides })
+  return true
+}
+
+function savedComponentAfterSwap(instance: SceneNode, authored: boolean): string | null {
+  const saved = instance.source.fig.savedComponentId ?? null
+  return authored ? null : (saved ?? instance.componentId)
+}
+
+function withSavedComponent(instance: SceneNode, saved: string | null): Partial<SceneNode> {
+  if ((instance.source.fig.savedComponentId ?? null) === saved) {
+    return {}
+  }
+  return {
+    source: { ...instance.source, fig: { ...instance.source.fig, savedComponentId: saved } }
+  }
 }
 
 export interface SwapInstanceOptions {
@@ -141,6 +158,8 @@ export interface SwapInstanceOptions {
    */
   keepName?: boolean
   authored?: boolean
+  keepsBoundVariant?: KeepsBoundVariant
+  followsSavedLayout?: boolean
 }
 
 function namedAfter(
@@ -160,7 +179,12 @@ export function swapInstanceComponent(
   graph: SceneGraph,
   instanceId: string,
   componentId: string,
-  { keepName = false, authored = true }: SwapInstanceOptions = {}
+  {
+    keepName = false,
+    authored = true,
+    keepsBoundVariant,
+    followsSavedLayout
+  }: SwapInstanceOptions = {}
 ): void {
   const instance = graph.nodes.get(instanceId)
   const component = graph.nodes.get(componentId)
@@ -168,9 +192,13 @@ export function swapInstanceComponent(
   if (instance.parentId && !canCreateInstance(graph, componentId, instance.parentId)) return
 
   const previousComponent = namedAfter(graph, instance, component)
-  recordNestedSwap(graph, instance, componentId, authored)
+  const nested = recordNestedSwap(graph, instance, componentId, authored)
   const source = sourceInTargetCoordinates(component, instance.componentScale)
-  const updates: Partial<SceneNode> = { componentId, ...ownSyncedProps(graph, instance, source) }
+  const updates: Partial<SceneNode> = {
+    componentId,
+    ...ownSyncedProps(graph, instance, source),
+    ...(nested ? {} : withSavedComponent(instance, savedComponentAfterSwap(instance, authored)))
+  }
   if (!authored) {
     keepBindingModes(graph, instance, updates)
   }
@@ -182,7 +210,9 @@ export function swapInstanceComponent(
   graph.updateNode(instanceId, updates)
   followComponentLayers(graph, instance, component, {
     parked: parkedContent(slotContent),
-    keepsRemoved: !authored
+    keepsRemoved: !authored,
+    keepsBoundVariant,
+    followsSavedLayout
   })
   restoreOwnedSlotContent(graph, instance, slotContent)
 }

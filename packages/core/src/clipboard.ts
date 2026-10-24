@@ -16,6 +16,7 @@ import {
   derivedAssetKey,
   derivedAssetVersion,
   ownsSlotContent,
+  savedVariantIds,
   type SceneGraph,
   type SceneNode
 } from '@open-pencil/scene-graph'
@@ -188,17 +189,23 @@ async function writeFigmaClipboardHTML(
     for (const child of graph.getChildren(node.id)) mark(child)
   }
   for (const node of nodes) mark(node)
-  const visitDependencies = (node: SceneNode): void => {
-    if (
-      node.type === 'INSTANCE' &&
-      node.componentId &&
-      !selected.has(node.componentId) &&
-      !dependencies.has(node.componentId)
-    ) {
-      const component = graph.getNode(node.componentId)
-      if (!component) throw new Error(`Missing clipboard component ${node.componentId}`)
+  const addDependency = (component: SceneNode): void => {
+    if (!selected.has(component.id) && !dependencies.has(component.id)) {
       dependencies.set(component.id, component)
       visitDependencies(component)
+    }
+  }
+  const visitDependencies = (node: SceneNode): void => {
+    if (node.type === 'INSTANCE' && node.componentId) {
+      const component = graph.getNode(node.componentId)
+      if (!component) throw new Error(`Missing clipboard component ${node.componentId}`)
+      addDependency(component)
+    }
+    for (const savedId of node.type === 'INSTANCE' ? savedVariantIds(node) : []) {
+      const saved = graph.getNode(savedId)
+      if (saved) {
+        addDependency(saved)
+      }
     }
     for (const child of graph.getChildren(node.id)) visitDependencies(child)
   }

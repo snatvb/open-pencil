@@ -110,11 +110,15 @@ export function createVariantActions(ctx: EditorContext) {
     if (!target) return { kind: 'unavailable', requested }
 
     const previousBindings = { ...instance.variantBindings }
+    const previousSource = instance.source
     const owner = instance.parentId ? findInstanceAncestor(ctx.graph, instance.parentId) : undefined
     const previousOwnerOverrides = owner && cloneInstanceOverrideState(owner.instanceOverrides)
     const unbind = () => unbindVariantProperty(ctx.graph, instanceId, propertyName)
     const restoreBindings = () => {
-      ctx.graph.updateNode(instanceId, { variantBindings: { ...previousBindings } })
+      ctx.graph.updateNode(instanceId, {
+        variantBindings: { ...previousBindings },
+        source: previousSource
+      })
       if (owner && previousOwnerOverrides) {
         ctx.graph.updateNode(owner.id, {
           instanceOverrides: cloneInstanceOverrideState(previousOwnerOverrides)

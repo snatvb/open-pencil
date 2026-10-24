@@ -18,13 +18,35 @@ import {
 const VARIANT_PROPERTIES_FIELD = 'VARIANT_PROPERTIES'
 const RESOLVE_VARIANT = 'RESOLVE_VARIANT'
 
+function consumesVariantProperties(map: unknown): boolean {
+  if (typeof map !== 'object' || map === null || !('entries' in map)) {
+    return false
+  }
+  const { entries } = map
+  return (
+    Array.isArray(entries) &&
+    entries.some(
+      (entry: unknown) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        'variableField' in entry &&
+        entry.variableField === VARIANT_PROPERTIES_FIELD
+    )
+  )
+}
+
 export function setsVariantBindings(source: VariableConsumptionSource): boolean {
-  return variableConsumptionEntries(source).some(
-    (entry) => entry.variableField === VARIANT_PROPERTIES_FIELD
+  return (
+    consumesVariantProperties(source.parameterConsumptionMap) ||
+    consumesVariantProperties(source.variableConsumptionMap)
   )
 }
 
 export function variantBindingsOf(source: VariableConsumptionSource): Record<string, string> {
+  return setsVariantBindings(source) ? collectVariantBindings(source) : {}
+}
+
+function collectVariantBindings(source: VariableConsumptionSource): Record<string, string> {
   const bindings: Record<string, string> = {}
   for (const entry of variableConsumptionEntries(source)) {
     const expression = entry.variableData?.value?.expressionValue

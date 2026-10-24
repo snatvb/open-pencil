@@ -2,6 +2,7 @@ import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
 
 import { idOf, parentIdOf, type SourceIndex } from '../instance-overrides/source-index'
 import { componentDependencies, slotContentDependencies } from './component/dependencies'
+import { createVariantDependencies } from './component/variant-dependencies'
 import { createResourceResolver } from './resource-reference'
 import { styleDependencies } from './style-dependencies'
 
@@ -63,6 +64,7 @@ export function collectSceneDependencies(
   whole: (record: NodeChange) => NodeChange = (record) => record
 ): SceneDependencyClosure {
   const resolveReference = createResourceResolver(changes)
+  const variantDependencies = createVariantDependencies({ index, whole, resolveReference })
   const { sources, children } = index
   const availableIds = new Set(sources.keys())
   const contentIds = new Set<string>()
@@ -103,6 +105,7 @@ export function collectSceneDependencies(
       ...(children.get(id) ?? []).flatMap((child) => idOf(child) ?? []),
       ...styleDependencies(record, resolveReference, availableIds),
       ...components,
+      ...variantDependencies(record),
       ...slotContent
     )
   }

@@ -6,6 +6,7 @@ import {
   reconcileVariableBindings,
   recordInstanceOverride,
   SceneGraph,
+  showBoundVariants,
   unbindVariantProperty,
   type SceneNode
 } from '@open-pencil/scene-graph'
@@ -285,6 +286,16 @@ describe('variant bindings', () => {
 
     expect(swapped).toEqual([outer.id])
     expect(changed).toEqual([outer.id])
+  })
+
+  test('showing bound variants switches instances without recording an override', () => {
+    const { graph, place, variants } = chipSet()
+    const chip = place(variants.tightPlain)
+
+    expect(showBoundVariants(graph, [chip])).toEqual([chip.id])
+
+    expect(chip.componentId).toBe(variants.loosePlain.id)
+    expect(chip.instanceOverrides.self.has('componentId')).toBe(false)
   })
 })
 

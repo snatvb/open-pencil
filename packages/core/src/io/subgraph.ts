@@ -1,4 +1,10 @@
-import { SceneGraph, styleRunReferences, variableValueReferences } from '@open-pencil/scene-graph'
+import {
+  SceneGraph,
+  savedVariantIds,
+  styleRunReferences,
+  variableValueReferences,
+  type SceneNode
+} from '@open-pencil/scene-graph'
 
 import type { ExportTarget } from './types'
 
@@ -213,17 +219,31 @@ function collectComponentDependencies(
     for (const id of Array.from(ids)) {
       const node = source.getNode(id)
       if (node?.type !== 'INSTANCE' || !node.componentId) continue
-      const componentId = resolveInstanceComponentId(source, node.componentId)
-      const component = source.getNode(componentId)
-      const set = component?.parentId ? source.getNode(component.parentId) : undefined
-      const dependency = componentSets && set?.type === 'COMPONENT_SET' ? set.id : componentId
-      if (ids.has(dependency)) continue
-      const before = ids.size
-      collectAncestors(source, dependency, ids)
-      collectDescendants(source, dependency, ids)
-      changed ||= ids.size !== before
+      for (const dependency of instanceDependencies(source, node, componentSets)) {
+        if (ids.has(dependency)) {
+          continue
+        }
+        const before = ids.size
+        collectAncestors(source, dependency, ids)
+        collectDescendants(source, dependency, ids)
+        changed ||= ids.size !== before
+      }
     }
   }
+}
+
+function instanceDependencies(
+  source: SceneGraph,
+  instance: SceneNode,
+  componentSets: boolean
+): string[] {
+  const shown = instance.componentId ? [instance.componentId] : []
+  return [...shown, ...savedVariantIds(instance)].map((id) => {
+    const componentId = resolveInstanceComponentId(source, id)
+    const component = source.getNode(componentId)
+    const set = component?.parentId ? source.getNode(component.parentId) : undefined
+    return componentSets && set?.type === 'COMPONENT_SET' ? set.id : componentId
+  })
 }
 
 export function findPageId(source: SceneGraph, nodeId: string): string | null {

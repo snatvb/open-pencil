@@ -8,6 +8,7 @@ import { compact } from 'es-toolkit'
 import {
   forEachInstanceOverride,
   overriddenAssignmentId,
+  savedVariantUnderBinding,
   ownsSlotContent,
   scaleNodeChanges,
   type SceneGraph,
@@ -52,14 +53,28 @@ function variantBindingsClaim(
   return entry && { guidPath: { guids: path }, parameterConsumptionMap: { entries: [entry] } }
 }
 
+function swappedComponent(
+  context: SceneNodeToKiwiContext,
+  target: SceneNode,
+  saved: unknown
+): string | undefined {
+  return (
+    savedVariantUnderBinding(context.graph, target, saved)?.id ?? target.componentId ?? undefined
+  )
+}
+
 function exportedSwapOverride(
   context: SceneNodeToKiwiContext,
   target: SceneNode,
+  saved: unknown,
   path: GUID[] | undefined,
   counter: { value: number }
 ): KiwiSymbolOverridePayload | undefined {
-  if (!path || target.type !== 'INSTANCE' || !target.componentId) return undefined
-  const component = getOrCreateNodeGuid(context, target.componentId, counter)
+  const componentId = swappedComponent(context, target, saved)
+  if (!path || target.type !== 'INSTANCE' || !componentId) {
+    return undefined
+  }
+  const component = getOrCreateNodeGuid(context, componentId, counter)
   return component ? { guidPath: { guids: path }, overriddenSymbolID: component } : undefined
 }
 
@@ -254,7 +269,7 @@ function overrideClaim(
     return variantBindingsClaim(input.context, input.target, path, counter)
   }
   if (field === 'componentId')
-    return exportedSwapOverride(input.context, input.target, path, counter)
+    return exportedSwapOverride(input.context, input.target, input.value, path, counter)
   const assignedPropertyId = overriddenAssignmentId(field)
   if (assignedPropertyId !== undefined) {
     return assignmentOverride(input.context, input.target, assignedPropertyId, path, counter)

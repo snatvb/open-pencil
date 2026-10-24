@@ -22,7 +22,8 @@ export function createDefaultSourceMetadata(): SourceMetadata {
       componentPropAssignments: [],
       derivedSymbolData: [],
       derivedSymbolDataLayoutVersion: null,
-      uniformScaleFactor: null
+      uniformScaleFactor: null,
+      savedComponentId: null
     }
   }
 }

@@ -23,6 +23,7 @@ import {
   mapInstanceSourceChildren,
   type MaterializedComponentOccurrence
 } from '../instance-overrides/source-children'
+import { derivedSymbolDataOf, type DerivedSymbolOverride } from '../instance-overrides/types'
 import { nodeChangeToProps } from '../node-change'
 import { generatedFrameCodec } from '../node-change/generated/codecs'
 import { readNodeChangePluginData } from '../node-change/plugin-data'
@@ -32,6 +33,7 @@ import { applyDocumentPaintBindings } from './bindings/paint'
 import type { BindingReferenceDiagnostic } from './bindings/references'
 import { applyDocumentTextStyleBindings } from './bindings/style'
 import { applyDocumentValueBindings } from './bindings/values'
+import { showDocumentVariantBindings } from './bindings/variant'
 import {
   checkpointComponent,
   restoreComponentCheckpoint,
@@ -409,8 +411,13 @@ function materializeReaderInto(
   const layoutScales = new Map<string, number>()
   /** The sizes Figma derived for this pass's instance layers, as materialized. */
   const derivedSizes = new Map<string, { width: number; height: number }>()
+  const placedGeometry = new Map<string, readonly DerivedSymbolOverride[]>()
   const rememberDerivedSizes = (nodes: ReadonlyMap<InstanceOccurrence, SceneNode>): void => {
     for (const [occurrence, node] of nodes) {
+      const derived = derivedSymbolDataOf(occurrence.properties)
+      if (node.type === 'INSTANCE' && derived.length > 0) {
+        placedGeometry.set(node.id, derived)
+      }
       if (occurrence.derivedSize) {
         savedSizeNodes.add(node.id)
         derivedSizes.set(node.id, { width: node.width, height: node.height })
@@ -527,15 +534,20 @@ function materializeReaderInto(
     })
   }
   // These passes apply to the nodes this page added, not to the whole graph.
-  const materialized = [...graph.nodes.values()].filter((node) => !existingNodeIds.has(node.id))
+  const isNew = (node: SceneNode): boolean => !existingNodeIds.has(node.id)
+  const materialized = [...graph.nodes.values()].filter(isNew)
   state.definitionTypes ??= seedDefinitionTypes(graph)
   linkComponentPropertyValues(graph, sources, materialized, state.definitionTypes)
   graph.preserveSourceMetadataDuring(() => {
     resolveVariantPropertyValues(graph, materialized)
-    applyDocumentLayoutBindings(graph, savedSizeNodes, materialized, layoutScales)
-    applyDocumentTextStyleBindings(graph, materialized)
-    applyDocumentPaintBindings(graph, materialized)
-    applyDocumentValueBindings(graph, materialized)
+    const shown = showDocumentVariantBindings(graph, materialized, isNew, {
+      sizes: savedSizeNodes,
+      placed: placedGeometry
+    })
+    applyDocumentLayoutBindings(graph, savedSizeNodes, shown, layoutScales)
+    applyDocumentTextStyleBindings(graph, shown)
+    applyDocumentPaintBindings(graph, shown)
+    applyDocumentValueBindings(graph, shown)
   })
   return state
 }

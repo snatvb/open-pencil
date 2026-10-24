@@ -54,6 +54,7 @@ export interface FigmaSourcePayload {
   derivedSymbolData: unknown[]
   derivedSymbolDataLayoutVersion: number | null
   uniformScaleFactor: number | null
+  savedComponentId?: string | null
 }
 
 export interface SourceMetadata {
