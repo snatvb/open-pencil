@@ -1,8 +1,11 @@
+import { pick } from 'es-toolkit/object'
+
 import {
   cloneInstanceOverrideState,
   findInstanceAncestor,
   variableBindingOwner,
   isNumericVariableBindingField,
+  withPairedTextLengthKeys,
   type SceneNode
 } from '@open-pencil/scene-graph'
 
@@ -23,7 +26,9 @@ export function createVariableBindingActions(ctx: EditorContext) {
     const previous = {
       boundVariables: { ...node.boundVariables },
       variableBindingScales: { ...node.variableBindingScales },
-      ...(isNumericVariableBindingField(path) ? { [path]: node[path as keyof SceneNode] } : {})
+      ...(isNumericVariableBindingField(path)
+        ? pick(node, withPairedTextLengthKeys([path as keyof SceneNode]))
+        : {})
     }
     const owner = variableBindingOwner(ctx.graph, node)
     const nearest = findInstanceAncestor(ctx.graph, nodeId)

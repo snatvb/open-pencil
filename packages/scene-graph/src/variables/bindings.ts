@@ -338,17 +338,52 @@ function withTextStyleConsumers(graph: SceneGraph, nodes: SceneNode[]): ScopedLa
   return { nodes: uniq([...nodes, ...textStyleConsumers(graph, styleIds)]), restyled: styleIds }
 }
 
-type NumericTextValues = Pick<CharacterStyleOverride, (typeof NUMERIC_RUN_FIELDS)[number]>
+type NumericRunField = (typeof NUMERIC_RUN_FIELDS)[number]
+
+type StyledTextValues = Pick<CharacterStyleOverride, NumericRunField | TextLengthPercentKey>
+
+function changedStyleLength(
+  style: SceneNode,
+  current: StyledTextValues,
+  length: NumericRunField,
+  percent: TextLengthPercentKey
+): StyledTextValues | undefined {
+  const stylePercent = style[percent]
+  if (stylePercent !== null) {
+    return current[percent] === stylePercent ? undefined : { [percent]: stylePercent }
+  }
+  const currentPercent = current[percent] ?? null
+  if (currentPercent === null && current[length] === style[length]) {
+    return undefined
+  }
+  return { [length]: style[length], [percent]: null }
+}
+
+function changedStyleValue(
+  style: SceneNode,
+  current: StyledTextValues,
+  field: NumericRunField
+): StyledTextValues | undefined {
+  const percent = textLengthPercentKey(field)
+  if (percent !== undefined) {
+    return changedStyleLength(style, current, field, percent)
+  }
+  return current[field] === style[field] ? undefined : { [field]: style[field] }
+}
 
 function unboundStyleValues(
   style: SceneNode,
-  current: NumericTextValues,
+  current: StyledTextValues,
   bound: VariableBindings
-): NumericTextValues | undefined {
-  let values: NumericTextValues | undefined
+): StyledTextValues | undefined {
+  let values: StyledTextValues | undefined
   for (const field of NUMERIC_RUN_FIELDS) {
-    if (!(field in bound) && current[field] !== style[field]) {
-      values = { ...values, [field]: style[field] }
+    if (field in bound) {
+      continue
+    }
+    const changed = changedStyleValue(style, current, field)
+    if (changed) {
+      values = { ...values, ...changed }
     }
   }
   return values
@@ -357,10 +392,10 @@ function unboundStyleValues(
 function restyledValues(
   graph: SceneGraph,
   styleId: string | null | undefined,
-  current: NumericTextValues,
+  current: StyledTextValues,
   bound: VariableBindings,
   restyled: ReadonlySet<string>
-): NumericTextValues | undefined {
+): StyledTextValues | undefined {
   if (!styleId || !restyled.has(styleId)) {
     return undefined
   }

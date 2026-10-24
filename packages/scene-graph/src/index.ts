@@ -723,7 +723,8 @@ export class SceneGraph {
     }
     const node = this.nodes.get(id)
     if (node) {
-      this.applyNodeChanges(node, this.sizedChanges(node, stripUndefinedProps(changes)))
+      const withLengths = withTextLengths(node, stripUndefinedProps(changes))
+      this.applyNodeChanges(node, this.sizedChanges(node, withLengths))
     }
   }
 
