@@ -1,15 +1,17 @@
 import { isEqual } from 'es-toolkit/predicate'
 
-import type { Paint } from '@open-pencil/kiwi/fig/codec'
+import type { NodeChange, Paint } from '@open-pencil/kiwi/fig/codec'
 import type { SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 import {
   bindingOverrideField,
-  setInstanceOverride
+  setInstanceOverride,
+  variableModeOverrideField
 } from '@open-pencil/scene-graph/instances/overrides'
 import { createDefaultSourceMetadata } from '@open-pencil/scene-graph/node-defaults'
 
 import { nodeChangeToProps } from '../node-change'
 import { numericVariableBindingScales } from '../node-change/variable/bindings'
+import { variableModeLayer } from '../node-change/variable/maps'
 import {
   recordVariableBindingClaims,
   occurrenceAssignmentScales,
@@ -265,6 +267,16 @@ function recordPaintBindingClaims(
   if (declared) setInstanceOverride(owner.instanceOverrides, owner.id, target.id, 'boundVariables')
 }
 
+function recordVariableModeClaims(owner: SceneNode, target: SceneNode, claim: NodeChange): void {
+  if (!claim.variableModeBySetMap) {
+    return
+  }
+  for (const collection of variableModeLayer(claim).keys()) {
+    const field = variableModeOverrideField(collection)
+    setInstanceOverride(owner.instanceOverrides, owner.id, target.id, field)
+  }
+}
+
 function recordPropertyClaims(nodes: ReadonlyMap<InstanceOccurrence, SceneNode>): void {
   for (const [ownerOccurrence, owner] of nodes) {
     if (owner.type !== 'INSTANCE') continue
@@ -290,6 +302,7 @@ function recordPropertyClaims(nodes: ReadonlyMap<InstanceOccurrence, SceneNode>)
           recordPaintBindingClaims(owner, target, field.scene[0], claim.properties[raw])
       }
       recordVariableBindingClaims(owner, target, claim.properties)
+      recordVariableModeClaims(owner, target, claim.properties)
     }
   }
 }
