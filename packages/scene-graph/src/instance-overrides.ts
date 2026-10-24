@@ -92,6 +92,19 @@ export function cloneInstanceOverrideState(state: InstanceOverrideState): Instan
 export interface InstanceOverrideReferenceMapper {
   node: (id: string) => string
   variable: (id: string) => string
+  collection?: (id: string) => string | undefined
+}
+
+const VARIABLE_MODE_FIELD_PREFIX = 'variableModes/'
+
+export function variableModeOverrideField(collectionId: string): InstanceOverrideField {
+  return `${VARIABLE_MODE_FIELD_PREFIX}${collectionId}`
+}
+
+export function variableModeOverrideCollection(field: InstanceOverrideField): string | undefined {
+  return field.startsWith(VARIABLE_MODE_FIELD_PREFIX)
+    ? field.slice(VARIABLE_MODE_FIELD_PREFIX.length)
+    : undefined
 }
 
 /** Remap runtime identities only; ordinary strings and source-format payloads stay opaque. */
@@ -105,8 +118,21 @@ export function remapInstanceOverrideState(
     if (field.startsWith('boundVariables/')) return references.variable(value)
     return value
   }
+  const remapField = (field: string): string | undefined => {
+    const collection = variableModeOverrideCollection(field)
+    if (collection === undefined || !references.collection) {
+      return field
+    }
+    const mapped = references.collection(collection)
+    return mapped === undefined ? undefined : variableModeOverrideField(mapped)
+  }
   const fields = (entries: ReadonlyMap<string, unknown>) =>
-    new Map([...entries].map(([field, value]) => [field, remapValue(field, value)]))
+    new Map(
+      [...entries].flatMap(([field, value]) => {
+        const mapped = remapField(field)
+        return mapped === undefined ? [] : [[mapped, remapValue(field, value)] as const]
+      })
+    )
   const descendants = new Map<string, Map<string, unknown>>()
   for (const [id, entries] of state.descendants) {
     const mapped = references.node(id)

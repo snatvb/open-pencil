@@ -16,6 +16,7 @@ import type { GUID, Vector } from '@open-pencil/scene-graph/primitives'
 
 import { instanceExportAddress } from '../instance/geometry'
 import { mergeVariableConsumptionMaps, overrideVariableBindingEntry } from '../variable/bindings'
+import { mergeVariableModeClaims } from '../variable/maps'
 import {
   createFillPaints,
   createStrokePaints,
@@ -29,6 +30,7 @@ import {
 } from './context'
 import { fillsOwnSizingAxis } from './fill-sizing'
 import { exportedNode } from './resolved-bindings'
+import { claimedVariableModes } from './variable-modes'
 
 function unscaledRootSize(instance: SceneNode, target: SceneNode): Vector {
   const scale = instance.componentScale
@@ -80,6 +82,7 @@ function layoutDistanceClaim(
 interface ClaimInput {
   context: SceneNodeToKiwiContext
   instance: SceneNode
+  owner: SceneNode
   target: SceneNode
   /** The recorded override value, when the override stored one. */
   value: unknown
@@ -124,7 +127,7 @@ function rawClaim(
   raw: string,
   definition: OverrideField,
   field: keyof SceneNode,
-  { context, instance, target, value, nodeFields }: ClaimInput
+  { context, instance, owner, target, value, nodeFields }: ClaimInput
 ): Omit<KiwiSymbolOverridePayload, 'guidPath'> | undefined {
   switch (definition.kind) {
     case 'node': {
@@ -157,6 +160,10 @@ function rawClaim(
       return layoutDistanceClaim(raw, target[field], instance)
     case 'layout-mode':
       return layoutModeClaim(raw, target[field], context.graph, target)
+    case 'variable-modes': {
+      const modes = claimedVariableModes(context, instance, owner, target)
+      return modes.entries.length > 0 ? { variableModeBySetMap: modes } : undefined
+    }
     default:
       return undefined
   }
@@ -250,7 +257,15 @@ export function serializeRuntimePropertyOverrides(
         const resolved = resolveTarget(node, nodeId)
         if (!resolved) return
         const claim = overrideClaim(
-          { context, instance, target: resolved.target, value, records, writeNodeFields },
+          {
+            context,
+            instance,
+            owner: node,
+            target: resolved.target,
+            value,
+            records,
+            writeNodeFields
+          },
           field,
           resolved.path,
           localIdCounter
@@ -292,7 +307,8 @@ export function mergeOverrides(
       symbolOverrides[existingIndex] = {
         ...symbolOverrides[existingIndex],
         ...override,
-        ...mergeVariableConsumptionMaps(symbolOverrides[existingIndex], override)
+        ...mergeVariableConsumptionMaps(symbolOverrides[existingIndex], override),
+        ...mergeVariableModeClaims(symbolOverrides[existingIndex], override)
       }
   }
 }

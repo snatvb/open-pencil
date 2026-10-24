@@ -4,7 +4,7 @@ import type { GUID, NodeChange } from '@open-pencil/kiwi/fig/codec'
 import { guidToString } from '@open-pencil/kiwi/fig/guid'
 
 import { cloneRecord } from '../node-change/clone'
-import { mergeVariableConsumptionMaps } from '../node-change/variable/bindings'
+import { claimedVariableMaps, mergeVariableConsumptionMaps } from '../node-change/variable/bindings'
 import {
   bindSourceProperties,
   componentBindings,
@@ -255,7 +255,7 @@ function interpretRoot(
     Object.assign(
       target.properties,
       cloneRecord(retained),
-      mergeVariableConsumptionMaps(target.properties, retained as NodeChange)
+      claimedVariableMaps(target.properties, retained as NodeChange)
     )
     if ('name' in retained) target.hasOwnName = true
     owner.propertyClaims.push({
