@@ -30,12 +30,13 @@ export {
   type OutlineNode
 } from './paths'
 
-import type {
-  SceneGraph,
-  SceneNode,
-  Fill,
-  Stroke,
-  CharacterStyleOverride
+import {
+  runLetterSpacing,
+  type SceneGraph,
+  type SceneNode,
+  type Fill,
+  type Stroke,
+  type CharacterStyleOverride
 } from '@open-pencil/scene-graph'
 
 import type { SVGExportContext } from './defs'
@@ -177,6 +178,13 @@ function nodeShapeElements(
   }
 }
 
+function tspanStyle(style: CharacterStyleOverride, node: SceneNode): CharacterStyleOverride {
+  const letterSpacing = runLetterSpacing(style, node)
+  return letterSpacing === (style.letterSpacing ?? node.letterSpacing)
+    ? style
+    : { ...style, letterSpacing }
+}
+
 function styleOverrideToTspanAttrs(
   style: CharacterStyleOverride,
   colorSpace: 'srgb' | 'display-p3'
@@ -253,7 +261,9 @@ function renderTextNode(
     for (const run of node.styleRuns) {
       const text = node.text.slice(pos, pos + run.length)
       pos += run.length
-      spans.push(svg('tspan', styleOverrideToTspanAttrs(run.style, colorSpace), text))
+      spans.push(
+        svg('tspan', styleOverrideToTspanAttrs(tspanStyle(run.style, node), colorSpace), text)
+      )
     }
 
     return svg('text', { x, y, ...attrs }, ...spans)

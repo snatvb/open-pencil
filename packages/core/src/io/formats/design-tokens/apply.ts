@@ -65,7 +65,9 @@ const TEXT_STYLE_FIELDS = [
   'italic',
   'fontSize',
   'lineHeight',
+  'lineHeightPercent',
   'letterSpacing',
+  'letterSpacingPercent',
   'textDecoration',
   'textCase'
 ] as const satisfies ReadonlyArray<keyof SceneNode>

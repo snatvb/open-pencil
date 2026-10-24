@@ -1,5 +1,6 @@
 import { uniqBy } from 'es-toolkit/array'
 
+import { percentOfFontSize } from '@open-pencil/scene-graph'
 import type {
   CharacterStyleOverride,
   Fill,
@@ -26,6 +27,8 @@ import {
   getRangeIndentation,
   getRangeListOptions,
   getRangeParagraphSpacing,
+  letterSpacingStyle,
+  lineHeightStyle,
   setRangeIndentation,
   setRangeListOptions,
   setRangeParagraphSpacing,
@@ -84,12 +87,17 @@ function numberProblem(value: unknown, at = ''): string | null {
 /** A length in pixels for a font size: a percent is of the size of the characters it styles. */
 type SizedLength<T> = (fontSize: number) => T
 
-function lengthFor(value: { unit: 'PIXELS' | 'PERCENT'; value: number }): SizedLength<number> {
-  return (fontSize) => (value.unit === 'PERCENT' ? (value.value / 100) * fontSize : value.value)
+function lengthFor(value: FigmaTextLength): SizedLength<number | null> {
+  return (fontSize) => {
+    if (value.unit === 'AUTO') {
+      return null
+    }
+    return value.unit === 'PERCENT' ? percentOfFontSize(value.value, fontSize) : value.value
+  }
 }
 
 /** A letter spacing Figma takes: pixels or percent, never automatic. */
-function letterSpacingLength(method: string, value: unknown): SizedLength<number> {
+function letterSpacingLength(method: string, value: unknown): FigmaLetterSpacing {
   const length = value as Partial<FigmaTextLength & { value: number }> | null
   if (!length || typeof length !== 'object') {
     throw invalid(method, `Expected object, received ${received(value)}`)
@@ -102,16 +110,18 @@ function letterSpacingLength(method: string, value: unknown): SizedLength<number
   }
   const problem = numberProblem(length.value, ' at .value')
   if (problem) throw invalid(method, problem)
-  return lengthFor(length as { unit: 'PIXELS' | 'PERCENT'; value: number })
+  return length as FigmaLetterSpacing
 }
 
 /** A length that may also be automatic, as line heights and decoration sizes are. */
-function lengthOrAuto(method: string, value: unknown): SizedLength<number | null> {
+function lengthOrAuto(method: string, value: unknown): FigmaTextLength {
   const length = value as Partial<FigmaTextLength & { value: number }> | null
   if (!length || typeof length !== 'object') {
     throw invalid(method, `Expected object, received ${received(value)}`)
   }
-  if (length.unit === 'AUTO') return () => null
+  if (length.unit === 'AUTO') {
+    return { unit: 'AUTO' }
+  }
   if (!LENGTH_UNITS.has(String(length.unit))) {
     throw invalid(
       method,
@@ -120,7 +130,7 @@ function lengthOrAuto(method: string, value: unknown): SizedLength<number | null
   }
   const problem = numberProblem(length.value, ' at .value')
   if (problem) throw invalid(method, problem)
-  return lengthFor(length as { unit: 'PIXELS' | 'PERCENT'; value: number })
+  return length as FigmaTextLength
 }
 
 function stringProblem(value: unknown, at: string): string | null {
@@ -283,11 +293,11 @@ const RANGE_SETTERS: Record<string, RangeSetter> = {
   }),
   setRangeLetterSpacing: (method, _node, _start, _end, value) => {
     const length = letterSpacingLength(method, value)
-    return (fontSize) => ({ letterSpacing: length(fontSize) })
+    return (fontSize) => letterSpacingStyle(length, fontSize)
   },
   setRangeLineHeight: (method, _node, _start, _end, value) => {
     const length = lengthOrAuto(method, value)
-    return (fontSize) => ({ lineHeight: length(fontSize) })
+    return (fontSize) => lineHeightStyle(length, fontSize)
   },
   setRangeTextDecoration: (method, _node, _start, _end, value) => ({
     textDecoration: enumValue(method, value, DECORATIONS)
@@ -296,11 +306,11 @@ const RANGE_SETTERS: Record<string, RangeSetter> = {
     textDecorationStyle: enumValue(method, value, DECORATION_STYLES)
   })),
   setRangeTextDecorationOffset: underlineStyle('offset', (method, value) => {
-    const length = lengthOrAuto(method, value)
+    const length = lengthFor(lengthOrAuto(method, value))
     return (fontSize) => ({ textUnderlineOffset: length(fontSize) })
   }),
   setRangeTextDecorationThickness: underlineStyle('thickness', (method, value) => {
-    const length = lengthOrAuto(method, value)
+    const length = lengthFor(lengthOrAuto(method, value))
     return (fontSize) => ({ textDecorationThickness: length(fontSize) })
   }),
   setRangeTextDecorationColor: underlineStyle('color', (method, value) => ({

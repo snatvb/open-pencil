@@ -10,7 +10,7 @@ import type {
   TextHeightBehavior
 } from 'canvaskit-wasm'
 
-import type { SceneNode } from '@open-pencil/scene-graph'
+import { runLetterSpacing, runLineHeight, type SceneNode } from '@open-pencil/scene-graph'
 import { resolveRGBAForPreview } from '@open-pencil/scene-graph/color'
 import { resolveNodeTextDirection } from '@open-pencil/scene-graph/text-direction'
 
@@ -165,7 +165,7 @@ function pushStyleRun(
 ): void {
   const ck = r.ck
   const style = run.style
-  const runLineHeight = style.lineHeight !== undefined ? style.lineHeight : node.lineHeight
+  const lineHeight = runLineHeight(style, node)
   const runFontSize = style.fontSize ?? baseFontSize
   const runFamily = style.fontFamily ?? (node.fontFamily || DEFAULT_FONT_FAMILY)
   const runWeight = style.fontWeight ?? node.fontWeight
@@ -182,8 +182,8 @@ function pushStyleRun(
       fontManager.namedInstanceVariations(runFamily, weightToStyle(runWeight, runItalic))
     ),
     fontFeatures: textFontFeatures(style.fontFeatures ?? node.fontFeatures),
-    letterSpacing: style.letterSpacing ?? (node.letterSpacing || 0),
-    heightMultiplier: runLineHeight ? runLineHeight / runFontSize : undefined,
+    letterSpacing: runLetterSpacing(style, node) || 0,
+    heightMultiplier: lineHeight ? lineHeight / runFontSize : undefined,
     halfLeading
   })
   pushParagraphStyle(builder, textStyle, paintStyle)

@@ -5,6 +5,8 @@ import {
   hasParagraphSpacing,
   MAX_LIST_INDENTATION,
   paragraphStyleAt,
+  runLetterSpacing,
+  runLineHeight,
   textParagraphRanges,
   withParagraphSpacing,
   type SceneNode,
@@ -33,7 +35,11 @@ export interface TextChildren {
 function characterStyles(node: SceneNode): SpanStyle[] {
   const styles = Array.from({ length: node.text.length }, (): SpanStyle => ({}))
   for (const run of node.styleRuns) {
-    const style: SpanStyle = pick(run.style, SPAN_STYLE_FIELDS)
+    const style: SpanStyle = {
+      ...pick(run.style, SPAN_STYLE_FIELDS),
+      letterSpacing: runLetterSpacing(run.style, node),
+      lineHeight: runLineHeight(run.style, node)
+    }
     if (run.style.hyperlink?.type === 'URL') style.hyperlink = run.style.hyperlink
     const end = Math.min(run.start + run.length, styles.length)
     for (let index = run.start; index < end; index++) styles[index] = { ...styles[index], ...style }

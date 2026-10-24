@@ -46,11 +46,15 @@ export const TEXT_SEGMENT_FIELDS = [
 
 export type TextSegmentField = (typeof TEXT_SEGMENT_FIELDS)[number]
 
-/** A size Figma reads as automatic or in pixels; the node keeps pixels. */
+/** A size Figma reads as automatic, in pixels, or in percent of the font size. */
 export type FigmaTextLength = { unit: 'AUTO' } | { unit: 'PIXELS' | 'PERCENT'; value: number }
 
 function pixels(value: number | null): FigmaTextLength {
   return value === null ? { unit: 'AUTO' } : { unit: 'PIXELS', value }
+}
+
+function lengthWithUnit(value: number | null, percent: number | null): FigmaTextLength {
+  return value === null || percent === null ? pixels(value) : { unit: 'PERCENT', value: percent }
 }
 
 function underlined(style: CharacterStyle): boolean {
@@ -97,8 +101,8 @@ const FIELD_READERS: Record<TextSegmentField, (context: FieldContext) => unknown
   textDecorationThickness: whenUnderlined((style) => pixels(style.textDecorationThickness)),
   textDecorationColor: whenUnderlined(decorationColor),
   textCase: ({ style }) => style.textCase,
-  lineHeight: ({ style }) => pixels(style.lineHeight),
-  letterSpacing: ({ style }) => ({ unit: 'PIXELS', value: style.letterSpacing }),
+  lineHeight: ({ style }) => lengthWithUnit(style.lineHeight, style.lineHeightPercent),
+  letterSpacing: ({ style }) => lengthWithUnit(style.letterSpacing, style.letterSpacingPercent),
   fills: ({ style }) => copyFills(style.fills),
   textStyleId: ({ style }) => style.textStyleId ?? '',
   fillStyleId: ({ style }) => style.fillStyleId ?? '',

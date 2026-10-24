@@ -1,3 +1,4 @@
+import { pick } from 'es-toolkit'
 import { computed } from 'vue'
 import type { ComputedRef } from 'vue'
 
@@ -8,7 +9,7 @@ import {
   nearestFamilyFace,
   weightToStyle
 } from '@open-pencil/core/text'
-import { shapeWithTextLabel } from '@open-pencil/scene-graph'
+import { shapeWithTextLabel, textLengthPercentKey } from '@open-pencil/scene-graph'
 import type {
   SceneNode,
   TextDecoration,
@@ -142,7 +143,7 @@ export function createTypographyActions({
   options
 }: TypographyActionOptions) {
   const lists = createTextListActions(editor)
-  type Preview = { value: SceneNode[keyof SceneNode]; textStyleId: string | null }
+  type Preview = { before: Partial<SceneNode>; textStyleId: string | null }
   let previewKey: keyof SceneNode | undefined
   const beforePreview = new Map<string, Preview>()
 
@@ -366,15 +367,33 @@ export function createTypographyActions({
     }
   }
 
+  function typedValueChanges(
+    key: keyof SceneNode,
+    value: number | string | null
+  ): Partial<SceneNode> {
+    const percent = textLengthPercentKey(key)
+    const changes = percent === undefined ? { [key]: value } : { [key]: value, [percent]: null }
+    return changes as Partial<SceneNode>
+  }
+
+  function fieldsOf(changes: Partial<SceneNode>): (keyof SceneNode)[] {
+    return Object.keys(changes) as (keyof SceneNode)[]
+  }
+
   function updateProp(key: keyof SceneNode, value: number | string | null) {
     if (previewKey !== key) {
       previewKey = key
       beforePreview.clear()
     }
+    const changes = typedValueChanges(key, value)
     for (const target of nodes.value) {
-      if (!beforePreview.has(target.id))
-        beforePreview.set(target.id, { value: target[key], textStyleId: target.textStyleId })
-      editor.updateNode(target.id, { [key]: value } as Partial<SceneNode>)
+      if (!beforePreview.has(target.id)) {
+        beforePreview.set(target.id, {
+          before: pick(target, fieldsOf(changes)),
+          textStyleId: target.textStyleId
+        })
+      }
+      editor.updateNode(target.id, changes)
     }
   }
 
@@ -389,12 +408,10 @@ export function createTypographyActions({
     editor.undo.runBatch(`Change ${String(key)}`, () => {
       for (const target of targets) {
         const snapshot = snapshots.get(target.id)
+        const unpreviewed = { [key]: previous } as Partial<SceneNode>
         editor.commitNodeUpdate(
           target.id,
-          {
-            [key]: snapshot ? snapshot.value : previous,
-            ...(snapshot ? { textStyleId: snapshot.textStyleId } : {})
-          } as Partial<SceneNode>,
+          snapshot ? { ...snapshot.before, textStyleId: snapshot.textStyleId } : unpreviewed,
           `Change ${String(key)}`
         )
       }

@@ -1,7 +1,7 @@
 import { isEqual } from 'es-toolkit'
 import { pick } from 'es-toolkit/object'
 
-import type { SceneNode } from '@open-pencil/scene-graph'
+import { withPairedTextLengthKeys, type SceneNode } from '@open-pencil/scene-graph'
 import type { Rect, Vector } from '@open-pencil/scene-graph/primitives'
 import { createResizeSnapshot, type ResizeSnapshot } from '@open-pencil/scene-graph/resize'
 import type { UndoEntry } from '@open-pencil/scene-graph/undo'
@@ -214,11 +214,9 @@ export function createUndoActions(ctx: EditorContext) {
     const node = ctx.graph.getNode(nodeId)
     if (!node) return
     const restoredPrevious = { ...previous, ...textAutoResizeChanges(node, previous) }
-    const current = pick(
-      node,
-      Object.keys(restoredPrevious) as (keyof SceneNode)[]
-    ) as Partial<SceneNode>
-    if (isEqual(current, restoredPrevious)) return
+    const restoredKeys = Object.keys(restoredPrevious) as (keyof SceneNode)[]
+    if (isEqual(pick(node, restoredKeys), restoredPrevious)) return
+    const current = pick(node, withPairedTextLengthKeys(restoredKeys)) as Partial<SceneNode>
     ctx.undo.push({
       label,
       forward: () => {

@@ -26,7 +26,9 @@ export const SHARED_TEXT_STYLE_FIELDS = [
   'italic',
   'fontSize',
   'lineHeight',
+  'lineHeightPercent',
   'letterSpacing',
+  'letterSpacingPercent',
   'textDecoration',
   'textCase',
   'fontFeatures'

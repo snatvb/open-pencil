@@ -1,17 +1,24 @@
 import { describe, expect, test } from 'bun:test'
 
-import { expectFills } from '#core-tests/helpers/assert'
+import { expectDefined, expectFills } from '#core-tests/helpers/assert'
 
 import { FigmaAPI, SceneGraph } from '@open-pencil/core'
 import type { Color } from '@open-pencil/scene-graph'
 
+import { characterStyles } from '#core/text/character-style'
+
 // Results recorded from the same scripts run in live Figma (2026-10-11). OpenPencil reports
-// lengths in pixels, as its node getters do, and paints in the shape `fills` returns.
+// decoration lengths in pixels, as its node getters do, and paints in the shape `fills` returns.
 function styledText(characters = 'Hello world\nSecond') {
-  const api = new FigmaAPI(new SceneGraph())
+  const graph = new SceneGraph()
+  const api = new FigmaAPI(graph)
   const text = api.createText()
   text.characters = characters
-  return { api, text }
+  const pixels = (field: 'letterSpacing' | 'lineHeight') => {
+    const node = expectDefined(graph.getNode(text.id))
+    return characterStyles(node, 0, node.text.length).map((style) => style[field])
+  }
+  return { api, text, pixels }
 }
 
 const REGULAR = { family: 'Inter', style: 'Regular' }
@@ -156,19 +163,21 @@ describe('character style ranges', () => {
   })
 
   test('take letter spacing and line height in pixels or percent of the font size', () => {
-    const { api, text } = styledText('Abc')
+    const { api, text, pixels } = styledText('Abc')
     text.fontSize = 20
     text.setRangeLetterSpacing(0, 1, { value: 10, unit: 'PERCENT' })
-    expect(text.getRangeLetterSpacing(0, 1)).toEqual({ unit: 'PIXELS', value: 2 })
+    expect(text.getRangeLetterSpacing(0, 1)).toEqual({ unit: 'PERCENT', value: 10 })
+    expect(pixels('letterSpacing')).toEqual([2, 0, 0])
     expect<unknown>(text.letterSpacing).toBe(api.mixed)
     text.setRangeLineHeight(0, 2, { value: 150, unit: 'PERCENT' })
-    expect(text.getRangeLineHeight(0, 1)).toEqual({ unit: 'PIXELS', value: 30 })
+    expect(text.getRangeLineHeight(0, 1)).toEqual({ unit: 'PERCENT', value: 150 })
+    expect(pixels('lineHeight')).toEqual([30, 30, null])
     text.setRangeLineHeight(0, 2, { unit: 'AUTO' })
     expect(text.getRangeLineHeight(0, 1)).toEqual({ unit: 'AUTO' })
   })
 
   test('resolve a percent against the size of each character it styles', () => {
-    const { text } = styledText('Small Large')
+    const { text, pixels } = styledText('Small Large')
     text.fontSize = 10
     text.setRangeFontSize(6, 11, 20)
     const spacing = () =>
@@ -177,20 +186,19 @@ describe('character style ranges', () => {
         .map((segment) => [segment.start, segment.end, segment.letterSpacing])
 
     text.letterSpacing = { value: 10, unit: 'PERCENT' }
-    expect(spacing()).toEqual([
-      [0, 6, { unit: 'PIXELS', value: 1 }],
-      [6, 11, { unit: 'PIXELS', value: 2 }]
-    ])
+    expect(spacing()).toEqual([[0, 11, { unit: 'PERCENT', value: 10 }]])
+    expect(pixels('letterSpacing')).toEqual([1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2])
     text.setRangeLetterSpacing(4, 8, { value: 50, unit: 'PERCENT' })
     expect(spacing()).toEqual([
-      [0, 4, { unit: 'PIXELS', value: 1 }],
-      [4, 6, { unit: 'PIXELS', value: 5 }],
-      [6, 8, { unit: 'PIXELS', value: 10 }],
-      [8, 11, { unit: 'PIXELS', value: 2 }]
+      [0, 4, { unit: 'PERCENT', value: 10 }],
+      [4, 8, { unit: 'PERCENT', value: 50 }],
+      [8, 11, { unit: 'PERCENT', value: 10 }]
     ])
+    expect(pixels('letterSpacing')).toEqual([1, 1, 1, 1, 5, 5, 10, 10, 2, 2, 2])
     text.lineHeight = { value: 150, unit: 'PERCENT' }
-    expect(text.getRangeLineHeight(0, 1)).toEqual({ unit: 'PIXELS', value: 15 })
-    expect(text.getRangeLineHeight(6, 7)).toEqual({ unit: 'PIXELS', value: 30 })
+    expect(text.getRangeLineHeight(0, 1)).toEqual({ unit: 'PERCENT', value: 150 })
+    expect(pixels('lineHeight')[0]).toBe(15)
+    expect(pixels('lineHeight')[6]).toBe(30)
   })
 
   test('style decorations of underlined ranges only, keeping them when the underline returns', () => {
@@ -247,9 +255,7 @@ describe('character style ranges', () => {
     expect(() => text.setRangeFontSize(5, 9, 0)).toThrow(
       'in setRangeFontSize: Range outside of available characters.'
     )
-    expect(() =>
-      text.setRangeLetterSpacing(0, 1, { value: 1, unit: 'EM' as 'PIXELS' })
-    ).toThrow(
+    expect(() => text.setRangeLetterSpacing(0, 1, { value: 1, unit: 'EM' as 'PIXELS' })).toThrow(
       message(
         'setRangeLetterSpacing',
         "Invalid enum value. Expected 'PIXELS' | 'PERCENT', received 'EM' at .unit"
@@ -321,8 +327,7 @@ describe('character style ranges', () => {
 
     text.setRangeTextDecoration(0, 3, 'UNDERLINE')
     const color = (problem: string) =>
-      'in setRangeTextDecorationColor: Property "textDecorationColor" failed validation: ' +
-      problem
+      'in setRangeTextDecorationColor: Property "textDecorationColor" failed validation: ' + problem
     const noneMatched = (issues: string) =>
       color(
         `Expected one of the following, but none matched:\n${issues}\n` +

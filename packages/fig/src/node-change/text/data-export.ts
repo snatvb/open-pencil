@@ -6,7 +6,12 @@ import { applyFontFeaturesToKiwi } from '../font/features'
 import { weightToFigmaStyle } from '../font/style'
 import { stringToFigmaAxisTag } from '../font/variations'
 import { exportTextLines } from './lines'
-import { FIGMA_AUTO_LINE_HEIGHT } from './values'
+import {
+  authoredLineHeightUnits,
+  letterSpacingToKiwi,
+  lineHeightToKiwi,
+  type PercentLineHeightUnits
+} from './values'
 
 export function fontVariationToKiwi(variation: SceneNode['fontVariations'][number]) {
   const axisTag = stringToFigmaAxisTag(variation.axis)
@@ -39,6 +44,7 @@ function textStyleOverrideToKiwi(
   id: number,
   style: CharacterStyleOverride,
   node: SceneNode,
+  lineHeightUnits: PercentLineHeightUnits,
   fillToKiwiPaint: (fill: SceneNode['fills'][number]) => Paint
 ): NodeChange {
   const override: Record<string, unknown> = { styleID: id }
@@ -57,13 +63,17 @@ function textStyleOverrideToKiwi(
     applyFontFeaturesToKiwi(override as NodeChange, style.fontFeatures)
   }
   if (style.letterSpacing !== undefined) {
-    override.letterSpacing = { value: style.letterSpacing, units: 'PIXELS' }
+    override.letterSpacing = letterSpacingToKiwi(
+      style.letterSpacing,
+      style.letterSpacingPercent ?? null
+    )
   }
   if (style.lineHeight !== undefined) {
-    override.lineHeight =
-      style.lineHeight === null
-        ? { ...FIGMA_AUTO_LINE_HEIGHT }
-        : { value: style.lineHeight, units: 'PIXELS' }
+    override.lineHeight = lineHeightToKiwi(
+      style.lineHeight,
+      style.lineHeightPercent ?? null,
+      lineHeightUnits
+    )
   }
   applyTextDecorationOverrideFields(override, style, fillToKiwiPaint)
   if (style.textCase) override.textCase = style.textCase
@@ -113,8 +123,9 @@ export function exportTextData(
   fillToKiwiPaint: (fill: SceneNode['fills'][number]) => Paint
 ): NodeChange['textData'] {
   const { charIds, styleMap } = collectTextStyleOverrides(node)
+  const lineHeightUnits = authoredLineHeightUnits(node)
   const characterOverrides = [...styleMap.values()].map(({ id, style }) =>
-    textStyleOverrideToKiwi(id, style, node, fillToKiwiPaint)
+    textStyleOverrideToKiwi(id, style, node, lineHeightUnits, fillToKiwiPaint)
   )
   // Paragraph spacing shares the override table, numbered after the character styles.
   const paragraphs = exportTextLines(node, styleMap.size + 1)

@@ -5,6 +5,8 @@ import {
   listNumberFormat,
   paragraphSpacingAt,
   paragraphStyleAt,
+  runLetterSpacing,
+  runLineHeight,
   textListItems,
   textParagraphRanges,
   type CharacterStyleOverride,
@@ -104,6 +106,8 @@ function characterStyle(node: SceneNode, override: CharacterStyleOverride = {}):
     const value = override[key]
     if (value !== undefined) style[key] = value
   }
+  style.letterSpacing = runLetterSpacing(override, node)
+  style.lineHeight = runLineHeight(override, node)
   return style as CharacterStyle
 }
 

@@ -38,6 +38,8 @@ import {
   convertLetterSpacing,
   convertLineHeight,
   isFigmaAutoLineHeight,
+  letterSpacingPercent,
+  lineHeightPercent,
   mapTextDecoration
 } from './text/values'
 import {
@@ -358,7 +360,9 @@ type TextProps = Pick<
   | 'textDecorationFills'
   | 'leadingTrim'
   | 'lineHeight'
+  | 'lineHeightPercent'
   | 'letterSpacing'
+  | 'letterSpacingPercent'
   | 'maxLines'
   | 'textParagraphs'
   | 'listSpacing'
@@ -449,7 +453,9 @@ function convertTextProps(nc: NodeChange, blobs: Uint8Array[]): TextProps {
     ...convertTextDecorationProps(nc),
     leadingTrim: (nc.leadingTrim ?? 'NONE') as SceneNode['leadingTrim'],
     lineHeight: importedTextLineHeight(nc),
+    lineHeightPercent: lineHeightPercent(nc.lineHeight),
     letterSpacing: convertLetterSpacing(nc.letterSpacing, nc.fontSize),
+    letterSpacingPercent: letterSpacingPercent(nc.letterSpacing),
     maxLines: (nc.maxLines ?? null) as number | null,
     ...convertParagraphProps(nc),
     styleRuns: importStyleRuns(nc),

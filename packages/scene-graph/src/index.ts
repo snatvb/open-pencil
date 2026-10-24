@@ -123,6 +123,7 @@ import { updateNodePreview, type NodePreviewObserver } from './preview'
 import { randomIndex } from './random'
 import { styleDetachmentChanges } from './shared-styles'
 import { markSourceFieldsEdited } from './source-metadata'
+import { withTextLengths } from './text/lengths'
 import { GLYPH_AFFECTING_KEYS, invalidateTextCaches, TEXT_PICTURE_KEYS } from './text/picture'
 import * as Variables from './variables'
 import type { VariableModeFallback } from './variables'
@@ -687,7 +688,9 @@ export class SceneGraph {
   }
   updateNodePreview(id: string, changes: Partial<SceneNode>): void {
     const node = this.nodes.get(id)
-    if (node) changes = this.sizedChanges(node, changes)
+    if (node) {
+      changes = withTextLengths(node, this.sizedChanges(node, changes))
+    }
     const appliedChanges = updateNodePreview(this, id, changes, (node, applied) => {
       for (const observe of this.previewObservers) observe(node, applied)
     })
@@ -703,6 +706,7 @@ export class SceneGraph {
     const node = this.nodes.get(id)
     if (!node) return
     changes = stripUndefinedProps(styleDetachmentChanges(node, stripUndefinedProps(changes)))
+    changes = withTextLengths(node, changes)
     this.applyNodeChanges(node, this.sizedChanges(node, changes))
   }
 

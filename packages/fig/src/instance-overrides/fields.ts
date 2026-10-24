@@ -107,8 +107,12 @@ export const OVERRIDE_FIELDS = {
   stackPositioning: { scene: ['layoutPositioning'], kind: 'node' },
   fontName: { scene: ['fontFamily', 'fontWeight', 'italic'], kind: 'node' },
   fontVariations: { scene: ['fontVariations'], kind: 'node', absent: [] },
-  lineHeight: { scene: ['lineHeight'], kind: 'node', absent: { value: 100, units: 'PERCENT' } },
-  letterSpacing: { scene: ['letterSpacing'], kind: 'node' },
+  lineHeight: {
+    scene: ['lineHeight', 'lineHeightPercent'],
+    kind: 'node',
+    absent: { value: 100, units: 'PERCENT' }
+  },
+  letterSpacing: { scene: ['letterSpacing', 'letterSpacingPercent'], kind: 'node' },
   paragraphSpacing: { scene: ['paragraphSpacing'], kind: 'node', length: true, absent: 0 },
   textCase: { scene: ['textCase'], kind: 'node', absent: 'ORIGINAL' },
   textDecoration: { scene: ['textDecoration'], kind: 'node', absent: 'NONE' },
