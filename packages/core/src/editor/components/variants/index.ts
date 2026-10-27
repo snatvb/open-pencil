@@ -1,9 +1,21 @@
-import type { ComponentPropertyDefinition, ComponentPropertyType } from '@open-pencil/scene-graph'
+import {
+  cloneInstanceOverrideState,
+  findInstanceAncestor,
+  unbindVariantProperty,
+  type ComponentPropertyDefinition,
+  type ComponentPropertyType
+} from '@open-pencil/scene-graph'
 import { buildVariantName, parseVariantName } from '@open-pencil/scene-graph/variant-name'
 
 import { assertNodeEditable } from '#core/editor/capabilities'
 import { reapplyInstanceComponentProperties } from '#core/editor/components/properties'
-import { restoreSubtree, snapshotSubtree } from '#core/editor/history/subtree'
+import {
+  restoreInstance,
+  restoreSubtree,
+  snapshotInstance,
+  snapshotSubtree,
+  type InstanceSnapshot
+} from '#core/editor/history/subtree'
 import type { EditorContext } from '#core/editor/types'
 
 import { addVariant, appendVariant } from './add'
@@ -96,19 +108,44 @@ export function createVariantActions(ctx: EditorContext) {
     }
     const target = findExactVariant(ctx.graph, componentSetId, requested)
     if (!target) return { kind: 'unavailable', requested }
-    if (target.id === instance.componentId) return { kind: 'unchanged', componentId: target.id }
 
-    const previousComponentId = instance.componentId
-    const applyComponent = (componentId: string) => {
-      ctx.graph.swapInstanceComponent(instanceId, componentId)
-      reapplyInstanceComponentProperties(ctx, instanceId)
+    const previousBindings = { ...instance.variantBindings }
+    const previousSource = instance.source
+    const owner = instance.parentId ? findInstanceAncestor(ctx.graph, instance.parentId) : undefined
+    const previousOwnerOverrides = owner && cloneInstanceOverrideState(owner.instanceOverrides)
+    const unbind = () => unbindVariantProperty(ctx.graph, instanceId, propertyName)
+    const restoreBindings = () => {
+      ctx.graph.updateNode(instanceId, {
+        variantBindings: { ...previousBindings },
+        source: previousSource
+      })
+      if (owner && previousOwnerOverrides) {
+        ctx.graph.updateNode(owner.id, {
+          instanceOverrides: cloneInstanceOverrideState(previousOwnerOverrides)
+        })
+      }
+    }
+    if (target.id === instance.componentId) {
+      if (unbind()) {
+        ctx.undo.push({ label: 'Switch variant', forward: unbind, inverse: restoreBindings })
+      }
+      return { kind: 'unchanged', componentId: target.id }
+    }
+
+    const before = snapshotInstance(ctx.graph, instanceId)
+    unbind()
+    ctx.graph.swapInstanceComponent(instanceId, target.id)
+    reapplyInstanceComponentProperties(ctx, instanceId)
+    ctx.requestRender()
+    const after = snapshotInstance(ctx.graph, instanceId)
+    const show = (snapshot: InstanceSnapshot) => {
+      restoreInstance(ctx.graph, snapshot)
       ctx.requestRender()
     }
-    applyComponent(target.id)
     ctx.undo.push({
       label: 'Switch variant',
-      forward: () => applyComponent(target.id),
-      inverse: () => applyComponent(previousComponentId)
+      forward: () => show(after),
+      inverse: () => show(before)
     })
     return { kind: 'changed', componentId: target.id }
   }

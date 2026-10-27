@@ -7,6 +7,7 @@ import {
   recordInstanceOverride,
   type SceneNode
 } from '@open-pencil/scene-graph'
+import { updateNodeOrKept } from '@open-pencil/scene-graph/instances'
 
 import { textAutoResizeChanges } from '#core/layout/text-auto-resize'
 import { reconcileVariableLayouts } from '#core/layout/variables'
@@ -94,12 +95,12 @@ export function createNodeActions(ctx: EditorContext) {
     ctx.undo.push({
       label,
       forward: () => {
-        ctx.graph.updateNode(id, nextChanges)
-        recordInstanceOverride(ctx.graph, id, Object.keys(nextChanges))
+        updateNodeOrKept(ctx.graph, id, nextChanges)
+        recordInstanceOverride(ctx.graph, id, Object.keys(nextChanges), true)
         runChangedLayout(id, nextChanges)
       },
       inverse: () => {
-        ctx.graph.updateNode(id, previous)
+        updateNodeOrKept(ctx.graph, id, previous)
         if (owner && previousOverrides)
           ctx.graph.updateNode(owner.id, {
             instanceOverrides: cloneInstanceOverrideState(previousOverrides)

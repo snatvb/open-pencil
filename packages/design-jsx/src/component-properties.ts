@@ -4,7 +4,8 @@ import * as v from 'valibot'
 import {
   applyComponentPropertyValue,
   componentPropertyDefinitions,
-  createComponentPropertyId
+  createComponentPropertyId,
+  unbindSwapPropertyTargets
 } from '@open-pencil/scene-graph'
 import type {
   ComponentPropertyDefinition,
@@ -122,6 +123,7 @@ function assignValue(
     throw new Error('Select a component-set variant when creating the instance')
   if (definition.type === 'BOOLEAN' && value !== 'true' && value !== 'false')
     throw new Error(`Expected true or false for component property: ${key}`)
+  unbindSwapPropertyTargets(graph, instance.id, definition, value)
   if (!applyComponentPropertyValue(graph, instance.id, definition, value))
     throw new Error(`Cannot assign component property: ${key}`)
 }

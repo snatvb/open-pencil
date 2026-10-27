@@ -22,7 +22,8 @@ export function createDefaultSourceMetadata(): SourceMetadata {
       componentPropAssignments: [],
       derivedSymbolData: [],
       derivedSymbolDataLayoutVersion: null,
-      uniformScaleFactor: null
+      uniformScaleFactor: null,
+      savedComponentId: null
     }
   }
 }
@@ -205,6 +206,7 @@ export function createDefaultNode(
     symbolLinks: [],
     variantPropSpecs: [],
     boundVariables: {},
+    variantBindings: {},
     variableBindingScales: {},
     variableAssignmentScales: {},
     componentScale: 1,

@@ -2,7 +2,8 @@ import {
   attachedConnectors,
   createsComponentCycle,
   recordInstanceOverride,
-  slotPropertyId
+  slotPropertyId,
+  unbindVariantsForSwap
 } from '@open-pencil/scene-graph'
 import type {
   GroupFitOptions,
@@ -378,6 +379,7 @@ export class FigmaNodeProxy {
     const target = this[INTERNAL_GRAPH].getNode(component[INTERNAL_ID])
     if (target?.type !== 'COMPONENT') throw new Error('swapComponent() needs a component')
     assertNodeEditable(this[INTERNAL_GRAPH], this[INTERNAL_ID])
+    unbindVariantsForSwap(this[INTERNAL_GRAPH], n.id)
     this[INTERNAL_GRAPH].swapInstanceComponent(n.id, target.id)
   }
 

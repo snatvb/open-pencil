@@ -1,5 +1,8 @@
+import { isEmptyObject } from 'es-toolkit/predicate'
+
 import type { SceneGraph } from '../index'
 import type { SceneNode } from '../types'
+import { keptNode } from './kept-copies'
 
 /**
  * The main component an instance shows. An instance nested in another instance points at the
@@ -16,6 +19,18 @@ export function instanceMainComponent(
     current = graph.getNode(current.componentId)
   }
   return current?.type === 'COMPONENT' ? current : undefined
+}
+
+export function showsBoundVariant(
+  graph: SceneGraph,
+  source: SceneNode,
+  target: SceneNode
+): boolean {
+  return (
+    target.type === 'INSTANCE' &&
+    !isEmptyObject(target.variantBindings) &&
+    instanceMainComponent(graph, target)?.id !== instanceMainComponent(graph, source)?.id
+  )
 }
 
 /** Root paint claims also protect a nested copy when its enclosing component syncs it. */
@@ -54,4 +69,22 @@ export function sourceWithEffectiveFill(
       effective.variableBindingScales
     )
   }
+}
+
+/** Nearest INSTANCE at or above `nodeId` — self, parent, grandparent, etc. */
+export function findInstanceAncestor(
+  graph: SceneGraph,
+  nodeId: string,
+  includeKept = false
+): SceneNode | undefined {
+  const lookup = (id: string) =>
+    graph.nodes.get(id) ?? (includeKept ? keptNode(graph, id) : undefined)
+  let current = lookup(nodeId)
+  while (current) {
+    if (current.type === 'INSTANCE') {
+      return current
+    }
+    current = current.parentId ? lookup(current.parentId) : undefined
+  }
+  return undefined
 }

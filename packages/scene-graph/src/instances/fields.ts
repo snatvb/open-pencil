@@ -43,6 +43,14 @@ export const INSTANCE_FOLLOWED_FIELDS = [
   'counterAxisAlignContent',
   'isMask',
   'maskType',
+  'maskIsOutline',
+  'booleanOperation',
+  'isExposedInstance',
+  'connectorStart',
+  'connectorEnd',
+  'connectorLineType',
+  'connectorStartCap',
+  'connectorEndCap',
   'arcData',
   'pointCount',
   'starInnerRadius',
@@ -80,7 +88,8 @@ export const INSTANCE_OVERRIDE_FIELDS = [
   ...INSTANCE_SYNC_PROPS,
   ...INSTANCE_SYNC_TEXT_PROPS,
   ...INSTANCE_SYNC_CHILD_PROPS,
-  'visible'
+  'visible',
+  'variantBindings'
 ] as const
 
 /** Fields a component's layer gives the copies of it in every instance. */

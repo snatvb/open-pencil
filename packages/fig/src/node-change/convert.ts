@@ -86,6 +86,7 @@ import type { GUID } from '@open-pencil/scene-graph/primitives'
 
 export { guidToString, stringToGuid } from '@open-pencil/kiwi/fig/guid'
 import { numericVariableAssignmentScales, sourceVariableBindingScales } from './variable/bindings'
+import { variantBindingsOf } from './variable/variants'
 export { VARIABLE_BINDING_FIELDS, VARIABLE_BINDING_FIELDS_INVERSE } from './variable/bindings'
 import type { FigVariableModeMap } from './variable/maps'
 
@@ -740,6 +741,7 @@ export function nodeChangeToProps(
     expanded: true,
     autoRename: (nc.autoRename ?? true) as boolean,
     boundVariables: extractBoundVariables(nc),
+    variantBindings: nodeType === 'INSTANCE' ? variantBindingsOf(nc) : {},
     variableAssignmentScales: numericVariableAssignmentScales(),
     variableBindingScales: sourceVariableBindingScales(nc),
     variableModes: extractVariableModes(nc),

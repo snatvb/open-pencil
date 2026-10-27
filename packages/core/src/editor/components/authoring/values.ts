@@ -1,6 +1,11 @@
-import { canCreateInstance, resolveComponentPropertyValue } from '@open-pencil/scene-graph'
+import {
+  canCreateInstance,
+  resolveComponentPropertyValue,
+  unbindVariantsForSwap
+} from '@open-pencil/scene-graph'
 import type { SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 
+import { restoreInstance, snapshotInstance } from '#core/editor/history/subtree'
 import { pathTextEditChanges } from '#core/editor/text/path-edit'
 import type { EditorContext } from '#core/editor/types'
 import { textAutoResizeChanges } from '#core/layout/text-auto-resize'
@@ -45,15 +50,20 @@ export function createAuthoringValueActions(ctx: EditorContext, patch: Patch) {
       const target = resolveComponentPropertyValue(ctx.graph, value)
       const previous = node.componentId
       if (!target || !previous || previous === target.id) return
-      const swap = (componentId: string) => {
-        ctx.graph.swapInstanceComponent(node.id, componentId)
+      const before = snapshotInstance(ctx.graph, node.id)
+      const show = (change: () => void) => {
+        change()
         ctx.runLayoutForNode(node.id)
         ctx.requestRender()
       }
       ctx.undo.execute({
         label: 'Change property source',
-        forward: () => swap(target.id),
-        inverse: () => swap(previous)
+        forward: () =>
+          show(() => {
+            unbindVariantsForSwap(ctx.graph, node.id)
+            ctx.graph.swapInstanceComponent(node.id, target.id)
+          }),
+        inverse: () => show(() => restoreInstance(ctx.graph, before))
       })
     } else if (field === 'TEXT') {
       patch(node.id, componentPropertyTextChanges(node, value), 'Change property source')

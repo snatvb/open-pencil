@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- SceneGraph exposes a stable facade over domain modules */
 export * from './mutation-impact'
 export * from './variables/bindings'
+export * from './variables/style-bindings'
 export * from './variables/text'
 export type { VariableModeFallback } from './variables'
 export { modesDefaultFirst } from './variables'
@@ -66,6 +67,7 @@ export * from './statuses/workflow'
 export * from './copy'
 export {
   createDefaultNode,
+  createDefaultSourceMetadata,
   defaultStrokeAlign,
   FITTED_CONTAINER_TYPES,
   newStrokeGeometry,
@@ -116,11 +118,13 @@ import { withGeneratedFrameSize } from './generated'
 import * as HitTest from './hit-test'
 export type { DropTargetOptions } from './hit-test'
 import * as Instances from './instances'
+import { dropKeptTargets, noteDeletedNode } from './instances/kept-copies'
 import { LayoutWrites } from './layout/writes'
 import Matrix, { type Mat3 } from './matrix'
 import { CONTAINER_TYPES, createDefaultNode } from './node-defaults'
 import { updateNodePreview, type NodePreviewObserver } from './preview'
 import { randomIndex } from './random'
+import { SharedStyleIndex } from './shared-style-index'
 import { styleDetachmentChanges } from './shared-styles'
 import { markSourceFieldsEdited } from './source-metadata'
 import { GLYPH_AFFECTING_KEYS, invalidateTextCaches, TEXT_PICTURE_KEYS } from './text/picture'
@@ -146,6 +150,7 @@ import type {
   NodeChangeObserver,
   SceneGraphEventHandlers,
   SceneNode,
+  SharedStyleType,
   SourceMetadata,
   Variable,
   VariableCollection,
@@ -236,6 +241,7 @@ export class SceneGraph {
   instanceIndex = new Map<string, Set<string>>()
   /** Every connector in the graph, so routing need not scan every layer. */
   connectorIds = new Set<string>()
+  readonly sharedStyleIndex = new SharedStyleIndex(() => this.nodes)
 
   constructor(private readonly idGenerator: () => string = generateId) {
     const root = createDefaultNode(this.idGenerator, 'FRAME', {
@@ -541,6 +547,7 @@ export class SceneGraph {
     node.parentId = parentId
     this.nodes.set(node.id, node)
     if (node.type === 'CONNECTOR') this.connectorIds.add(node.id)
+    this.sharedStyleIndex.added(node)
     for (const observer of this.changeObservers) observer.created(node)
     if (node.type === 'INSTANCE' && node.componentId) {
       let set = this.instanceIndex.get(node.componentId)
@@ -706,6 +713,25 @@ export class SceneGraph {
     this.applyNodeChanges(node, this.sizedChanges(node, changes))
   }
 
+  updateNodeFromStyle(id: string, changes: Partial<SceneNode>): void {
+    if (this.previewMutationDepth > 0) {
+      this.updateNodePreview(id, changes)
+      return
+    }
+    const node = this.nodes.get(id)
+    if (node) {
+      this.applyNodeChanges(node, this.sizedChanges(node, stripUndefinedProps(changes)))
+    }
+  }
+
+  getSharedStyleNode(styleId: string, type: SharedStyleType): SceneNode | undefined {
+    return this.sharedStyleIndex.styleNode(styleId, type)
+  }
+
+  private styleIndexWillChange(node: SceneNode, changes: Partial<SceneNode>): boolean {
+    return !this.isApplyingLayout && this.sharedStyleIndex.willChange(node, changes)
+  }
+
   /** A size set from outside layout, with what it also sets on a generated frame. */
   private sizedChanges(node: SceneNode, changes: Partial<SceneNode>): Partial<SceneNode> {
     return this.isApplyingLayout ? changes : withGeneratedFrameSize(node, changes)
@@ -761,10 +787,12 @@ export class SceneGraph {
       changes = { ...changes, vectorNetwork: normalizeVectorNetwork(changes.vectorNetwork) }
     }
     this.layoutWrites?.record(node, changes)
+    const restyled = this.styleIndexWillChange(node, changes)
     Object.assign(node, changes)
     if (changes.fills) removeStaleBindings(node, 'fills', changes)
     if (changes.strokes) removeStaleBindings(node, 'strokes', changes)
     for (const key of absent) Reflect.deleteProperty(node, key)
+    this.sharedStyleIndex.didChange(node, restyled)
     this.publishNodeUpdate(id, changes)
   }
 
@@ -889,6 +917,8 @@ export class SceneGraph {
       this.instanceIndex.get(node.componentId)?.delete(id)
     }
     this.connectorIds.delete(id)
+    noteDeletedNode(this, id)
+    this.sharedStyleIndex.removed(node)
     this.nodes.delete(id)
     this.emitter.emit('node:deleted', id, node.parentId)
   }
@@ -949,6 +979,7 @@ export class SceneGraph {
     props.source = { ...(props.source as SourceMetadata), id: null, orderKey: null }
     // A copy is a new design nobody has reviewed: Figma's duplicate and clone() drop the status.
     props.status = null
+    dropKeptTargets(this, props.instanceOverrides)
     const clone = this.createNode(src.type, parentId, { ...props, ...overrides })
     if (src.status) markSourceFieldsEdited(clone, ['status'])
 

@@ -54,6 +54,7 @@ export interface FigmaSourcePayload {
   derivedSymbolData: unknown[]
   derivedSymbolDataLayoutVersion: number | null
   uniformScaleFactor: number | null
+  savedComponentId?: string | null
 }
 
 export interface SourceMetadata {
@@ -772,6 +773,7 @@ export interface SceneNode {
   variantPropSpecs: VariantPropSpec[]
 
   boundVariables: Record<string, string>
+  variantBindings: Record<string, string>
   /** Multipliers from bound numeric values to this occurrence's scene units. */
   variableBindingScales: Partial<Record<string, number>>
   /** Numeric units for new declarations owned by this node's occurrence scope. */

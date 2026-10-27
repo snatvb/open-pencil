@@ -161,6 +161,23 @@ describe('style ranges', () => {
     expect(text.getRangeTextStyleId(0, 11)).toBe('')
   })
 
+  test('give a range the value a style binds in the mode of the text', () => {
+    const { api, text } = styledText()
+    const graph = api.graph
+    const collection = graph.createCollection('Type scale')
+    const roomy = graph.createMode(collection.id, 'Roomy') ?? ''
+    const size = graph.createVariable('Body size', 'FLOAT', collection.id, 14)
+    size.valuesByMode[roomy] = 20
+    textStyle(api, '1:20', { fontSize: 14, boundVariables: { fontSize: size.id } })
+    graph.updateNode(text.id, { variableModes: { [collection.id]: roomy } })
+
+    text.setRangeTextStyleId(0, 5, '1:20')
+
+    expect(text.getRangeFontSize(0, 5)).toBe(20)
+    expect(text.getRangeTextStyleId(0, 5)).toBe('1:20')
+    expect(text.getRangeBoundVariable(0, 5, 'fontSize')).toBeNull()
+  })
+
   test('give a range a fill style and its paints, and detach it when filled', async () => {
     const { api, text } = styledText()
     fillStyle(api, '1:30')

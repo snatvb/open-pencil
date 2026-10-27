@@ -2,7 +2,7 @@ import type { SceneGraph } from '@open-pencil/scene-graph'
 
 import { findLibraryDefinition } from './definitions'
 import type { ComponentLibraryRevision, LibraryAssetDescriptor } from './types'
-import type { LibraryInstanceUpdate } from './update'
+import { savedComponentOf, type LibraryInstanceUpdate } from './update'
 
 export function libraryAssetKeyForComponent(graph: SceneGraph, componentId: string): string | null {
   let node = graph.getNode(componentId)
@@ -67,10 +67,14 @@ export function planOutdatedLibraryInstances(
     if (!descriptor) continue
     const target = targetComponentId(graph, descriptor, revision, component.id)
     if (!target) continue
+    const previousSaved = savedComponentOf(graph, instance)
+    const saved = previousSaved && targetComponentId(graph, descriptor, revision, previousSaved)
     updates.push({
       instanceId: instance.id,
       previousComponentId: component.id,
       componentId: target.id,
+      previousSavedComponentId: previousSaved,
+      savedComponentId: saved && !saved.fallback ? saved.id : null,
       fallback: target.fallback
     })
   }

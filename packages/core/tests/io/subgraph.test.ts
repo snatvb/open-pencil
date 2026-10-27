@@ -27,6 +27,14 @@ describe('extracting page context', () => {
     expect(withSets.getNode(on.id)).toBeDefined()
   })
 
+  test('brings the variant an instance a variable switched saves', () => {
+    const { graph, pageId, card, instance, off, on } = cardWithSwitch()
+    graph.swapInstanceComponent(instance.id, on.id, { authored: false })
+    const plain = extractPageContext(graph, pageId, [card.id])
+    expect(plain.getNode(on.id)).toBeDefined()
+    expect(plain.getNode(off.id)).toBeDefined()
+  })
+
   test('indexes instances by component, so the copy can sync and swap them', () => {
     const { graph, pageId, card, instance, off } = cardWithSwitch()
     const copy = extractPageContext(graph, pageId, [card.id], { componentSets: true })

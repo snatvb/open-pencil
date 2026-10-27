@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 
+import { expectDefined } from '#core-tests/helpers/assert'
+
 import { createEditor } from '@open-pencil/core/editor'
+import { exportFigFile, parseFigFile } from '@open-pencil/core/io'
+import { initCodec } from '@open-pencil/core/kiwi'
+import { instanceMainComponent, SceneGraph } from '@open-pencil/scene-graph'
+
+import { reconcileVariableLayouts } from '#core/layout/variables'
 
 function setupVariants() {
   const editor = createEditor()
@@ -213,5 +220,66 @@ describe('variant authoring', () => {
     expect(editor.graph.getNode(duplicateId)).toBeUndefined()
     editor.undo.undo()
     expect(editor.graph.getNode(duplicateId)?.parentId).toBe(componentSet.id)
+  })
+})
+
+function boundIconInRoomyPanel() {
+  const graph = new SceneGraph()
+  const pageId = graph.getPages()[0].id
+  const collection = graph.createCollection('Density')
+  const roomy = graph.createMode(collection.id, 'Roomy') ?? ''
+  const size = graph.createVariable('Size', 'STRING', collection.id, 'small')
+  size.valuesByMode[roomy] = 'large'
+  const set = graph.createNode('COMPONENT_SET', pageId, {
+    name: 'Badge',
+    componentPropertyDefinitions: [
+      { id: '8:1', name: 'Size', type: 'VARIANT', defaultValue: 'small' }
+    ]
+  })
+  const variants = ['small', 'medium', 'large'].map((value) =>
+    graph.createNode('COMPONENT', set.id, {
+      name: `Size=${value}`,
+      width: 10,
+      height: 10,
+      componentPropertyValues: { Size: value }
+    })
+  )
+  const panel = graph.createNode('COMPONENT', pageId, { name: 'Panel' })
+  const icon = expectDefined(
+    graph.createInstance(expectDefined(variants[0]).id, panel.id, {
+      name: 'Icon',
+      variantBindings: { '8:1': size.id }
+    })
+  )
+  const host = graph.createNode('FRAME', pageId, {
+    name: 'Host',
+    variableModes: { [collection.id]: roomy }
+  })
+  graph.createInstance(panel.id, host.id, { name: 'Panel occurrence' })
+  reconcileVariableLayouts(graph, { subtrees: [host.id] })
+  return { graph, icon }
+}
+
+function occurrenceIconVariant(graph: SceneGraph): string | undefined {
+  const occurrence = expectDefined(
+    [...graph.getAllNodes()].find((node) => node.name === 'Panel occurrence')
+  )
+  const icon = expectDefined(graph.getChildren(occurrence.id)[0])
+  return instanceMainComponent(graph, icon)?.name
+}
+
+describe('choosing a variant on a bound layer of a definition', () => {
+  test('moves copies that showed what the binding picked, live and in the saved file', async () => {
+    await initCodec()
+    const { graph, icon } = boundIconInRoomyPanel()
+    expect(occurrenceIconVariant(graph)).toBe('Size=large')
+    createEditor({ graph }).switchInstanceVariant(icon.id, 'Size', 'medium')
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0)
+    })
+    const reopened = await parseFigFile((await exportFigFile(graph)).slice().buffer)
+
+    expect(occurrenceIconVariant(graph)).toBe('Size=medium')
+    expect(occurrenceIconVariant(reopened)).toBe('Size=medium')
   })
 })

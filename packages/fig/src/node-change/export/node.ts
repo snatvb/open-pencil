@@ -15,6 +15,7 @@ import {
   DEFAULT_STROKE_WEIGHT,
   isGeneratedFrame,
   OPEN_PENCIL_PLUGIN_DATA,
+  savedVariantUnderBinding,
   withPluginData
 } from '@open-pencil/scene-graph'
 import { layoutGridCount } from '@open-pencil/scene-graph/layout'
@@ -49,10 +50,16 @@ import {
 } from './context'
 import { generatedFrameRecord, writesGeneratedFrame } from './generated'
 import { mergeOverrides, serializeRuntimePropertyOverrides } from './override-claims'
+import {
+  componentPropertyValue,
+  componentPropertyVariableValue,
+  exportedPropertyAssignment
+} from './property-values'
 import { exportedNode } from './resolved-bindings'
-import { slotContentAssignment, slotDefinitionFields } from './slots'
+import { slotDefinitionFields } from './slots'
 import { serializeText } from './text'
 import { applyVariableModes } from './variable-modes'
+import { applyVariantBindings } from './variant-bindings'
 
 export type { KiwiNodeChange, SceneNodeToKiwiContext } from './context'
 
@@ -118,46 +125,6 @@ export function buildAssetRefToVarGuidMap(
 function componentPropertyTypeForKiwi(type: string) {
   if (type === 'BOOLEAN') return 'BOOL'
   return type
-}
-
-function componentPropertyValue(
-  type: string,
-  value: string,
-  context: SceneNodeToKiwiContext,
-  localIdCounter: { value: number }
-) {
-  if (type === 'BOOLEAN') return { boolValue: value === 'true' }
-  if (type === 'INSTANCE_SWAP') {
-    const target = context.graph.getNode(value)
-    const guid = target
-      ? getOrCreateNodeGuid(context, target.id, localIdCounter)
-      : parseGuidOrNull(value)
-    return guid ? { guidValue: guid } : { textValue: { characters: value } }
-  }
-  return { textValue: { characters: value } }
-}
-
-function componentPropertyVariableValue(
-  type: string,
-  value: string,
-  context: SceneNodeToKiwiContext,
-  localIdCounter: { value: number }
-) {
-  const legacy = componentPropertyValue(type, value, context, localIdCounter)
-  if (type === 'BOOLEAN')
-    return {
-      value: { boolValue: value === 'true' },
-      dataType: 'BOOLEAN',
-      resolvedDataType: 'BOOLEAN'
-    }
-  if (type === 'INSTANCE_SWAP' && 'guidValue' in legacy) {
-    return {
-      value: { symbolIdValue: { guid: legacy.guidValue } },
-      dataType: 'SYMBOL_ID',
-      resolvedDataType: 'SYMBOL_ID'
-    }
-  }
-  return { value: { textValue: value }, dataType: 'STRING', resolvedDataType: 'STRING' }
 }
 
 const FIGMA_PAYLOAD_VARIABLE_MAP_FIELDS = new Set([
@@ -471,9 +438,10 @@ function applyInstancePayload(
   localIdCounter: { value: number }
 ): void {
   if (node.type !== 'INSTANCE' || !node.componentId) return
+  const saved = savedVariantUnderBinding(context.graph, node, node.source.fig.savedComponentId)
   const symbolID = getOrCreateNodeGuid(
     context,
-    resolveInstanceComponentId(context, node.componentId),
+    resolveInstanceComponentId(context, saved?.id ?? node.componentId),
     localIdCounter
   )
   if (symbolID) {
@@ -701,23 +669,9 @@ function applyComponentMetadata(
 
   applyParameterReferences(nc, parameterRefs)
   const componentPropAssignments = Object.entries(node.componentPropertyAssignments)
-    .map(([propertyId, value]) => {
-      const definition = context.componentPropertyDefinitionsById.get(propertyId)
-      if (!definition) return null
-      if (definition.type === 'SLOT')
-        return slotContentAssignment(
-          context,
-          node,
-          propertyId,
-          getOrCreatePropertyGuid(context, propertyId, localIdCounter),
-          localIdCounter
-        )
-      return {
-        defID: getOrCreatePropertyGuid(context, propertyId, localIdCounter),
-        value: componentPropertyValue(definition.type, value, context, localIdCounter),
-        varValue: componentPropertyVariableValue(definition.type, value, context, localIdCounter)
-      }
-    })
+    .map(([propertyId, value]) =>
+      exportedPropertyAssignment(context, node, propertyId, value, localIdCounter)
+    )
     .filter((assignment): assignment is NonNullable<typeof assignment> => assignment !== null)
   if (
     shouldSerializeRawBackedField(
@@ -1029,6 +983,7 @@ export function sceneNodeToKiwiWithContext(
   context.serializeGeometry(nodeForGeometryExport(node), nc, context.blobs)
   context.serializeVariableBindings(node, nc, context.graph, context.varIdToGuid)
   mergeParameterBindings(nc)
+  applyVariantBindings(context, node, nc, localIdCounter)
   applyRawFigmaNodeFields(context, node, nc)
   applyVariableModes(context, node, nc)
 

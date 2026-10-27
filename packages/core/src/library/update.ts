@@ -1,3 +1,9 @@
+import {
+  deleteInstanceOverride,
+  findInstanceAncestor,
+  getInstanceOverride,
+  setInstanceOverride
+} from '@open-pencil/scene-graph'
 import type { SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 
 import { findLibraryDefinition } from './definitions'
@@ -20,6 +26,8 @@ export interface LibraryInstanceUpdate {
   instanceId: string
   previousComponentId: string
   componentId: string
+  previousSavedComponentId: string | null
+  savedComponentId: string | null
   fallback: boolean
 }
 
@@ -38,6 +46,10 @@ function sameVariant(left: SceneNode, right: SceneNode): boolean {
     leftEntries.length === Object.keys(right.componentPropertyValues).length &&
     leftEntries.every(([name, value]) => right.componentPropertyValues[name] === value)
   )
+}
+
+function counterpartOf(previous: SceneNode, next: SceneNode[]): SceneNode | undefined {
+  return next.find((component) => sameVariant(previous, component))
 }
 
 function topLeft(components: SceneNode[]): SceneNode | undefined {
@@ -87,17 +99,71 @@ export function planLibraryInstanceUpdates(
     if (!fallback) continue
 
     for (const previousComponent of previousComponents) {
-      const target =
-        nextComponents.find((component) => sameVariant(previousComponent, component)) ?? fallback
+      const target = counterpartOf(previousComponent, nextComponents) ?? fallback
       for (const instance of graph.getInstances(previousComponent.id)) {
+        const previousSaved = savedComponentOf(graph, instance)
+        const saved = previousComponents.find((component) => component.id === previousSaved)
         updates.push({
           instanceId: instance.id,
           previousComponentId: previousComponent.id,
           componentId: target.id,
+          previousSavedComponentId: previousSaved,
+          savedComponentId: saved ? (counterpartOf(saved, nextComponents)?.id ?? null) : null,
           fallback: !sameVariant(previousComponent, target)
         })
       }
     }
   }
   return updates
+}
+
+export function savedComponentOf(graph: SceneGraph, instance: SceneNode): string | null {
+  const owner = instance.parentId ? findInstanceAncestor(graph, instance.parentId) : undefined
+  if (!owner) {
+    return instance.source.fig.savedComponentId ?? null
+  }
+  const claimed = getInstanceOverride(owner.instanceOverrides, owner.id, instance.id, 'componentId')
+  return typeof claimed === 'string' ? claimed : null
+}
+
+export function showLibraryComponent(
+  graph: SceneGraph,
+  instanceId: string,
+  componentId: string,
+  savedComponentId: string | null
+): void {
+  const instance = graph.getNode(instanceId)
+  const owner = instance?.parentId ? findInstanceAncestor(graph, instance.parentId) : undefined
+  if (owner) {
+    graph.swapInstanceComponent(instanceId, componentId, { authored: false })
+    claimNestedComponent(graph, owner, instanceId, savedComponentId)
+    return
+  }
+  graph.swapInstanceComponent(instanceId, componentId)
+  const swapped = graph.getNode(instanceId)
+  if (!swapped || (swapped.source.fig.savedComponentId ?? null) === savedComponentId) {
+    return
+  }
+  graph.updateNode(instanceId, {
+    source: { ...swapped.source, fig: { ...swapped.source.fig, savedComponentId } }
+  })
+}
+
+function claimNestedComponent(
+  graph: SceneGraph,
+  owner: SceneNode,
+  instanceId: string,
+  componentId: string | null
+): void {
+  const claimed = getInstanceOverride(owner.instanceOverrides, owner.id, instanceId, 'componentId')
+  if ((claimed ?? null) === componentId) {
+    return
+  }
+  graph.willChangeNode(owner)
+  if (componentId) {
+    setInstanceOverride(owner.instanceOverrides, owner.id, instanceId, 'componentId', componentId)
+  } else {
+    deleteInstanceOverride(owner.instanceOverrides, owner.id, instanceId, 'componentId')
+  }
+  graph.updateNode(owner.id, { instanceOverrides: owner.instanceOverrides })
 }

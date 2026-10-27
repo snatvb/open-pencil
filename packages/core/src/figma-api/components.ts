@@ -9,18 +9,20 @@ import type {
 } from '@open-pencil/scene-graph'
 import {
   applyComponentPropertyValue,
+  recordAssignmentOverride,
   componentPropertyDefinitions as sharedComponentPropertyDefinitions,
   removeComponentProperty,
   createComponentPropertyId,
   exposedInstances,
   instanceExposureIssue,
-  resolveComponentPropertyValue
+  resolveComponentPropertyValue,
+  unbindSwapPropertyTargets
 } from '@open-pencil/scene-graph'
 import { cloneNodeProps } from '@open-pencil/scene-graph/copy'
 
 import { becomesComponent, componentWrapProps } from '#core/editor/components/create'
-import { measurePropertyText } from '#core/editor/components/properties'
 import { wrapNodes } from '#core/editor/structure/container-wrap'
+import { measurePropertyText } from '#core/layout/property-text'
 
 import type { NodeProxyInternals, ProxyThis } from './accessor-utils'
 import { assertProxyEditable, graph, raw, updateNode } from './accessor-utils'
@@ -315,9 +317,11 @@ function applyProperty(
   value: string | boolean
 ): void {
   const scene = graph(target, internals)
+  unbindSwapPropertyTargets(scene, node.id, definition, String(value))
   const result = applyComponentPropertyValue(scene, node.id, definition, String(value))
   if (!result) throw new Error(`Unable to apply component property: ${propertyName(definition)}`)
-  measurePropertyText({ graph: scene }, node.id, definition)
+  recordAssignmentOverride(scene, node.id, definition.id)
+  measurePropertyText(scene, node.id, definition)
 }
 export function installComponentPropertyAccessors(
   prototype: object,

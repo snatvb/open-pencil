@@ -1,6 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 
+import { expectDefined } from '#core-tests/helpers/assert'
+
 import { createEditor } from '@open-pencil/core/editor'
+import { exportFigFile, parseFigFile } from '@open-pencil/core/io'
+import { initCodec } from '@open-pencil/core/kiwi'
+import { parseFigBuffer } from '@open-pencil/fig'
+import { symbolOverridesOf } from '@open-pencil/fig/instance-overrides'
+import { guidToString } from '@open-pencil/kiwi/fig/guid'
+import { instanceMainComponent, type SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
+
+import { releaseFigArchive } from '#core/kiwi/fig/session/archive/access'
+import { reconcileVariableLayouts } from '#core/layout/variables'
 
 function childByName(editor: ReturnType<typeof createEditor>, parentId: string, name: string) {
   return editor.graph.getChildren(parentId).find((node) => node.name === name)
@@ -106,13 +117,14 @@ describe('component property actions', () => {
     editor.undo.undo()
     expect(childByName(editor, instance.id, 'Icon B')?.componentId).toBe(iconB.id)
     editor.undo.undo()
-    const restored = childByName(editor, instance.id, 'Icon A')
-    expect(restored?.componentId).toBe(iconA.id)
+    const restored = expectDefined(childByName(editor, instance.id, 'Icon'))
+    expect(instanceMainComponent(editor.graph, restored)?.id).toBe(iconA.id)
     editor.undo.redo()
     expect(childByName(editor, instance.id, 'Icon B')?.componentId).toBe(iconB.id)
     editor.undo.undo()
-    expect(childByName(editor, instance.id, 'Icon A')?.componentId).toBe(iconA.id)
-    expect(restored?.childIds.map((id) => editor.graph.getNode(id)?.name)).toEqual(['A shape'])
+    const again = expectDefined(childByName(editor, instance.id, 'Icon'))
+    expect(instanceMainComponent(editor.graph, again)?.id).toBe(iconA.id)
+    expect(restored.childIds.map((id) => editor.graph.getNode(id)?.name)).toEqual(['A shape'])
   })
 
   test('preserves assignments when the main component synchronizes', () => {
@@ -176,5 +188,177 @@ describe('component property actions', () => {
     editor.undo.undo()
     expect(editor.graph.getNode(instance.id)?.componentId).toBe(variantA.id)
     expect(childByName(editor, instance.id, 'Label')?.text).toBe('Custom')
+  })
+})
+
+function boundIconPanel() {
+  const editor = createEditor()
+  const graph = editor.graph
+  const pageId = editor.state.currentPageId
+  const collection = graph.createCollection('Density')
+  const roomy = graph.createMode(collection.id, 'Roomy') ?? ''
+  const size = graph.createVariable('Size', 'STRING', collection.id, 'small')
+  size.valuesByMode[roomy] = 'large'
+  const set = graph.createNode('COMPONENT_SET', pageId, {
+    name: 'Badge',
+    componentPropertyDefinitions: [
+      { id: '8:1', name: 'Size', type: 'VARIANT', defaultValue: 'small' }
+    ]
+  })
+  const variant = (value: string) =>
+    graph.createNode('COMPONENT', set.id, {
+      name: `Size=${value}`,
+      componentPropertyValues: { Size: value }
+    })
+  const small = variant('small')
+  const medium = variant('medium')
+  variant('large')
+  const panel = graph.createNode('COMPONENT', pageId, {
+    name: 'Panel',
+    componentPropertyDefinitions: [
+      { id: '9:1', name: 'Icon', type: 'INSTANCE_SWAP', defaultValue: small.id }
+    ]
+  })
+  const icon = expectDefined(
+    graph.createInstance(small.id, panel.id, { name: 'Icon', variantBindings: { '8:1': size.id } })
+  )
+  graph.updateNode(icon.id, {
+    componentPropertyReferences: [{ propertyId: '9:1', field: 'INSTANCE_SWAP' }]
+  })
+  const host = graph.createNode('FRAME', pageId, { name: 'Host' })
+  const occurrence = expectDefined(
+    graph.createInstance(panel.id, host.id, { name: 'Panel occurrence' })
+  )
+  const switchToRoomy = () => {
+    graph.updateNode(host.id, { variableModes: { [collection.id]: roomy } })
+    reconcileVariableLayouts(graph, { subtrees: [host.id] })
+  }
+  const shown = (node: SceneNode) =>
+    node.componentId ? graph.getNode(node.componentId)?.name : undefined
+  const occurrenceIcon = () => expectDefined(graph.getChildren(occurrence.id)[0])
+  return { editor, panel, icon, occurrence, medium, size, switchToRoomy, shown, occurrenceIcon }
+}
+
+describe('swap properties on variant-bound layers', () => {
+  test('a swap chosen on an instance unbinds the layer and survives a mode switch', () => {
+    const { editor, occurrence, medium, switchToRoomy, shown, occurrenceIcon } = boundIconPanel()
+    editor.setInstanceComponentProperty(occurrence.id, '9:1', medium.id)
+    switchToRoomy()
+
+    expect(shown(occurrenceIcon())).toBe('Size=medium')
+    expect(occurrenceIcon().variantBindings).toEqual({})
+  })
+
+  test('undoing a swap chosen on an instance binds the layer again', () => {
+    const { editor, occurrence, medium, size, switchToRoomy, shown, occurrenceIcon } =
+      boundIconPanel()
+    editor.setInstanceComponentProperty(occurrence.id, '9:1', medium.id)
+    editor.undo.undo()
+    switchToRoomy()
+
+    expect(occurrenceIcon().variantBindings).toEqual({ '8:1': size.id })
+    expect(shown(occurrenceIcon())).toBe('Size=large')
+  })
+
+  test('a new swap default unbinds the linked layer, and undo binds it again', () => {
+    const { editor, panel, icon, medium, size, shown } = boundIconPanel()
+    editor.setComponentPropertyDefault(panel.id, '9:1', medium.id)
+    const unbound = expectDefined(editor.graph.getNode(icon.id))
+
+    expect(shown(unbound)).toBe('Size=medium')
+    expect(unbound.variantBindings).toEqual({})
+
+    editor.undo.undo()
+    const rebound = expectDefined(editor.graph.getNode(icon.id))
+
+    expect(shown(rebound)).toBe('Size=small')
+    expect(rebound.variantBindings).toEqual({ '8:1': size.id })
+  })
+})
+
+async function openedInRoomy() {
+  await initCodec()
+  const panel = boundIconPanel()
+  panel.switchToRoomy()
+  const graph = await parseFigFile((await exportFigFile(panel.editor.graph)).slice().buffer)
+  const named = (name: string) =>
+    expectDefined([...graph.getAllNodes()].find((node) => node.name === name))
+  const occurrence = named('Panel occurrence')
+  const occurrenceIcon = () => expectDefined(graph.getChildren(occurrence.id)[0])
+  const shownVariant = () => instanceMainComponent(graph, occurrenceIcon())?.name
+  const switchToDefault = () => {
+    graph.updateNode(named('Host').id, { variableModes: {} })
+    reconcileVariableLayouts(graph, { subtrees: [named('Host').id] })
+  }
+  return {
+    graph,
+    editor: createEditor({ graph }),
+    named,
+    occurrence,
+    occurrenceIcon,
+    shownVariant,
+    switchToDefault
+  }
+}
+
+async function savedSwaps(graph: SceneGraph): Promise<(string | undefined)[][]> {
+  const host = expectDefined([...graph.getAllNodes()].find((node) => node.name === 'Host'))
+  graph.updateNode(host.id, { x: host.x + 1 })
+  const patched = await exportFigFile(graph)
+  releaseFigArchive(graph)
+  return [patched, await exportFigFile(graph)].map((file) => {
+    const records = parseFigBuffer(file.slice().buffer).nodeChanges
+    const occurrence = expectDefined(records.find((record) => record.name === 'Panel occurrence'))
+    return symbolOverridesOf(occurrence)
+      .filter((override) => override.overriddenSymbolID)
+      .map((override) => {
+        const swapped = override.overriddenSymbolID
+        return records.find(
+          (record) => swapped && record.guid && guidToString(record.guid) === guidToString(swapped)
+        )?.name
+      })
+  })
+}
+
+describe('swap properties where a mode shows another variant', () => {
+  test('undo brings back the variant shown and saves no new swap', async () => {
+    const { graph, editor, named, occurrence, occurrenceIcon, shownVariant } = await openedInRoomy()
+    editor.setInstanceComponentProperty(occurrence.id, '9:1', named('Size=medium').id)
+    editor.undo.undo()
+
+    expect(shownVariant()).toBe('Size=large')
+    expect(Object.keys(occurrenceIcon().variantBindings)).toEqual(['8:1'])
+    expect(
+      occurrence.instanceOverrides.descendants.get(occurrenceIcon().id)?.has('componentId')
+    ).toBeFalsy()
+    expect(await savedSwaps(graph)).toEqual([[], []])
+  })
+
+  test('choosing the variant the mode shows still pins it', async () => {
+    const { editor, named, occurrence, occurrenceIcon, shownVariant, switchToDefault } =
+      await openedInRoomy()
+    editor.setInstanceComponentProperty(occurrence.id, '9:1', named('Size=large').id)
+    switchToDefault()
+
+    expect(occurrenceIcon().variantBindings).toEqual({})
+    expect(shownVariant()).toBe('Size=large')
+  })
+
+  test('a new swap default moves the copies, live and in the saved file alike', async () => {
+    const { graph, editor, named, shownVariant } = await openedInRoomy()
+    editor.setComponentPropertyDefault(named('Panel').id, '9:1', named('Size=medium').id)
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0)
+    })
+    const reopened = await parseFigFile((await exportFigFile(graph)).slice().buffer)
+    const copy = expectDefined(
+      reopened.getChildren(
+        expectDefined([...reopened.getAllNodes()].find((node) => node.name === 'Panel occurrence'))
+          .id
+      )[0]
+    )
+
+    expect(shownVariant()).toBe('Size=medium')
+    expect(instanceMainComponent(reopened, copy)?.name).toBe('Size=medium')
   })
 })

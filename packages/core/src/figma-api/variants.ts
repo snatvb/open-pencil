@@ -1,4 +1,9 @@
-import type { ComponentPropertyDefinition, SceneGraph, SceneNode } from '@open-pencil/scene-graph'
+import {
+  unbindVariantProperty,
+  type ComponentPropertyDefinition,
+  type SceneGraph,
+  type SceneNode
+} from '@open-pencil/scene-graph'
 import { parseVariantName } from '@open-pencil/scene-graph/variant-name'
 
 import { reapplyInstanceComponentProperties } from '#core/editor/components/properties'
@@ -83,6 +88,9 @@ export function switchVariant(
       : undefined
   if (!target)
     throw new Error('in setProperties: Unable to find a variant with those property values')
+  for (const { definition } of values) {
+    unbindVariantProperty(scene, instance.id, definition.name)
+  }
   if (target.id === instance.componentId) return
   scene.swapInstanceComponent(instance.id, target.id)
   reapplyInstanceComponentProperties({ graph: scene }, instance.id)
