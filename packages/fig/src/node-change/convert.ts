@@ -87,15 +87,9 @@ import type { GUID } from '@open-pencil/scene-graph/primitives'
 export { guidToString, stringToGuid } from '@open-pencil/kiwi/fig/guid'
 import { numericVariableAssignmentScales, sourceVariableBindingScales } from './variable/bindings'
 export { VARIABLE_BINDING_FIELDS, VARIABLE_BINDING_FIELDS_INVERSE } from './variable/bindings'
+import type { FigVariableModeMap } from './variable/maps'
 
-interface FigVariableModeMap {
-  entries?: Array<{
-    variableSetID?: { guid?: GUID }
-    variableModeID?: GUID
-  }>
-}
-
-function extractVariableModes(nc: NodeChange): VariableModeMap {
+export function extractVariableModes(nc: NodeChange): VariableModeMap {
   const result: VariableModeMap = {}
   const modeMap = nc.variableModeBySetMap as FigVariableModeMap | undefined
   for (const entry of modeMap?.entries ?? []) {
