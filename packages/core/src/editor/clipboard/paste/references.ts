@@ -3,7 +3,8 @@ import type { InstanceOverrideState, SceneNode } from '@open-pencil/scene-graph'
 
 export function pastedReferences(
   node: SceneNode,
-  copiedIds: ReadonlyMap<string, string>
+  copiedIds: ReadonlyMap<string, string>,
+  pastedCollection: (id: string) => string | undefined = (id) => id
 ): Partial<SceneNode> {
   const pastedId = (id: string) => copiedIds.get(id) ?? id
   const copiedMain = node.componentId ? copiedIds.get(node.componentId) : undefined
@@ -11,7 +12,8 @@ export function pastedReferences(
     componentId: copiedMain ?? node.componentId,
     instanceOverrides: remapInstanceOverrideState(withoutStaleCollisions(node, copiedIds), {
       node: pastedId,
-      variable: (id) => id
+      variable: (id) => id,
+      collection: pastedCollection
     }),
     ...pastedSavedComponent(node, copiedIds, copiedMain !== undefined)
   }

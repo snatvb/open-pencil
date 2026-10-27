@@ -167,13 +167,15 @@ export function createClipboardActions(ctx: EditorContext) {
     let created: string[] = []
     ctx.undo.runBatch('Paste', () => {
       const dependencies = importClipboardDependenciesWithUndo(ctx, snapshot)
+      const { collectionIds } = dependencies
       created = pasteOpenPencilNodes(
         dependencies.nodes,
         snapshot.placement,
         snapshot.images,
         dependencies.componentDependencies,
         cursorPos,
-        options
+        options,
+        collectionIds ? (id) => collectionIds.get(id) : undefined
       )
     })
     await fontActions.loadFontsForNodes(created)
@@ -245,7 +247,8 @@ export function createClipboardActions(ctx: EditorContext) {
     images: Map<string, Uint8Array>,
     dependencies: Array<SceneNode & { children?: SceneNode[] }> = [],
     cursorPos?: Vector,
-    options: PasteOptions = {}
+    options: PasteOptions = {},
+    pastedCollection?: (id: string) => string | undefined
   ) {
     const prevSelection = new Set(ctx.state.selectedIds)
     const replacementTargets = options.replaceSelection ? selectedReplacementTargets(ctx) : []
@@ -283,7 +286,7 @@ export function createClipboardActions(ctx: EditorContext) {
     for (const id of copiedIds.values()) {
       const node = ctx.graph.getNode(id)
       if (!node) continue
-      ctx.graph.updateNode(id, pastedReferences(node, copiedIds))
+      ctx.graph.updateNode(id, pastedReferences(node, copiedIds, pastedCollection))
     }
     if (dependencyRootIds.length > 0) {
       const snapshots = collectSubtrees(ctx.graph, dependencyRootIds)

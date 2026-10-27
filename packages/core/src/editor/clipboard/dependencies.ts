@@ -9,6 +9,7 @@ export interface ClipboardDependencyImport {
   nodes: ClipboardSnapshot['nodes']
   componentDependencies: ClipboardSnapshot['componentDependencies']
   styleSnapshots: SceneNode[]
+  collectionIds?: ReadonlyMap<string, string>
   applyVariables?: () => void
   revertVariables?: () => void
 }
@@ -94,6 +95,7 @@ export function importClipboardDependencies(
     nodes,
     componentDependencies,
     styleSnapshots,
+    collectionIds: variables.collectionIds,
     applyVariables: variables.apply,
     revertVariables: variables.revert
   }
