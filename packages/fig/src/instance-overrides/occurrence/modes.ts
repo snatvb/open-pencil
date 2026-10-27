@@ -87,7 +87,7 @@ function insideComponent(
 }
 
 interface ClaimRouting {
-  readonly ending: ModesByCollection | undefined
+  readonly ending: ModeLayer | undefined
   readonly continuing: readonly ModeClaim[]
   readonly elsewhere: readonly ModeClaim[]
 }
