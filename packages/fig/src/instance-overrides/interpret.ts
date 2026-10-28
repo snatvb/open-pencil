@@ -47,6 +47,7 @@ import {
   terminalComponent,
   type InterpreterIndex
 } from './source-index'
+import { placedRootRecord } from './swapped-root'
 import { invalidateInheritedTextData } from './text-provenance'
 import {
   assignedSlotContent,
@@ -387,15 +388,17 @@ function interpretRoot(
       } else {
         subtree = expandChildren(id, source, bindings, root.groups, root.descendant, rank, modes)
       }
-      const occurrence = createOccurrence(id, raw, source, root, subtree, record.claims)
+      const expandedComponent = subtree.base ? root.effective : undefined
+      const placed = placedRootRecord(source, raw, expandedComponent, sources)
+      const occurrence = createOccurrence(id, raw, placed, root, subtree, record.claims)
       if (record.slotContent) occurrence.slotContentId = record.slotContent
       assignedFields.set(occurrence, record.bound)
       if (subtree.base && root.replaced.length) replacedComponents.set(occurrence, root.replaced)
-      declareSourceVariableBindingUnits(occurrence, source)
+      declareSourceVariableBindingUnits(occurrence, placed)
       const claims = subtree.dangling
         ? own.claims.filter(({ path }) => path.length === 1 && isRootGuid(occurrence, path[0]))
         : own.claims
-      finishOccurrence(occurrence, subtree.base, source, claims, rank, !subtree.dangling, modes)
+      finishOccurrence(occurrence, subtree.base, placed, claims, rank, !subtree.dangling, modes)
       for (const diagnostic of owner.unresolved)
         options.onUnresolvedAssignment?.({
           ...diagnostic,
@@ -536,11 +539,6 @@ function interpretRoot(
   ): InstanceOccurrence => {
     const original = raw.symbolData?.symbolID
     const [, sourceComponentOverrideKey] = componentKeys(original)
-    // A swapped root draws the replacement's paint, so the old paint's style link goes with it.
-    const placed =
-      base && effective && !sameGuid(original, effective) && source.type === 'INSTANCE'
-        ? omit(source, ['fillPaints', 'styleIdForFill'])
-        : source
     const occurrence: InstanceOccurrence = {
       sourceId: id,
       sourceComponentId: original,
@@ -552,7 +550,7 @@ function interpretRoot(
       properties: {
         // The component's look carries over; its identity does not.
         ...(base && omit(base.properties, COMPONENT_IDENTITY_FIELDS)),
-        ...placed,
+        ...source,
         ...(effective && source.symbolData
           ? { symbolData: { ...source.symbolData, symbolID: effective } }
           : {}),

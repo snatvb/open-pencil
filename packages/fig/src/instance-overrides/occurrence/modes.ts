@@ -145,6 +145,9 @@ export function createModeScopes(index: InterpreterIndex) {
     return [...scope.placed.keys(), ...laidOut.keys()].some(differsAt)
   }
 
+  const laidOutForExpansion = (scope: ModeScope, source: NodeChange): boolean =>
+    !scope.expandedComponent || recordOf(source.symbolData?.symbolID) === scope.expandedComponent
+
   const expansionClaims = (
     record: NodeChange,
     component: GUID,
@@ -208,7 +211,10 @@ export function createModeScopes(index: InterpreterIndex) {
       // The size the file keeps for the instance is its own content laid out, such as a hug
       // frame around longer text than its component's, which a sync with the component must
       // not replace.
-      if (!differsFromDocument(scope, source, occurrence.sourceId)) {
+      if (
+        laidOutForExpansion(scope, source) &&
+        !differsFromDocument(scope, source, occurrence.sourceId)
+      ) {
         occurrence.derivedSize = structuredClone(source.size)
       }
     }
