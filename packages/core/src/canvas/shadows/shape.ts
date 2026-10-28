@@ -1,8 +1,8 @@
-import type { BlendMode, Canvas, Path } from 'canvaskit-wasm'
+import type { Canvas, Path } from 'canvaskit-wasm'
 
-import type { Effect, SceneNode, Stroke } from '@open-pencil/scene-graph'
+import type { BlendMode, Effect, SceneNode, Stroke } from '@open-pencil/scene-graph'
 
-import { figmaBlendModeToSkia } from '#core/canvas/blend'
+import { setPaintBlendMode } from '#core/canvas/blend'
 import { blurSigma } from '#core/canvas/effects'
 import type { SkiaRenderer } from '#core/canvas/renderer'
 import {
@@ -192,13 +192,13 @@ function drawMaskShadow(
   r: SkiaRenderer,
   canvas: Canvas,
   effect: Effect,
-  blendMode: BlendMode,
+  blendMode: BlendMode | undefined,
   draw: () => void
 ): void {
   r.auxFill.setColor(r.color4f(effect.color.r, effect.color.g, effect.color.b, effect.color.a))
   r.auxFill.setMaskFilter(r.getCachedMaskBlur(blurSigma(effect.radius)))
   r.auxFill.setImageFilter(null)
-  r.auxFill.setBlendMode(blendMode)
+  setPaintBlendMode(r, r.auxFill, blendMode)
   canvas.save()
   try {
     canvas.translate(effect.offset.x, effect.offset.y)
@@ -218,7 +218,7 @@ export function drawShapeDropShadow(
   effect: Effect,
   hasRadius: boolean,
   spread: number,
-  blendMode: BlendMode
+  blendMode: BlendMode | undefined
 ): void {
   const sp = spread
   const geometryShadow = r.getFillGeometry(node)
@@ -254,7 +254,7 @@ export function drawOutlineDropShadow(
   effect: Effect,
   outline: StrokeOutline,
   spread: number,
-  blendMode: BlendMode
+  blendMode: BlendMode | undefined
 ): void {
   drawMaskShadow(r, canvas, effect, blendMode, () => {
     const offset = outline.outset[0] + spread
@@ -279,7 +279,7 @@ export function drawRingDropShadow(
   effect: Effect,
   outline: StrokeOutline,
   spread: number,
-  blendMode: BlendMode
+  blendMode: BlendMode | undefined
 ): void {
   const builder = new r.ck.PathBuilder()
   if (outline.even) {
@@ -338,7 +338,7 @@ export function drawShapeInnerShadow(
   const shapeNode = node
   r.auxFill.setColor(r.ck.Color4f(effect.color.r, effect.color.g, effect.color.b, effect.color.a))
   r.auxFill.setImageFilter(r.getCachedDecalBlur(blurSigma(effect.radius)))
-  r.auxFill.setBlendMode(figmaBlendModeToSkia(r.ck, effect.blendMode))
+  setPaintBlendMode(r, r.auxFill, effect.blendMode)
 
   const shapeRect = rect
   const shapeHasRadius = hasRadius
