@@ -1,6 +1,7 @@
 import type { Canvas, Path, PathBuilder, PathOp } from 'canvaskit-wasm'
 
 import type { GroupFitOptions, SceneGraph, SceneNode } from '@open-pencil/scene-graph'
+import { getNodeLocalMatrix } from '@open-pencil/scene-graph/coordinate'
 
 import { getTextOutlineSupport } from '#core/text/outlines'
 
@@ -17,27 +18,6 @@ const BOOLEAN_PATH_OP: Record<
   SUBTRACT: 'Difference',
   INTERSECT: 'Intersect',
   EXCLUDE: 'XOR'
-}
-
-export function nodePathTransform(r: SkiaRenderer, child: SceneNode): number[] {
-  const transforms = [r.ck.Matrix.translated(child.x, child.y)]
-  if (child.rotation !== 0) {
-    transforms.push(
-      r.ck.Matrix.rotated((child.rotation * Math.PI) / 180, child.width / 2, child.height / 2)
-    )
-  }
-  if (child.flipX || child.flipY) {
-    transforms.push(
-      r.ck.Matrix.scaled(
-        child.flipX ? -1 : 1,
-        child.flipY ? -1 : 1,
-        child.width / 2,
-        child.height / 2
-      )
-    )
-  }
-  if (transforms.length === 1) return transforms[0]
-  return r.ck.Matrix.multiply(...transforms)
 }
 
 function hasVisibleImageFill(node: SceneNode): boolean {
@@ -110,7 +90,6 @@ function canContainFlattenableChildren(node: SceneNode): boolean {
 }
 
 function appendVisibleChildPaths(
-  r: SkiaRenderer,
   graph: SceneGraph,
   parent: SceneNode,
   target: PathBuilder,
@@ -126,7 +105,7 @@ function appendVisibleChildPaths(
       if (failOnMissing) return null
       continue
     }
-    target.addPath(childPath, nodePathTransform(r, child))
+    target.addPath(childPath, getNodeLocalMatrix(child))
     childPath.delete()
     hasPath = true
   }
@@ -148,7 +127,6 @@ function containerSourcePath(r: SkiaRenderer, node: SceneNode, graph: SceneGraph
   }
 
   const childPaths = appendVisibleChildPaths(
-    r,
     graph,
     node,
     path,
@@ -216,7 +194,6 @@ export function makeStrokeOutlinePath(
     }
     hasPath ||=
       appendVisibleChildPaths(
-        r,
         graph,
         node,
         path,
@@ -245,7 +222,7 @@ function transformedShapePath(r: SkiaRenderer, child: SceneNode, graph: SceneGra
   const path = makeBooleanSourcePath(r, child, graph)
   if (!path) return null
   const transformed = new r.ck.PathBuilder()
-  transformed.addPath(path, nodePathTransform(r, child))
+  transformed.addPath(path, getNodeLocalMatrix(child))
   path.delete()
   return transformed.detachAndDelete()
 }
