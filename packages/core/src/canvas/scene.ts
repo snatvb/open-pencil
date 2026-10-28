@@ -23,6 +23,7 @@ import {
   vectorNetworkToCenterlinePath,
   vectorNetworkToPath
 } from '#core/vector'
+import { isOpenVectorNetwork } from '#core/vector/connectivity'
 
 import { figmaBlendModeToSkia, needsIsolatedBlendLayer } from './blend'
 import { renderBooleanOperation } from './boolean'
@@ -800,6 +801,10 @@ function drawNodeStroke(
     } else drawRegularStroke(r, canvas, node, rect, hasRadius, stroke, sc)
     return
   }
+  if (node.type === 'VECTOR' && stroke.align !== 'CENTER') {
+    drawFillSideStrokeGeometry(r, canvas, node, stroke, sc, sg)
+    return
+  }
   if (stroke.align !== 'INSIDE') {
     if (node.type === 'VECTOR' || node.type === 'TEXT') {
       drawVectorStrokeGeometry(r, canvas, sg, sc, stroke.opacity)
@@ -807,17 +812,37 @@ function drawNodeStroke(
     return
   }
 
-  const clipPaths = node.type === 'VECTOR' ? r.getFillGeometry(node) : null
-  if (node.type === 'VECTOR' && !clipPaths) {
+  canvas.save()
+  r.clipNodeShape(canvas, node, rect, hasRadius)
+  drawVectorStrokeGeometry(r, canvas, sg, sc, stroke.opacity)
+  canvas.restore()
+}
+
+function drawFillSideStrokeGeometry(
+  r: SkiaRenderer,
+  canvas: Canvas,
+  node: SceneNode,
+  stroke: SceneNode['strokes'][0],
+  sc: Color,
+  sg: Path[]
+): void {
+  const fillPaths = r.getFillGeometry(node)
+  if (!fillPaths || (node.vectorNetwork && isOpenVectorNetwork(node.vectorNetwork))) {
     drawVectorStrokeGeometry(r, canvas, sg, sc, stroke.opacity)
     return
   }
-
+  if (stroke.align === 'INSIDE') {
+    for (const path of fillPaths) {
+      canvas.save()
+      canvas.clipPath(path, r.ck.ClipOp.Intersect, true)
+      drawVectorStrokeGeometry(r, canvas, sg, sc, stroke.opacity)
+      canvas.restore()
+    }
+    return
+  }
   canvas.save()
-  if (clipPaths) {
-    for (const path of clipPaths) canvas.clipPath(path, r.ck.ClipOp.Intersect, true)
-  } else {
-    r.clipNodeShape(canvas, node, rect, hasRadius)
+  for (const path of fillPaths) {
+    canvas.clipPath(path, r.ck.ClipOp.Difference, true)
   }
   drawVectorStrokeGeometry(r, canvas, sg, sc, stroke.opacity)
   canvas.restore()
