@@ -7,7 +7,7 @@ import type { Color, Rect, Vector } from '@open-pencil/scene-graph/primitives'
 
 import { isWholeArc } from '#core/geometry'
 
-import { figmaBlendModeToSkia } from './blend'
+import { setPaintBlendMode } from './blend'
 import { makeDiamondGradient } from './gradients/diamond'
 import { previewEdge } from './images/previews'
 import type { SkiaRenderer } from './renderer'
@@ -35,7 +35,7 @@ export function paintFills(
       : r.applyFill(fill, node, graph, fillIndex)
     if (!applied) continue
     r.fillPaint.setAlphaf(fill.opacity)
-    r.fillPaint.setBlendMode(figmaBlendModeToSkia(r.ck, fill.blendMode))
+    setPaintBlendMode(r, r.fillPaint, fill.blendMode)
     draw(fill)
     r.fillPaint.setShader(null)
     r.fillPaint.setBlendMode(r.ck.BlendMode.SrcOver)

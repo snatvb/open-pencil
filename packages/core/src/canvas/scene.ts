@@ -24,7 +24,7 @@ import {
   vectorNetworkToPath
 } from '#core/vector'
 
-import { figmaBlendModeToSkia, needsIsolatedBlendLayer } from './blend'
+import { needsIsolatedBlendLayer, setPaintBlendMode } from './blend'
 import { renderBooleanOperation } from './boolean'
 import { blurSigma } from './effects'
 import { drawVectorMultiStyleFills, paintFills } from './fills'
@@ -363,7 +363,7 @@ export function renderNode(
   if (needsNodeLayer) {
     const layerBounds = nodeIsolationLayerBounds(r, graph, node, overlays.rotationPreview)
     r.opacityPaint.setAlphaf(node.opacity)
-    r.opacityPaint.setBlendMode(figmaBlendModeToSkia(r.ck, node.blendMode))
+    setPaintBlendMode(r, r.opacityPaint, node.blendMode)
     canvas.saveLayer(r.opacityPaint, layerBounds)
   }
 
