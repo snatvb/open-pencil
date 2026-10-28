@@ -1,8 +1,9 @@
 import type { Canvas, Path, PathBuilder, PathOp } from 'canvaskit-wasm'
 
-import type { GroupFitOptions, SceneGraph, SceneNode } from '@open-pencil/scene-graph'
+import type { GroupFitOptions, SceneGraph, SceneNode, Stroke } from '@open-pencil/scene-graph'
 
 import { getTextOutlineSupport } from '#core/text/outlines'
+import { isOpenVectorNetwork } from '#core/vector/connectivity'
 
 import { makeArcPath } from './fills'
 import type { SkiaRenderer } from './renderer'
@@ -90,14 +91,75 @@ export function nodeHasVisibleStroke(node: SceneNode): boolean {
   return node.strokes.some((stroke) => stroke.visible && stroke.weight > 0)
 }
 
-function addVisibleStrokeOutlines(target: PathBuilder, source: Path, node: SceneNode): void {
+function strokeSide(node: SceneNode, stroke: Stroke): Stroke['align'] {
+  const network = node.type === 'VECTOR' ? node.vectorNetwork : null
+  return network && isOpenVectorNetwork(network) ? 'CENTER' : stroke.align
+}
+
+function alignedStrokeOutline(
+  r: SkiaRenderer,
+  source: Path,
+  weight: number,
+  side: Stroke['align']
+): Path | null {
+  if (side === 'CENTER') {
+    return source.makeStroked({ width: weight })
+  }
+  const band = source.makeStroked({ width: weight * 2 })
+  if (!band) {
+    return null
+  }
+  const keptSide = side === 'INSIDE' ? r.ck.PathOp.Intersect : r.ck.PathOp.Difference
+  const evenOddOutline = r.ck.Path.MakeFromOp(band, source, keptSide)
+  band.delete()
+  if (!evenOddOutline) {
+    return null
+  }
+  const outline = evenOddOutline.makeAsWinding()
+  evenOddOutline.delete()
+  return outline
+}
+
+function addVisibleStrokeOutlines(
+  r: SkiaRenderer,
+  target: PathBuilder,
+  source: Path,
+  node: SceneNode
+): void {
   for (const stroke of node.strokes) {
     if (!stroke.visible || stroke.weight <= 0) continue
-    const outline = source.makeStroked({ width: stroke.weight })
+    const side = strokeSide(node, stroke)
+    if (node.type === 'VECTOR' && side !== 'CENTER') {
+      const cachedOutline = cachedVectorStrokeOutline(r, source, node, stroke.weight, side)
+      if (cachedOutline) {
+        target.addPath(cachedOutline)
+      }
+      continue
+    }
+    const outline = alignedStrokeOutline(r, source, stroke.weight, side)
     if (!outline) continue
     target.addPath(outline)
     outline.delete()
   }
+}
+
+function cachedVectorStrokeOutline(
+  r: SkiaRenderer,
+  source: Path,
+  node: SceneNode,
+  weight: number,
+  side: Stroke['align']
+): Path | null {
+  const key = `${node.id}|aligned|${weight}|${side}`
+  const cached = r.nodePaths.strokeOutline.get(key)
+  if (cached) {
+    return cached[0]
+  }
+  const outline = alignedStrokeOutline(r, source, weight, side)
+  if (outline) {
+    r.nodePaths.store(r.nodePaths.strokeOutline, key, [outline])
+  }
+  return outline
 }
 
 function canContainFlattenableChildren(node: SceneNode): boolean {
@@ -141,7 +203,7 @@ function containerSourcePath(r: SkiaRenderer, node: SceneNode, graph: SceneGraph
     const ownPath = baseShapePath(r, node)
     if (ownPath) {
       if (nodeHasVisibleFill(node)) path.addPath(ownPath)
-      addVisibleStrokeOutlines(path, ownPath, node)
+      addVisibleStrokeOutlines(r, path, ownPath, node)
       ownPath.delete()
       hasPath = true
     }
@@ -182,8 +244,10 @@ export function makeBooleanSourcePath(
   if (!path) return null
   if (!nodeHasVisibleStroke(node)) return path
   const combined = new r.ck.PathBuilder()
-  combined.addPath(path)
-  addVisibleStrokeOutlines(combined, path, node)
+  if (nodeHasVisibleFill(node)) {
+    combined.addPath(path)
+  }
+  addVisibleStrokeOutlines(r, combined, path, node)
   path.delete()
   return combined.detachAndDelete()
 }
@@ -209,7 +273,7 @@ export function makeStrokeOutlinePath(
     if (nodeHasVisibleStroke(node)) {
       const ownPath = baseShapePath(r, node)
       if (ownPath) {
-        addVisibleStrokeOutlines(path, ownPath, node)
+        addVisibleStrokeOutlines(r, path, ownPath, node)
         ownPath.delete()
         hasPath = true
       }
@@ -236,7 +300,7 @@ export function makeStrokeOutlinePath(
   if (!path) return null
   if (node.type === 'LINE') return path
   const outline = new r.ck.PathBuilder()
-  addVisibleStrokeOutlines(outline, path, node)
+  addVisibleStrokeOutlines(r, outline, path, node)
   path.delete()
   return outline.detachAndDelete()
 }
