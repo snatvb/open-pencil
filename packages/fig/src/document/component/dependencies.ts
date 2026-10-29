@@ -6,7 +6,7 @@ import {
 } from '#fig/instance-overrides/types'
 
 import type { GUID } from '@open-pencil/kiwi/fig'
-import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
+import type { NodeChange, Paint } from '@open-pencil/kiwi/fig/codec'
 import { guidToString } from '@open-pencil/kiwi/fig/guid'
 
 interface DependencyDefinition {
@@ -71,6 +71,23 @@ export function slotContentDependencies(node: NodeChange): ReadonlySet<string> {
       const content = assignedSlotContent(value.varValue?.value)
       if (content) dependencies.add(guidToString(content))
     }
+  })
+  return dependencies
+}
+
+function addPatternSources(paints: readonly Paint[] | undefined, dependencies: Set<string>) {
+  for (const paint of paints ?? []) {
+    if (paint.type === 'PATTERN' && paint.sourceNodeId) {
+      dependencies.add(guidToString(paint.sourceNodeId))
+    }
+  }
+}
+
+export function patternSourceDependencies(node: NodeChange): ReadonlySet<string> {
+  const dependencies = new Set<string>()
+  forEachOverrideRecord(node, (source) => {
+    addPatternSources(source.fillPaints, dependencies)
+    addPatternSources(source.strokePaints, dependencies)
   })
   return dependencies
 }
