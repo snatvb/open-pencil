@@ -1,5 +1,6 @@
 import type { SceneNode } from '@open-pencil/scene-graph'
 
+import { clearPatternTiles, invalidatePatternTargets } from '#core/canvas/patterns/tiles'
 import type { SkiaRenderer } from '#core/canvas/renderer'
 import { changesShaping } from '#core/canvas/text/paragraph/inputs'
 
@@ -31,6 +32,7 @@ export function invalidateAllPictures(r: SkiaRenderer): void {
   r.nodePictureCache.clear()
   r.nodePictureCacheGenerations.clear()
   r.effectRasterCache.clear()
+  clearPatternTiles(r)
   clearSubtreePictureCache(r)
 }
 
@@ -43,6 +45,7 @@ export function invalidateNodePicture(
     keepShaping: changedKeys !== undefined && !changesShaping(changedKeys)
   })
   r.effectRasterCache.delete(nodeId)
+  invalidatePatternTargets(r, nodeId)
   const pic = r.nodePictureCache.get(nodeId)
   if (pic) {
     pic.delete()

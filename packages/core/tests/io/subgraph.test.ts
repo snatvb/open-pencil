@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import { SceneGraph } from '@open-pencil/scene-graph'
 
-import { extractPageContext } from '#core/io/subgraph'
+import { extractExportGraph, extractPageContext } from '#core/io/subgraph'
 
 /** A Switch set with two variants, and a card on the same page holding an Off instance. */
 function cardWithSwitch() {
@@ -39,5 +39,57 @@ describe('extracting page context', () => {
     const shared = extractPageContext(graph, pageId, [card.id], { shareTables: true })
     expect(shared.variables).toBe(graph.variables)
     expect(shared.images).toBe(graph.images)
+  })
+})
+
+describe('extracting an export', () => {
+  test('brings the layer a pattern paint tiles, from any page', () => {
+    const graph = new SceneGraph()
+    const pageId = graph.getPages()[0].id
+    const sources = graph.addPage('Sources')
+    const holder = graph.createNode('FRAME', sources.id)
+    const source = graph.createNode('FRAME', holder.id)
+    const stripe = graph.createNode('LINE', source.id)
+    const target = graph.createNode('RECTANGLE', pageId, {
+      fills: [
+        {
+          type: 'PATTERN',
+          color: { r: 0, g: 0, b: 0, a: 1 },
+          opacity: 1,
+          visible: true,
+          sourceNodeId: source.id
+        }
+      ]
+    })
+    const copy = extractExportGraph(graph, { scope: 'selection', nodeIds: [target.id] }).graph
+    expect(copy.getNode(stripe.id)).toBeDefined()
+    expect(copy.getNode(holder.id)).toBeDefined()
+    expect(copy.getNode(sources.id)?.childIds).toEqual([holder.id])
+  })
+
+  test('brings every layer of a source that another source sits inside', () => {
+    for (const innerFirst of [true, false]) {
+      const graph = new SceneGraph()
+      const pageId = graph.getPages()[0].id
+      const outer = graph.createNode('FRAME', pageId, { x: 200 })
+      const inner = graph.createNode('FRAME', outer.id)
+      const innerMark = graph.createNode('LINE', inner.id)
+      const outerMark = graph.createNode('LINE', outer.id)
+      const pattern = (sourceNodeId: string) => ({
+        type: 'PATTERN' as const,
+        color: { r: 0, g: 0, b: 0, a: 1 },
+        opacity: 1,
+        visible: true,
+        sourceNodeId
+      })
+      const order = innerFirst ? [inner, outer] : [outer, inner]
+      const targets = order.map((source) =>
+        graph.createNode('RECTANGLE', pageId, { fills: [pattern(source.id)] })
+      )
+      const nodeIds = targets.map((target) => target.id)
+      const copy = extractExportGraph(graph, { scope: 'selection', nodeIds }).graph
+      expect(copy.getNode(innerMark.id)).toBeDefined()
+      expect(copy.getNode(outerMark.id)).toBeDefined()
+    }
   })
 })

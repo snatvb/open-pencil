@@ -1,3 +1,4 @@
+import { clearPatternTiles } from '#core/canvas/patterns/tiles'
 import type { SkiaRenderer } from '#core/canvas/renderer'
 import { clearSubtreePictureCache } from '#core/canvas/renderer/state'
 import { fontManager } from '#core/text/fonts'
@@ -84,6 +85,7 @@ export function destroyRenderer(r: SkiaRenderer): void {
   r.labelParagraphCache.clear()
   r.textPreparationCache.clear()
   r.effectRasterCache.clear()
+  clearPatternTiles(r)
   r.tiledScene.destroy()
   clearSubtreePictureCache(r)
   clearRetainedSceneState(r)

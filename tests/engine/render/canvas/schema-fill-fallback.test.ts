@@ -8,7 +8,6 @@ import { applyFill } from '#core/canvas/fills'
 import { asRenderer } from './helpers'
 
 function createRenderer() {
-  // A real CanvasKit shader is a WASM handle the caller deletes once the paint holds it.
   const patternShader = { id: 'pattern-shader', delete: mock(() => undefined) }
   const picture = {
     makeShader: mock(() => patternShader),
@@ -28,6 +27,11 @@ function createRenderer() {
   }
 
   return asRenderer({
+    fontGeneration: 0,
+    viewportImageRendering: false,
+    renderingSceneBacking: false,
+    worldViewport: { x: 0, y: 0, w: 0, h: 0 },
+    renderNode: mock(() => undefined),
     fillPaint: {
       setShader: mock(() => undefined),
       setColor: mock(() => undefined),
