@@ -1,6 +1,7 @@
 import { isEqual } from 'es-toolkit'
 
 import type { SceneGraph } from './graph'
+import { captureKeptCopies } from './instances/kept-copies'
 
 /** Capture rollback state without changing graph or surviving object identities. */
 export function captureGraphCheckpoint(graph: SceneGraph) {
@@ -21,6 +22,7 @@ export function captureGraphCheckpoint(graph: SceneGraph) {
   })
   // Atomic property tools cannot edit assets. Retain existing buffers, not copies of every bitmap.
   const images = new Map(graph.images)
+  const restoreKeptCopies = captureKeptCopies(graph)
 
   function assertPropertiesOnly() {
     if (
@@ -86,6 +88,7 @@ export function captureGraphCheckpoint(graph: SceneGraph) {
     graph.figKiwiVersion = snapshot.figKiwiVersion
     graph.figSchemaDeflated = structuredClone(snapshot.figSchemaDeflated)
     graph.documentColorSpace = snapshot.documentColorSpace
+    restoreKeptCopies()
     graph.clearAbsPosCache()
     // Notify consumers only after the complete hierarchy and indexes have been restored.
     for (const [id, node] of failedNodes) {

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import { SceneGraph } from '@open-pencil/scene-graph'
 import {
+  createVariantLookup,
   defaultVariant,
   restingVariant,
   variantDefaultValue
@@ -55,5 +56,19 @@ describe('default variants', () => {
     expect(restingVariant(recorded.graph, recorded.set)?.name).toBe('Size=Large')
     const empty = sizes('')
     expect(restingVariant(empty.graph, empty.set)?.name).toBe('Size=Small')
+  })
+})
+
+describe('variant lookup', () => {
+  test('finds the first variant in reading order when two have the same values', () => {
+    const { graph, set } = sizes('')
+    graph.createNode('COMPONENT', set.id, {
+      name: 'Size=Small above',
+      x: 0,
+      y: -30,
+      componentPropertyValues: { Size: 'Small' }
+    })
+
+    expect(createVariantLookup(graph)(set, { Size: 'Small' })?.name).toBe('Size=Small above')
   })
 })

@@ -3,19 +3,19 @@ import {
   applyComponentPropertyValue,
   componentPropertyDefinitions,
   findComponentPropertyTargets,
+  reapplyComponentPropertyAssignments,
   recordAssignmentOverride,
   resolveComponentPropertyValue,
   type ComponentPropertyTarget
 } from '@open-pencil/scene-graph/components'
 import { findInstanceAncestor } from '@open-pencil/scene-graph/instances'
-import {
-  cloneInstanceOverrideState,
-  setInstanceOverride
-} from '@open-pencil/scene-graph/instances/overrides'
+import { cloneInstanceOverrideState } from '@open-pencil/scene-graph/instances/overrides'
+import { unbindSwapPropertyTargets } from '@open-pencil/scene-graph/variables'
 
 import { assertNodeEditable } from '#core/editor/capabilities'
+import { restoreInstance, snapshotInstance } from '#core/editor/history/subtree'
 import type { EditorContext } from '#core/editor/types'
-import { textAutoResizeChanges } from '#core/layout/text-auto-resize'
+import { measurePropertyText } from '#core/layout/property-text'
 
 function definitionsForInstance(
   ctx: Pick<EditorContext, 'graph'>,
@@ -34,20 +34,6 @@ function targetValue(target: ComponentPropertyTarget | null): string {
   if (target.field === 'VISIBLE') return String(target.node.visible)
   return target.source.componentId ?? target.node.componentId ?? ''
 }
-/** Measures text a property gave new characters, when it sizes itself to them, as Figma does. */
-export function measurePropertyText(
-  ctx: Pick<EditorContext, 'graph'>,
-  instanceId: string,
-  definition: ComponentPropertyDefinition
-): void {
-  const instance = ctx.graph.getNode(instanceId)
-  if (definition.type !== 'TEXT' || !instance) return
-  for (const target of findComponentPropertyTargets(ctx.graph, instance, definition.id)) {
-    if (target.field !== 'TEXT') continue
-    const changes = textAutoResizeChanges(target.node, { text: target.node.text })
-    if (Object.keys(changes).length > 0) ctx.graph.updateNode(target.node.id, changes)
-  }
-}
 
 function applyPropertyValue(
   ctx: Pick<EditorContext, 'graph'>,
@@ -55,8 +41,9 @@ function applyPropertyValue(
   definition: ComponentPropertyDefinition,
   value: string
 ): boolean {
+  unbindSwapPropertyTargets(ctx.graph, instanceId, definition, value)
   const result = applyComponentPropertyValue(ctx.graph, instanceId, definition, value)
-  measurePropertyText(ctx, instanceId, definition)
+  measurePropertyText(ctx.graph, instanceId, definition)
   return definition.type !== 'INSTANCE_SWAP' || result !== null
 }
 
@@ -64,16 +51,8 @@ export function reapplyInstanceComponentProperties(
   ctx: Pick<EditorContext, 'graph'>,
   instanceId: string
 ): void {
-  const instance = ctx.graph.getNode(instanceId)
-  if (instance?.type !== 'INSTANCE') return
-  const definitions = new Map(
-    definitionsForInstance(ctx, instance).map((definition) => [definition.id, definition])
-  )
-  for (const [propertyId, value] of Object.entries(instance.componentPropertyAssignments)) {
-    const definition = definitions.get(propertyId)
-    if (definition && definition.type !== 'VARIANT') {
-      applyPropertyValue(ctx, instanceId, definition, value)
-    }
+  for (const definition of reapplyComponentPropertyAssignments(ctx.graph, instanceId)) {
+    measurePropertyText(ctx.graph, instanceId, definition)
   }
 }
 
@@ -100,23 +79,11 @@ export function createComponentPropertyActions(
     return definition.type === 'INSTANCE_SWAP' ? (swapTargetId(ctx, value) ?? value) : value
   }
 
-  function restoreTarget(instance: SceneNode, target: ComponentPropertyTarget, value: string) {
+  function restoreTarget(target: ComponentPropertyTarget, value: string) {
     if (target.field === 'TEXT' && target.node.type === 'TEXT') {
       ctx.graph.updateNode(target.node.id, { text: value })
     } else if (target.field === 'VISIBLE') {
       ctx.graph.updateNode(target.node.id, { visible: value === 'true' })
-    } else if (target.field === 'INSTANCE_SWAP' && target.node.type === 'INSTANCE') {
-      const componentId = swapTargetId(ctx, value)
-      if (!componentId) return
-      ctx.graph.swapInstanceComponent(target.node.id, componentId)
-      setInstanceOverride(
-        instance.instanceOverrides,
-        instance.id,
-        target.node.id,
-        'sourceComponentId',
-        target.source.id
-      )
-      ctx.graph.updateNode(instance.id, { instanceOverrides: instance.instanceOverrides })
     }
   }
 
@@ -137,13 +104,12 @@ export function createComponentPropertyActions(
     const previousOwnerOverrides = owner && cloneInstanceOverrideState(owner.instanceOverrides)
 
     // A property can drive several layers; undo restores each one to what it showed.
-    const assignedValue = instance.componentPropertyAssignments[propertyId]
-    const previousValues = findComponentPropertyTargets(ctx.graph, instance, propertyId).map(
-      (target) =>
-        definition.type === 'INSTANCE_SWAP' && assignedValue
-          ? (swapTargetId(ctx, assignedValue) ?? assignedValue)
-          : targetValue(target)
-    )
+    const targets = findComponentPropertyTargets(ctx.graph, instance, propertyId)
+    const previousValues = targets.map(targetValue)
+    const swappedLayers =
+      definition.type === 'INSTANCE_SWAP'
+        ? targets.map(({ node }) => snapshotInstance(ctx.graph, node.id))
+        : []
 
     if (!applyPropertyValue(ctx, instanceId, definition, value)) return
     recordAssignmentOverride(ctx.graph, instanceId, propertyId)
@@ -170,9 +136,12 @@ export function createComponentPropertyActions(
             })
           }
           restoredTargets.forEach((target, index) =>
-            restoreTarget(live, target, previousValues[index] ?? '')
+            restoreTarget(target, previousValues[index] ?? '')
           )
-          measurePropertyText(ctx, instanceId, definition)
+          for (const layer of swappedLayers) {
+            restoreInstance(ctx.graph, layer)
+          }
+          measurePropertyText(ctx.graph, instanceId, definition)
           ctx.runLayoutForNode(instanceId)
         }
         ctx.requestRender()

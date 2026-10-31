@@ -14,16 +14,18 @@ import {
 import type { GUID, Vector } from '@open-pencil/scene-graph/primitives'
 import { scaleNodeChanges } from '@open-pencil/scene-graph/scaling'
 import { ownsSlotContent } from '@open-pencil/scene-graph/slots'
-import { paintBindingTarget } from '@open-pencil/scene-graph/variables'
+import { paintBindingTarget, savedVariantUnderBinding } from '@open-pencil/scene-graph/variables'
 
 import { instanceExportAddress } from '../instance/geometry'
 import { mergeVariableConsumptionMaps, overrideVariableBindingEntry } from '../variable/bindings'
+import { variantBindingsClaimEntry } from '../variable/variants'
 import { nestedPropertyAssignments } from './assignments/nested'
 import { componentPropAssignment } from './assignments/values'
 import {
   createFillPaints,
   createStrokePaints,
   getOrCreateNodeGuid,
+  getOrCreatePropertyGuid,
   exportedStyleReference,
   instanceGuidResolver,
   isDescendantOf,
@@ -40,14 +42,40 @@ function unscaledRootSize(instance: SceneNode, target: SceneNode): Vector {
   return { x: target.width / scale, y: target.height / scale }
 }
 
+function variantBindingsClaim(
+  context: SceneNodeToKiwiContext,
+  target: SceneNode,
+  path: GUID[],
+  counter: { value: number }
+): KiwiSymbolOverridePayload | undefined {
+  const entry = variantBindingsClaimEntry(target, context.graph, context.varIdToGuid, (id) =>
+    getOrCreatePropertyGuid(context, id, counter)
+  )
+  return entry && { guidPath: { guids: path }, parameterConsumptionMap: { entries: [entry] } }
+}
+
+function swappedComponent(
+  context: SceneNodeToKiwiContext,
+  target: SceneNode,
+  saved: unknown
+): string | undefined {
+  return (
+    savedVariantUnderBinding(context.graph, target, saved)?.id ?? target.componentId ?? undefined
+  )
+}
+
 function exportedSwapOverride(
   context: SceneNodeToKiwiContext,
   target: SceneNode,
+  saved: unknown,
   path: GUID[] | undefined,
   counter: { value: number }
 ): KiwiSymbolOverridePayload | undefined {
-  if (!path || target.type !== 'INSTANCE' || !target.componentId) return undefined
-  const component = getOrCreateNodeGuid(context, target.componentId, counter)
+  const componentId = swappedComponent(context, target, saved)
+  if (!path || target.type !== 'INSTANCE' || !componentId) {
+    return undefined
+  }
+  const component = getOrCreateNodeGuid(context, componentId, counter)
   return component ? { guidPath: { guids: path }, overriddenSymbolID: component } : undefined
 }
 
@@ -236,8 +264,11 @@ function overrideClaim(
     return record
   }
   const input: ClaimInput = { ...claimed, target, nodeFields }
+  if (field === 'variantBindings') {
+    return variantBindingsClaim(input.context, input.target, path, counter)
+  }
   if (field === 'componentId')
-    return exportedSwapOverride(input.context, input.target, path, counter)
+    return exportedSwapOverride(input.context, input.target, input.value, path, counter)
   const assignedPropertyId = overriddenAssignmentId(field)
   if (assignedPropertyId !== undefined) {
     return assignmentOverride(input.context, input.target, assignedPropertyId, path, counter)

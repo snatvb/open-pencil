@@ -1,4 +1,7 @@
 import type { ComponentPropertyDefinition, ComponentPropertyType } from '@open-pencil/scene-graph'
+import { findInstanceAncestor } from '@open-pencil/scene-graph/instances'
+import { cloneInstanceOverrideState } from '@open-pencil/scene-graph/instances/overrides'
+import { unbindVariantProperty } from '@open-pencil/scene-graph/variables'
 import { buildVariantName, parseVariantName } from '@open-pencil/scene-graph/variant-name'
 
 import { assertNodeEditable } from '#core/editor/capabilities'
@@ -102,9 +105,32 @@ export function createVariantActions(ctx: EditorContext) {
     }
     const target = findExactVariant(ctx.graph, componentSetId, requested)
     if (!target) return { kind: 'unavailable', requested }
-    if (target.id === instance.componentId) return { kind: 'unchanged', componentId: target.id }
+
+    const previousBindings = { ...instance.variantBindings }
+    const previousSource = instance.source
+    const owner = instance.parentId ? findInstanceAncestor(ctx.graph, instance.parentId) : undefined
+    const previousOwnerOverrides = owner && cloneInstanceOverrideState(owner.instanceOverrides)
+    const unbind = () => unbindVariantProperty(ctx.graph, instanceId, propertyName)
+    const restoreBindings = () => {
+      ctx.graph.updateNode(instanceId, {
+        variantBindings: { ...previousBindings },
+        source: previousSource
+      })
+      if (owner && previousOwnerOverrides) {
+        ctx.graph.updateNode(owner.id, {
+          instanceOverrides: cloneInstanceOverrideState(previousOwnerOverrides)
+        })
+      }
+    }
+    if (target.id === instance.componentId) {
+      if (unbind()) {
+        ctx.undo.push({ label: 'Switch variant', forward: unbind, inverse: restoreBindings })
+      }
+      return { kind: 'unchanged', componentId: target.id }
+    }
 
     const before = snapshotInstance(ctx.graph, instanceId)
+    unbind()
     ctx.graph.swapInstanceComponent(instanceId, target.id)
     reapplyInstanceComponentProperties(ctx, instanceId)
     ctx.requestRender()

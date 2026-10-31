@@ -20,6 +20,7 @@ import { layoutGridCount } from '@open-pencil/scene-graph/layout'
 import { siblingOrderKeys } from '@open-pencil/scene-graph/order-keys'
 import { OPEN_PENCIL_PLUGIN_DATA, withPluginData } from '@open-pencil/scene-graph/plugin-data'
 import type { GUID, Matrix, Vector } from '@open-pencil/scene-graph/primitives'
+import { savedVariantUnderBinding } from '@open-pencil/scene-graph/variables'
 
 /* eslint-disable max-lines */
 import { bytesToHex } from '../bytes'
@@ -57,6 +58,7 @@ import { mergeOverrides, serializeRuntimePropertyOverrides } from './override-cl
 import { exportedNode } from './resolved-bindings'
 import { slotDefinitionFields } from './slots'
 import { serializeText } from './text'
+import { applyVariantBindings } from './variant-bindings'
 
 export type { KiwiNodeChange, SceneNodeToKiwiContext } from './context'
 
@@ -458,9 +460,10 @@ function applyInstancePayload(
   localIdCounter: { value: number }
 ): void {
   if (node.type !== 'INSTANCE' || !node.componentId) return
+  const saved = savedVariantUnderBinding(context.graph, node, node.source.fig.savedComponentId)
   const symbolID = getOrCreateNodeGuid(
     context,
-    resolveInstanceComponentId(context, node.componentId),
+    resolveInstanceComponentId(context, saved?.id ?? node.componentId),
     localIdCounter
   )
   if (symbolID) {
@@ -1000,6 +1003,7 @@ export function sceneNodeToKiwiWithContext(
   context.serializeGeometry(nodeForGeometryExport(node), nc, context.blobs)
   context.serializeVariableBindings(node, nc, context.graph, context.varIdToGuid)
   mergeParameterBindings(nc)
+  applyVariantBindings(context, node, nc, localIdCounter)
   applyRawFigmaNodeFields(context, node, nc)
   applyVariableModes(context, node, nc)
 

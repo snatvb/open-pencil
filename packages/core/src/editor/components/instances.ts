@@ -1,6 +1,11 @@
 import type { SceneNode } from '@open-pencil/scene-graph'
 import { getAxisAlignedWorldBounds, getWorldMatrix } from '@open-pencil/scene-graph/coordinate'
-import { canCreateInstance } from '@open-pencil/scene-graph/instances'
+import {
+  canCreateInstance,
+  keepCopiesAgain,
+  keptCopiesWithin,
+  subtreeIds
+} from '@open-pencil/scene-graph/instances'
 import { cloneInstanceOverrideState } from '@open-pencil/scene-graph/instances/overrides'
 import Matrix from '@open-pencil/scene-graph/matrix'
 import type { Vector } from '@open-pencil/scene-graph/primitives'
@@ -114,6 +119,8 @@ export function createComponentInstanceActions(ctx: EditorContext) {
 
     const prevComponentId = selectedNode.componentId
     const previousOverrides = cloneInstanceOverrideState(selectedNode.instanceOverrides)
+    const previousBindings = { ...selectedNode.variantBindings }
+    const keptCopies = keptCopiesWithin(ctx.graph, subtreeIds(ctx.graph, selectedNode))
 
     ctx.graph.detachInstance(selectedNode.id)
     ctx.setSelectedIds(new Set([selectedNode.id]))
@@ -128,8 +135,10 @@ export function createComponentInstanceActions(ctx: EditorContext) {
         ctx.graph.updateNode(selectedNode.id, {
           type: 'INSTANCE',
           componentId: prevComponentId,
-          instanceOverrides: cloneInstanceOverrideState(previousOverrides)
+          instanceOverrides: cloneInstanceOverrideState(previousOverrides),
+          variantBindings: { ...previousBindings }
         })
+        keepCopiesAgain(ctx.graph, keptCopies)
       }
     })
   }

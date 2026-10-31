@@ -1,7 +1,11 @@
 import { pick } from 'es-toolkit/object'
 
 import type { SceneNode } from '@open-pencil/scene-graph'
-import { findInstanceAncestor, recordInstanceOverride } from '@open-pencil/scene-graph/instances'
+import {
+  findInstanceAncestor,
+  recordInstanceOverride,
+  updateNodeOrKept
+} from '@open-pencil/scene-graph/instances'
 import { cloneInstanceOverrideState } from '@open-pencil/scene-graph/instances/overrides'
 import { styleDetachmentChanges } from '@open-pencil/scene-graph/shared-styles'
 
@@ -93,12 +97,12 @@ export function createNodeActions(ctx: EditorContext) {
     ctx.undo.push({
       label,
       forward: () => {
-        ctx.graph.updateNode(id, nextChanges)
-        recordInstanceOverride(ctx.graph, id, Object.keys(nextChanges))
+        updateNodeOrKept(ctx.graph, id, nextChanges)
+        recordInstanceOverride(ctx.graph, id, Object.keys(nextChanges), true)
         runChangedLayout(id, nextChanges)
       },
       inverse: () => {
-        ctx.graph.updateNode(id, previous)
+        updateNodeOrKept(ctx.graph, id, previous)
         if (owner && previousOverrides)
           ctx.graph.updateNode(owner.id, {
             instanceOverrides: cloneInstanceOverrideState(previousOverrides)

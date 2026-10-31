@@ -10,6 +10,23 @@ import type { Fill, SceneNode, Stroke, StyleRun, TextLength } from '../types'
 import { NUMERIC_FIELDS, isNumericVariableBindingField, paintBindingTarget } from './fields'
 import { variableText, variableTruthy } from './text'
 import { variableValueReferences } from './value'
+import { hasVariantBindings } from './variant-bindings'
+import {
+  boundInstancesFirst,
+  createVariantWalk,
+  subtreeNodes,
+  walkBoundVariants,
+  type ReconcileOptions
+} from './variant-reconcile'
+export type { ReconcileOptions } from './variant-reconcile'
+export {
+  savedVariantIds,
+  savedVariantUnderBinding,
+  unbindSwapPropertyTargets,
+  unbindVariantProperty,
+  unbindVariantsForSwap
+} from './variant-bindings'
+export { showBoundVariants } from './variant-reconcile'
 export {
   isNumericVariableBindingField,
   paintBindingTarget,
@@ -136,12 +153,16 @@ export function resolvedRunBindings(
   return changed ? { styleRuns } : {}
 }
 
-/** The variables a node binds, its own and its characters'. */
+/** The variables a node binds, its own, its characters', and the variants it binds. */
 function boundVariableIds(node: SceneNode): string[] {
-  return [
+  const ids = [
     ...Object.values(node.boundVariables),
     ...node.styleRuns.flatMap((run) => Object.values(run.style.boundVariables ?? {}))
-  ].filter((id): id is string => typeof id === 'string')
+  ]
+  if (hasVariantBindings(node)) {
+    ids.push(...Object.values(node.variantBindings))
+  }
+  return ids.filter((id): id is string => typeof id === 'string')
 }
 
 /**
@@ -207,18 +228,6 @@ export function variablesResolvingThrough(graph: SceneGraph, ids: Iterable<strin
   return found
 }
 
-function subtreeNodes(graph: SceneGraph, roots: Iterable<string>): SceneNode[] {
-  const nodes: SceneNode[] = []
-  const pending = [...roots]
-  for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
-    const node = graph.getNode(id)
-    if (!node) continue
-    nodes.push(node)
-    pending.push(...node.childIds)
-  }
-  return nodes
-}
-
 /**
  * The collections whose variables the layers in these subtrees resolve: those they bind, and
  * those the bound variables alias, so a mode set on the subtrees can change what they show.
@@ -250,10 +259,31 @@ export function layersUsingVariables(graph: SceneGraph, ids: Iterable<string>): 
   )
 }
 
+function allNodes(graph: SceneGraph): Iterable<SceneNode> {
+  return { [Symbol.iterator]: () => graph.getAllNodes()[Symbol.iterator]() }
+}
+
 function scopedNodes(graph: SceneGraph, scope: BindingScope | undefined): Iterable<SceneNode> {
-  if (!scope) return graph.getAllNodes()
-  if ('subtrees' in scope) return subtreeNodes(graph, scope.subtrees)
+  if (!scope) {
+    return allNodes(graph)
+  }
+  if ('subtrees' in scope) {
+    return subtreeNodes(graph, scope.subtrees)
+  }
   return layersUsingVariables(graph, scope.variables)
+}
+
+function applyResolvedBindings(graph: SceneGraph, node: SceneNode): boolean {
+  const updates = {
+    ...resolvedNumericBindings(graph, node),
+    ...resolvedValueBindings(graph, node),
+    ...resolvedRunBindings(graph, node)
+  }
+  if (Object.keys(updates).length === 0) {
+    return false
+  }
+  graph.updateNode(node.id, updates)
+  return true
 }
 
 /**
@@ -261,17 +291,18 @@ function scopedNodes(graph: SceneGraph, scope: BindingScope | undefined): Iterab
  * instance overrides. A scope limits it to the layers a change can reach, so layers whose saved
  * values differ from their bindings elsewhere in the document are left as saved.
  */
-export function reconcileVariableBindings(graph: SceneGraph, scope?: BindingScope): string[] {
+export function reconcileVariableBindings(
+  graph: SceneGraph,
+  scope?: BindingScope,
+  { onVariantSwap }: ReconcileOptions = {}
+): string[] {
   const changed: string[] = []
-  for (const node of scopedNodes(graph, scope)) {
-    const updates = {
-      ...resolvedNumericBindings(graph, node),
-      ...resolvedValueBindings(graph, node),
-      ...resolvedRunBindings(graph, node)
-    }
-    if (Object.keys(updates).length === 0) continue
-    graph.updateNode(node.id, updates)
-    changed.push(node.id)
-  }
+  walkBoundVariants(
+    graph,
+    boundInstancesFirst(graph, scopedNodes(graph, scope)),
+    createVariantWalk(graph, { onVariantSwap }),
+    (node) => applyResolvedBindings(graph, node),
+    changed
+  )
   return changed
 }

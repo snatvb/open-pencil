@@ -1,6 +1,9 @@
+import { isEmptyObject } from 'es-toolkit/predicate'
+
 import type { SceneGraph } from '../graph'
 import type { SceneNode } from '../types'
 import { paintBindingTarget } from '../variables/fields'
+import { keptNode } from './kept-copies'
 import { overriddenBindingField } from './overrides'
 
 /**
@@ -18,6 +21,18 @@ export function instanceMainComponent(
     current = graph.getNode(current.componentId)
   }
   return current?.type === 'COMPONENT' ? current : undefined
+}
+
+export function showsBoundVariant(
+  graph: SceneGraph,
+  source: SceneNode,
+  target: SceneNode
+): boolean {
+  return (
+    target.type === 'INSTANCE' &&
+    !isEmptyObject(target.variantBindings) &&
+    instanceMainComponent(graph, target)?.id !== instanceMainComponent(graph, source)?.id
+  )
 }
 
 /** Root paint claims also protect a nested copy when its enclosing component syncs it. */
@@ -61,13 +76,19 @@ export function sourceWithEffectiveFill(
 }
 
 /** Nearest INSTANCE at or above `nodeId` — self, parent, grandparent, etc. */
-export function findInstanceAncestor(graph: SceneGraph, nodeId: string): SceneNode | undefined {
-  let current = graph.nodes.get(nodeId)
+export function findInstanceAncestor(
+  graph: SceneGraph,
+  nodeId: string,
+  includeKept = false
+): SceneNode | undefined {
+  const lookup = (id: string) =>
+    graph.nodes.get(id) ?? (includeKept ? keptNode(graph, id) : undefined)
+  let current = lookup(nodeId)
   while (current) {
     if (current.type === 'INSTANCE') {
       return current
     }
-    current = current.parentId ? graph.nodes.get(current.parentId) : undefined
+    current = current.parentId ? lookup(current.parentId) : undefined
   }
   return undefined
 }

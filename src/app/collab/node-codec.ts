@@ -108,7 +108,8 @@ export function normalizeSourceMetadata(source: unknown): SourceMetadata {
       componentPropAssignments: arrayOrEmpty(fig.componentPropAssignments),
       derivedSymbolData: arrayOrEmpty(fig.derivedSymbolData),
       derivedSymbolDataLayoutVersion: numberOrNull(fig.derivedSymbolDataLayoutVersion),
-      uniformScaleFactor: numberOrNull(fig.uniformScaleFactor)
+      uniformScaleFactor: numberOrNull(fig.uniformScaleFactor),
+      savedComponentId: stringOrNull(fig.savedComponentId)
     }
   }
 }

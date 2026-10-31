@@ -129,3 +129,58 @@ test("an instance's componentProperties report its own variant", () => {
   instance.setProperties({ State: 'Default' })
   expect(instance.componentProperties.State?.value).toBe('Default')
 })
+
+test('setting a variant property unbinds it from its variable', () => {
+  const graph = new SceneGraph()
+  const figma = new FigmaAPI(graph)
+  const base = figma.createComponent()
+  base.name = 'State=Default'
+  const hover = figma.createComponent()
+  hover.name = 'State=Hover'
+  const set = figma.combineAsVariants([base, hover], figma.currentPage)
+  const instance = base.createInstance()
+  const collection = graph.createCollection('States')
+  const state = graph.createVariable('State', 'STRING', collection.id, 'Default')
+  const [property] = graph.getNode(set.id)?.componentPropertyDefinitions ?? []
+  graph.updateNode(instance.id, { variantBindings: { [property.id]: state.id } })
+
+  instance.setProperties({ State: 'Hover' })
+
+  expect(graph.getNode(instance.id)?.variantBindings).toEqual({})
+})
+
+function boundVariantInstance() {
+  const graph = new SceneGraph()
+  const figma = new FigmaAPI(graph)
+  const base = figma.createComponent()
+  base.name = 'State=Default'
+  const hover = figma.createComponent()
+  hover.name = 'State=Hover'
+  const set = figma.combineAsVariants([base, hover], figma.currentPage)
+  const other = figma.createComponent()
+  const instance = base.createInstance()
+  const collection = graph.createCollection('States')
+  const state = graph.createVariable('State', 'STRING', collection.id, 'Default')
+  const [property] = graph.getNode(set.id)?.componentPropertyDefinitions ?? []
+  const bindings = { [property.id]: state.id }
+  graph.updateNode(instance.id, { variantBindings: bindings })
+  const bindingsOf = () => graph.getNode(instance.id)?.variantBindings
+  return { base, hover, other, instance, bindings, bindingsOf }
+}
+
+for (const pick of ['base', 'hover'] as const) {
+  test(`swapping to a variant of the set unbinds its variant properties, ${pick} shown or not`, () => {
+    const variant = boundVariantInstance()
+    variant.instance.swapComponent(variant[pick])
+
+    expect(variant.bindingsOf()).toEqual({})
+  })
+}
+
+test('swapping to a component outside the set unbinds its variant properties', () => {
+  const { other, instance, bindingsOf } = boundVariantInstance()
+
+  instance.swapComponent(other)
+
+  expect(bindingsOf()).toEqual({})
+})

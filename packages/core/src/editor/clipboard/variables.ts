@@ -1,3 +1,5 @@
+import { mapValues } from 'es-toolkit/object'
+
 import type { SceneGraph, SceneNode, Variable, VariableCollection } from '@open-pencil/scene-graph'
 import { remapStyleRunReferences, styleRunReferences } from '@open-pencil/scene-graph/text'
 import {
@@ -42,6 +44,9 @@ export function captureClipboardVariables(
   }
   for (const node of nodes) {
     for (const id of Object.values(node.boundVariables)) visit(id)
+    for (const id of Object.values(node.variantBindings)) {
+      visit(id)
+    }
     for (const id of styleRunReferences(node.styleRuns).variables) visit(id)
   }
   const activeModes: Array<[string, string]> = []
@@ -118,6 +123,7 @@ export function remapClipboardVariableBindings(
   node.boundVariables = Object.fromEntries(
     Object.entries(node.boundVariables).map(([field, id]) => [field, variables.get(id) ?? id])
   )
+  node.variantBindings = mapValues(node.variantBindings, (id) => variables.get(id) ?? id)
   node.variableModes = Object.fromEntries(
     Object.entries(node.variableModes).map(([id, mode]) => [
       collections.get(id) ?? id,

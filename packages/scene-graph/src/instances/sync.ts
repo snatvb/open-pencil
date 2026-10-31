@@ -18,7 +18,12 @@ import {
   type InstanceSyncContext
 } from './copies'
 import { INSTANCE_SYNC_FIELD_OWNERS, INSTANCE_SYNC_FIELDS } from './fields'
-import { ownsSelfFillField, sourceWithEffectiveFill } from './main-component'
+import {
+  instanceMainComponent,
+  ownsSelfFillField,
+  showsBoundVariant,
+  sourceWithEffectiveFill
+} from './main-component'
 import {
   bindingOverrideField,
   copiedComponentLayerId,
@@ -57,6 +62,8 @@ export function copyProp(
     setSceneProp(target, 'variableBindingScales', { ...source.variableBindingScales })
   } else if (key === 'variableModes') {
     setSceneProp(target, key, { ...source.variableModes })
+  } else if (key === 'variantBindings') {
+    setSceneProp(target, key, { ...source.variantBindings })
   } else if (key === 'gridPosition') {
     // Shallow copy the grid position object — all fields are primitives
     setSceneProp(target, key, source.gridPosition ? { ...source.gridPosition } : null)
@@ -475,6 +482,22 @@ function placeMissingChildren(
   }
 }
 
+function followSourceVariant(
+  graph: SceneGraph,
+  compChild: SceneNode,
+  instChild: SceneNode,
+  swapped: boolean
+): void {
+  if (instChild.type !== 'INSTANCE' || swapped || showsBoundVariant(graph, compChild, instChild)) {
+    return
+  }
+  const shown = instanceMainComponent(graph, instChild)
+  const source = instanceMainComponent(graph, compChild)
+  if (shown && source && shown.id !== source.id) {
+    graph.updateNode(instChild.id, { componentId: source.id })
+  }
+}
+
 export function syncChildren(
   graph: SceneGraph,
   compParentId: string,
@@ -528,10 +551,17 @@ export function syncChildren(
       { compParent, instParent, compChild, instChild },
       childBindingProtection(graph, instChild, overrides)
     )
+    followSourceVariant(
+      graph,
+      compChild,
+      instChild,
+      hasNodeInstanceOverride(overrides, instParentId, instChild.id, 'componentId')
+    )
 
     if (
       compChild.childIds.length > 0 &&
       !hasNodeInstanceOverride(overrides, instParentId, instChild.id, 'componentId') &&
+      !showsBoundVariant(graph, compChild, instChild) &&
       // The component's frame is the authority on which slot this is; instance copies of
       // its bindings are not synced.
       !ownsSlotContent(graph, instChild, slotPropertyId(compChild))

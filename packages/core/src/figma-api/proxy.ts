@@ -13,6 +13,7 @@ import { createsComponentCycle, recordInstanceOverride } from '@open-pencil/scen
 import type { Rect, Vector } from '@open-pencil/scene-graph/primitives'
 import type { ShapeWithTextType } from '@open-pencil/scene-graph/shape-with-text'
 import { slotPropertyId } from '@open-pencil/scene-graph/slots'
+import { unbindVariantsForSwap } from '@open-pencil/scene-graph/variables'
 
 import { assertNodeEditable } from '#core/editor/capabilities'
 import type { FigmaEffect } from '#core/figma-api/effects'
@@ -391,6 +392,7 @@ export class FigmaNodeProxy {
     const target = this[INTERNAL_GRAPH].getNode(component[INTERNAL_ID])
     if (target?.type !== 'COMPONENT') throw new Error('swapComponent() needs a component')
     assertNodeEditable(this[INTERNAL_GRAPH], this[INTERNAL_ID])
+    unbindVariantsForSwap(this[INTERNAL_GRAPH], n.id)
     this[INTERNAL_GRAPH].swapInstanceComponent(n.id, target.id)
   }
 

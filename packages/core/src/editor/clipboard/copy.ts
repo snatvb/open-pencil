@@ -31,7 +31,13 @@ function graphForSnapshot(ctx: EditorContext, snapshot: ClipboardSnapshot): Scen
     for (const child of node.children ?? []) index(child)
   }
   for (const node of snapshot.nodes) index(node)
-  for (const node of snapshot.componentDependencies) index(node)
+  for (const node of snapshot.componentDependencies) {
+    index(node)
+    const set = node.parentId ? ctx.graph.getNode(node.parentId) : undefined
+    if (set?.type === 'COMPONENT_SET' && !graph.nodes.has(set.id)) {
+      graph.nodes.set(set.id, set)
+    }
+  }
   for (const node of snapshot.styleDefinitions) index(node)
   for (const collection of snapshot.variableDependencies.collections)
     graph.variableCollections.set(collection.id, collection)
