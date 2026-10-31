@@ -18,6 +18,7 @@ import { importClipboardDependenciesWithUndo } from './clipboard/dependencies'
 import { createClipboardExportActions } from './clipboard/export'
 import { createClipboardFontActions } from './clipboard/fonts'
 import { deleteIds, recreateSnapshots, restoreDeletedEntries } from './clipboard/history'
+import { pastedOverrides } from './clipboard/paste/overrides'
 import type { PasteHistoryOperation } from './clipboard/paste/replace'
 import { replaceTargetsWithCreated, selectedReplacementTargets } from './clipboard/paste/replace'
 import {
@@ -170,7 +171,8 @@ export function createClipboardActions(ctx: EditorContext) {
         snapshot.images,
         dependencies.componentDependencies,
         cursorPos,
-        options
+        options,
+        dependencies.collectionIds
       )
     })
     await fontActions.loadFontsForNodes(created)
@@ -242,7 +244,8 @@ export function createClipboardActions(ctx: EditorContext) {
     images: Map<string, Uint8Array>,
     dependencies: Array<SceneNode & { children?: SceneNode[] }> = [],
     cursorPos?: Vector,
-    options: PasteOptions = {}
+    options: PasteOptions = {},
+    collectionIds: ReadonlyMap<string, string> = new Map()
   ) {
     const prevSelection = new Set(ctx.state.selectedIds)
     const replacementTargets = options.replaceSelection ? selectedReplacementTargets(ctx) : []
@@ -281,15 +284,7 @@ export function createClipboardActions(ctx: EditorContext) {
       const node = ctx.graph.getNode(id)
       if (!node) continue
       const componentId = node.componentId ? copiedIds.get(node.componentId) : undefined
-      const instanceOverrides = {
-        self: node.instanceOverrides.self,
-        descendants: new Map(
-          [...node.instanceOverrides.descendants].map(([target, fields]) => [
-            copiedIds.get(target) ?? target,
-            fields
-          ])
-        )
-      }
+      const instanceOverrides = pastedOverrides(node.instanceOverrides, copiedIds, collectionIds)
       ctx.graph.updateNode(id, { componentId: componentId ?? node.componentId, instanceOverrides })
     }
     if (dependencyRootIds.length > 0) {
