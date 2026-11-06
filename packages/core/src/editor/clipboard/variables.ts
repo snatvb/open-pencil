@@ -1,6 +1,7 @@
 import { mapValues } from 'es-toolkit/object'
 
 import type { SceneGraph, SceneNode, Variable, VariableCollection } from '@open-pencil/scene-graph'
+import { remapInstanceOverrideState } from '@open-pencil/scene-graph/instances/overrides'
 import { remapStyleRunReferences, styleRunReferences } from '@open-pencil/scene-graph/text'
 import {
   isUnsupportedVariableValue,
@@ -140,8 +141,14 @@ export function remapClipboardVariableBindings(
     const id = node[key]
     if (id && styleIds.has(id)) node[key] = styleIds.get(id) ?? id
   }
+  const remapVariable = (id: string) => variables.get(id) ?? id
+  node.instanceOverrides = remapInstanceOverrideState(node.instanceOverrides, {
+    node: (id) => id,
+    variable: remapVariable,
+    collection: (id) => collections.get(id) ?? id
+  })
   node.styleRuns = remapStyleRunReferences(node.styleRuns, {
-    variable: (id) => variables.get(id) ?? id,
+    variable: remapVariable,
     style: (id) => styleIds.get(id) ?? id
   })
 }
