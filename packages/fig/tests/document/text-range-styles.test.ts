@@ -19,8 +19,8 @@ const PRIMARY = solid(PRIMARY_COLOR)
 const OWN = solid({ r: 0.1, g: 0.8, b: 0.3, a: 1 })
 const PRIMARY_LIBRARY_REF = { assetRef: { key: 'primary', version: '2:0' } }
 const HEADING_REF = { guid: guid(52) }
-const LABEL = 'Play 30'
-const LAST_TWO_CHARACTERS_STYLED = [0, 0, 0, 0, 0, 1, 1]
+const LABEL = 'Total 42'
+const LAST_TWO_CHARACTERS_STYLED = [0, 0, 0, 0, 0, 0, 1, 1]
 
 const STYLES: NodeChange[] = [
   {
@@ -81,7 +81,7 @@ describe('text ranges that name a fill style', () => {
   test('draw in the paints of the style version they name', () => {
     const text = importedTextWithRange({ styleIdForFill: PRIMARY_LIBRARY_REF })
 
-    expect(styledRun(text)).toMatchObject({ start: 5, length: 2 })
+    expect(styledRun(text)).toMatchObject({ start: 6, length: 2 })
     expect(runColor(text)).toEqual(PRIMARY_COLOR)
   })
 
@@ -138,7 +138,7 @@ describe('text ranges that name a fill style', () => {
 })
 
 describe('text ranges that name a text style', () => {
-  test('keep their own decoration and size', () => {
+  test('keep their own fields, since ranges take only fill styles so far', () => {
     const text = importedTextWithRange({
       styleIdForText: HEADING_REF,
       textDecoration: 'UNDERLINE',
