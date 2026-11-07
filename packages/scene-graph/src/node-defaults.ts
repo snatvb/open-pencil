@@ -206,6 +206,7 @@ export function createDefaultNode(
     sharedSymbolVersion: null,
     publishedVersion: null,
     librarySource: null,
+    libraryLayerId: null,
     isPublishable: false,
     isSymbolPublishable: false,
     isExposedInstance: false,

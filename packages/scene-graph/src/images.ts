@@ -1,10 +1,11 @@
 import { sha1 } from '@noble/hashes/legacy.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
 import { imageSize as readImageHeader } from 'image-size'
+import { isValid, toUint8Array } from 'js-base64'
+import { decode } from 'ufo'
 
 import type { Matrix, Size } from './primitives'
-import type { Fill, SceneNode } from './types'
-import { regionFills } from './vector-network'
+import type { Fill } from './types'
 
 /**
  * The name an image's bytes are stored under: the hex SHA-1 of the bytes, as Figma names images,
@@ -68,6 +69,32 @@ export function imageMimeType(data: Uint8Array): ImageMimeType {
   return imageHeader(data)?.type ?? 'image/png'
 }
 
+export interface DataURL {
+  /** The media type in lowercase, without parameters; `text/plain` when the URL names none. */
+  mimeType: string
+  bytes: Uint8Array
+}
+
+/**
+ * The media type and bytes a `data:` URL carries, read as the Fetch standard reads one: a Base64
+ * body is decoded and a percent-encoded one unescaped. Null for anything else, and for Base64 the
+ * standard refuses, such as a body cut short in transit.
+ */
+export function parseDataURL(url: string): DataURL | null {
+  const match = /^\s*data:([^,]*),(.*?)\s*$/is.exec(url)
+  if (!match) return null
+  const [, header = '', body = ''] = match
+  const params = header.split(';').map((param) => param.trim())
+  const base64 = params.length > 1 && params.at(-1)?.toLowerCase() === 'base64'
+  const mimeType = params[0]?.toLowerCase() || 'text/plain'
+  const text = decode(body)
+  if (!base64) return { mimeType, bytes: new TextEncoder().encode(text) }
+  const compact = text.replace(/\s+/g, '')
+  // Base64 one character past a whole group of four cannot be bytes: it was cut short.
+  if (compact.replace(/={1,2}$/, '').length % 4 === 1 || !isValid(compact)) return null
+  return { mimeType, bytes: toUint8Array(compact) }
+}
+
 /** An image's size in pixels, read from its header; null for bytes it cannot read. */
 export function imageSize(data: Uint8Array): Size | null {
   const header = imageHeader(data)
@@ -95,11 +122,22 @@ export function drawnImageHash(paint: Pick<Fill, 'type' | 'imageHash'>): string 
   return paint.type === 'IMAGE' || paint.type === 'VIDEO' ? paint.imageHash : undefined
 }
 
-/** The images a layer's fills, strokes and vector regions draw, so a copy can carry them. */
-export function drawnImageHashes(
-  node: Pick<SceneNode, 'fills' | 'strokes' | 'vectorNetwork'>
-): string[] {
-  return [...node.fills, ...node.strokes, ...regionFills(node.vectorNetwork)].flatMap(
-    (paint) => drawnImageHash(paint) ?? []
-  )
+/** The images `paints` show, by their hashes: a VIDEO paint shows its poster frame. */
+export function imagePaintHashes(paints: Iterable<Fill>): string[] {
+  return [...paints].flatMap((paint) => drawnImageHash(paint) ?? [])
+}
+
+/**
+ * Copies the images `hashes` name from `from` into `to`, each as bytes of its own. An image is
+ * named by its content, so one `to` already holds stays.
+ */
+export function copyImages(
+  from: ReadonlyMap<string, Uint8Array>,
+  to: Map<string, Uint8Array>,
+  hashes: Iterable<string>
+): void {
+  for (const hash of hashes) {
+    const bytes = from.get(hash)
+    if (bytes && !to.has(hash)) to.set(hash, new Uint8Array(bytes))
+  }
 }

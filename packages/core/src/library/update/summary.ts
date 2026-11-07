@@ -6,9 +6,14 @@ import {
   setInstanceOverride
 } from '@open-pencil/scene-graph/instances/overrides'
 
-import { findLibraryDefinition } from './definitions'
-import { diffLibraryManifests } from './diff'
-import type { ComponentLibraryRevision, LibraryAssetChange, LibraryAssetDescriptor } from './types'
+import { findLibraryDefinition } from '#core/library/definitions'
+import { diffLibraryManifests } from '#core/library/diff'
+import type {
+  ComponentLibraryRevision,
+  LibraryAssetChange,
+  LibraryAssetDescriptor
+} from '#core/library/types'
+import { assetComponent, assetComponents } from '#core/library/variants'
 
 export interface LibraryUpdateSummary {
   libraryId: string
@@ -29,33 +34,6 @@ export interface LibraryInstanceUpdate {
   previousSavedComponentId: string | null
   savedComponentId: string | null
   fallback: boolean
-}
-
-function componentsForRoot(graph: SceneGraph, root: SceneNode): SceneNode[] {
-  if (root.type === 'COMPONENT') return [root]
-  if (root.type !== 'COMPONENT_SET') return []
-  return root.childIds.flatMap((id) => {
-    const child = graph.getNode(id)
-    return child?.type === 'COMPONENT' ? [child] : []
-  })
-}
-
-function sameVariant(left: SceneNode, right: SceneNode): boolean {
-  const leftEntries = Object.entries(left.componentPropertyValues)
-  return (
-    leftEntries.length === Object.keys(right.componentPropertyValues).length &&
-    leftEntries.every(([name, value]) => right.componentPropertyValues[name] === value)
-  )
-}
-
-function counterpartOf(previous: SceneNode, next: SceneNode[]): SceneNode | undefined {
-  return next.find((component) => sameVariant(previous, component))
-}
-
-function topLeft(components: SceneNode[]): SceneNode | undefined {
-  return [...components].sort(
-    (left, right) => left.y - right.y || left.x - right.x || left.name.localeCompare(right.name)
-  )[0]
 }
 
 export function summarizeLibraryUpdate(
@@ -93,23 +71,22 @@ export function planLibraryInstanceUpdates(
     const previousRoot = findLibraryDefinition(graph, libraryId, descriptor.key, previousRevisionId)
     const nextRoot = findLibraryDefinition(graph, libraryId, descriptor.key, nextRevisionId)
     if (!previousRoot || !nextRoot) continue
-    const previousComponents = componentsForRoot(graph, previousRoot)
-    const nextComponents = componentsForRoot(graph, nextRoot)
-    const fallback = topLeft(nextComponents)
-    if (!fallback) continue
 
+    const previousComponents = assetComponents(graph, previousRoot)
     for (const previousComponent of previousComponents) {
-      const target = counterpartOf(previousComponent, nextComponents) ?? fallback
+      const target = assetComponent(graph, nextRoot, previousComponent)
+      if (!target) continue
       for (const instance of graph.getInstances(previousComponent.id)) {
         const previousSaved = savedComponentOf(graph, instance)
         const saved = previousComponents.find((component) => component.id === previousSaved)
+        const savedTarget = saved ? assetComponent(graph, nextRoot, saved) : undefined
         updates.push({
           instanceId: instance.id,
           previousComponentId: previousComponent.id,
-          componentId: target.id,
+          componentId: target.component.id,
           previousSavedComponentId: previousSaved,
-          savedComponentId: saved ? (counterpartOf(saved, nextComponents)?.id ?? null) : null,
-          fallback: !sameVariant(previousComponent, target)
+          savedComponentId: savedTarget && !savedTarget.fallback ? savedTarget.component.id : null,
+          fallback: target.fallback
         })
       }
     }

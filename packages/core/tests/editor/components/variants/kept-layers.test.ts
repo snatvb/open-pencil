@@ -4,7 +4,6 @@ import { expectDefined } from '@open-pencil/test-support/assert'
 import { badgedCard, layerNamed, withOwnLayers } from '#core-tests/helpers/bound-variants'
 
 import { FigmaAPI } from '@open-pencil/core/figma-api'
-import { buildOpenPencilClipboardHTML } from '@open-pencil/core/clipboard'
 import { createEditor } from '#core/editor'
 import { instanceMainComponent, keptNodeCount } from '@open-pencil/scene-graph/instances'
 import { DEFAULT_HISTORY_LIMIT } from '@open-pencil/scene-graph/undo'
@@ -263,10 +262,11 @@ describe('layers a mode switch sets aside', () => {
       height: 20
     })
 
+    source.select([pasted.id])
+    const { snapshot } = await source.prepareCopy()
+
     editor.select([chip.id])
-    await editor.pasteFromHTML(buildOpenPencilClipboardHTML([pasted], source.graph), undefined, {
-      replaceSelection: true
-    })
+    await editor.pasteSnapshot(expectDefined(snapshot), undefined, { replaceSelection: true })
     editor.undo.undo()
     editor.setActiveMode(collection.id, compact)
 
