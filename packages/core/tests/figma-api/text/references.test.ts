@@ -173,7 +173,7 @@ describe('style ranges', () => {
 
   test('give a range the value a style binds in the mode of the text', () => {
     const { api, text } = styledText()
-    const graph = api.graph
+    const graph = graphOf(api)
     const collection = graph.createCollection('Type scale')
     const roomy = graph.createMode(collection.id, 'Roomy') ?? ''
     const size = graph.createVariable('Body size', 'FLOAT', collection.id, 14)
@@ -190,7 +190,7 @@ describe('style ranges', () => {
 
   test('give each text the value a changed style binds in its own mode', () => {
     const { api, text } = styledText()
-    const graph = api.graph
+    const graph = graphOf(api)
     const roomyCopy = api.createText()
     roomyCopy.characters = 'Hello world'
     const collection = graph.createCollection('Type scale')
@@ -216,7 +216,7 @@ describe('style ranges', () => {
 
   test('leave the style where a text binds a field the style gives it, as Figma does', () => {
     const { api, text } = styledText()
-    const graph = api.graph
+    const graph = graphOf(api)
     const collection = graph.createCollection('Type scale')
     const roomy = graph.createMode(collection.id, 'Roomy') ?? ''
     const size = graph.createVariable('Body size', 'FLOAT', collection.id, 14)
