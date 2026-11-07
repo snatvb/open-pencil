@@ -1,5 +1,4 @@
-import type { CharacterStyleOverride, StyleRun } from '@open-pencil/scene-graph'
-import { rangeFontStyle } from '@open-pencil/scene-graph/shared-styles'
+import type { StyleRun } from '@open-pencil/scene-graph'
 import {
   hasParagraphSpacing,
   hasTextList,
@@ -9,7 +8,6 @@ import {
   textParagraphRanges,
   lineStepPixels,
   topLevelNumberDigits,
-  type TextListItem,
   type TextParagraphRange
 } from '@open-pencil/scene-graph/text'
 import { resolveNodeTextDirection } from '@open-pencil/scene-graph/text/direction'
@@ -19,9 +17,10 @@ import {
   paragraphBlock,
   type BlockBuild,
   type JoinedBlock,
-  type TextLayoutBlock,
-  type TextLayoutMarker
+  type SplitBlock,
+  type TextLayoutBlock
 } from '#core/canvas/text/layout/block'
+import type { LineFitting } from '#core/canvas/text/layout/fit'
 import {
   firstBuild,
   likelyWraps,
@@ -31,6 +30,7 @@ import {
 } from '#core/canvas/text/layout/joining'
 import type { LineSpacing } from '#core/canvas/text/layout/letter-spacing'
 import type { LineHeightRun, TextLayoutBlockLines } from '#core/canvas/text/layout/lines'
+import { buildMarker, listInset, listStyle } from '#core/canvas/text/layout/list'
 import type { LineCapHeight } from '#core/canvas/text/layout/vertical'
 import type { ParagraphBuildOptions } from '#core/canvas/text/paint'
 import {
@@ -42,33 +42,17 @@ import {
 import type { ParagraphNode } from '#core/canvas/text/paragraph/inputs'
 import { JoinerIndex, sliceJoiners, type Joiner } from '#core/canvas/text/paragraph/joiners'
 import type { TextRenderer } from '#core/canvas/text/renderer'
-import { DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE } from '#core/constants'
 import { autoWidthWrapWidth } from '#core/layout/text-measurement'
 import { shownText } from '#core/text/case'
 import { rangeCapHeight } from '#core/text/character-face'
-import { glyphAdvanceSync } from '#core/text/font/glyphs'
-import { textFontFace } from '#core/text/requirements/collect'
 import { utf8Length } from '#core/text/utf8'
 
-/** A list item's indent per level, in ems of the list's first character. */
-const LIST_INDENT_EMS = 1.5
-/**
- * Figma widens ordered lists by the advance of glyph 48 per extra digit: the character code of
- * "0" read as a glyph ID. Measured in live Figma for Inter, Roboto, DM Sans, and others.
- */
-const LIST_DIGIT_GLYPH_ID = 48
-/** A digit's width, in ems, for a font whose glyphs cannot be read. */
-const FALLBACK_DIGIT_EMS = 0.6
 /** The placeholder a first-line indent puts before the text takes one UTF-16 unit, three bytes. */
 const PLACEHOLDER_UTF8_LENGTH = 3
 // Each native paragraph costs a fixed native layout; measured, blocks pay off past 200 joiners.
 const BLOCKS_PAST_JOINED_PARAGRAPHS = 200
 const JOINED_PARAGRAPHS_PER_BLOCK = 128
 const CARRIAGE_RETURN = '\r'
-
-function styleAt(runs: readonly StyleRun[], index: number): CharacterStyleOverride | undefined {
-  return runs.find((run) => index >= run.start && index < run.start + run.length)?.style
-}
 
 /** Style runs of `text[start, end)` in the slice's own indices. */
 function sliceStyleRuns(runs: readonly StyleRun[], start: number, end: number): StyleRun[] {
@@ -160,17 +144,20 @@ function paragraphLines(
   }
 }
 
+function joinsInBlocksOnceJoined(node: ParagraphNode, joiners: readonly Joiner[]): boolean {
+  return (
+    joiners.length > BLOCKS_PAST_JOINED_PARAGRAPHS &&
+    node.styleRuns.length === 0 &&
+    node.textTruncation !== 'ENDING'
+  )
+}
+
 function joinsInBlocks(
   node: ParagraphNode,
   spacing: LineSpacing,
   joiners: readonly Joiner[]
 ): boolean {
-  return (
-    joiners.length > BLOCKS_PAST_JOINED_PARAGRAPHS &&
-    node.styleRuns.length === 0 &&
-    node.textTruncation !== 'ENDING' &&
-    likelyWraps(node, spacing, joiners)
-  )
+  return joinsInBlocksOnceJoined(node, joiners) && likelyWraps(node, spacing, joiners)
 }
 
 /** Whether the text lays out paragraph by paragraph rather than as one native paragraph. */
@@ -210,59 +197,6 @@ function layoutAutoWidth(layout: TextLayout, node: ParagraphNode): void {
   }
 }
 
-interface ListStyle {
-  em: number
-  family: string
-  style: string
-  /** The name of the first character's face, which its markers are drawn in. */
-  faceName: string | null
-  /** The list's first character's style, which its markers take. */
-  override: CharacterStyleOverride | undefined
-}
-
-function listStyle(node: ParagraphNode, firstCharacter: number): ListStyle {
-  const override = styleAt(node.styleRuns, firstCharacter)
-  return {
-    em: override?.fontSize ?? (node.fontSize || DEFAULT_FONT_SIZE),
-    family: override?.fontFamily ?? (node.fontFamily || DEFAULT_FONT_FAMILY),
-    style: textFontFace(node, override).style,
-    faceName: rangeFontStyle(node, override ?? {}),
-    override
-  }
-}
-
-/** A marker in its list's style, without the text's decoration and with figures of one width. */
-function markerNode(node: ParagraphNode, item: TextListItem, style: ListStyle): ParagraphNode {
-  const override = style.override
-  const features = override?.fontFeatures ?? node.fontFeatures
-  return {
-    ...node,
-    text: item.marker,
-    fontSize: style.em,
-    fontFamily: style.family,
-    fontWeight: override?.fontWeight ?? node.fontWeight,
-    italic: override?.italic ?? node.italic,
-    fontStyle: style.faceName,
-    letterSpacing: override?.letterSpacing ?? node.letterSpacing,
-    lineHeight: override?.lineHeight !== undefined ? override.lineHeight : node.lineHeight,
-    fontVariations: override?.fontVariations ?? node.fontVariations,
-    opticalSizeFromFontSize: override?.opticalSizeFromFontSize ?? node.opticalSizeFromFontSize,
-    fontFeatures:
-      item.listType === 'ORDERED' ? [...features, { tag: 'TNUM', enabled: true }] : features,
-    textLanguage: override?.textLanguage !== undefined ? override.textLanguage : node.textLanguage,
-    styleRuns: override?.fills
-      ? [{ start: 0, length: item.marker.length, style: { fills: override.fills } }]
-      : [],
-    textCase: 'ORIGINAL',
-    textDecoration: 'NONE',
-    textDirection: 'LTR',
-    textAlignHorizontal: 'LEFT',
-    textAutoResize: 'WIDTH_AND_HEIGHT',
-    textTruncation: 'DISABLED',
-    maxLines: null
-  }
-}
-
 /**
  * Text laid out as several native paragraphs: one per paragraph for lists, paragraph spacing,
  * or a first-line indent, since Skia has no hanging indent; groups of paragraphs for a long
@@ -275,6 +209,25 @@ function buildBlocks(
   options: ParagraphBuildOptions,
   paragraphsPerBlock = 1
 ): TextLayout {
+  const fitting = lineFitting(node)
+  const blocks = buildBlockList(r, node, color, options, { fitting, paragraphsPerBlock })
+  const maxLines = buildTruncateOpts(node).maxLines
+  return new TextLayout(r.ck, blocks, maxLines, trimmedCapHeight(node), fitting)
+}
+
+interface BlockListOptions {
+  fitting: LineFitting
+  paragraphsPerBlock: number
+  joined?: boolean
+}
+
+function buildBlockList(
+  r: TextRenderer,
+  node: ParagraphNode,
+  color: Float32Array | undefined,
+  options: ParagraphBuildOptions,
+  { fitting, paragraphsPerBlock, joined = false }: BlockListOptions
+): TextLayoutBlock[] {
   const shown = shownText(node)
   const sources = textParagraphRanges(node.text)
   const groups = paragraphGroups(node.text, sources, paragraphsPerBlock)
@@ -286,7 +239,8 @@ function buildBlocks(
   )
   const digits = topLevelNumberDigits([...items.values()])
   const rtl = resolveNodeTextDirection(node) === 'RTL'
-  const fitting = lineFitting(node)
+  const groupDirection =
+    paragraphsPerBlock > 1 ? resolveNodeTextDirection(node) : node.textDirection
   const truncation = buildTruncateOpts(node)
   const maxLines = truncation.maxLines
   // Each paragraph starts one byte, its newline, after the one before it ends.
@@ -296,6 +250,12 @@ function buildBlocks(
     utf8Starts.push(utf8Offset)
     utf8Offset += utf8Length(shown.slice(range.start, range.end)) + 1
   }
+
+  const firstBlockBuild = (
+    joiners: readonly Joiner[],
+    plain: () => JoinedBlock,
+    join: () => JoinedBlock
+  ): BlockBuild => (joined ? join() : firstBuild(node, fitting.spacing, joiners, plain, join))
 
   const blocks: TextLayoutBlock[] = []
   try {
@@ -310,7 +270,7 @@ function buildBlocks(
     }
     throw error
   }
-  return new TextLayout(r.ck, blocks, maxLines, trimmedCapHeight(node), fitting)
+  return blocks
 
   function buildBlock(order: number, index: number, start: number, end: number): TextLayoutBlock {
     const shownRange: TextParagraphRange = shownRanges[order]
@@ -322,7 +282,8 @@ function buildBlocks(
       text: empty ? ' ' : node.text.slice(start, end),
       styleRuns: empty
         ? sliceStyleRuns(node.styleRuns, start, start + 1)
-        : sliceStyleRuns(node.styleRuns, start, end)
+        : sliceStyleRuns(node.styleRuns, start, end),
+      textDirection: groupDirection
     }
     const paragraphIndent = paragraphSpacingAt(node, index, 'paragraphIndent')
     const firstLineIndent =
@@ -365,7 +326,7 @@ function buildBlocks(
     const marker = item && list ? buildMarker(r, node, item, list, color, options) : null
     let built: BlockBuild
     try {
-      built = firstBuild(node, fitting.spacing, joiners, plain, join)
+      built = firstBlockBuild(joiners, plain, join)
     } catch (error) {
       marker?.paragraph.delete()
       throw error
@@ -436,47 +397,6 @@ function paragraphGroups(
   return groups
 }
 
-/**
- * How far a list item's text stands from the start edge: its level's indent, widened for
- * ordered items by the digits past the first of the largest top-level number. A hanging list
- * moves the items back by one level, so markers stand outside the text box.
- */
-function listInset(
-  node: ParagraphNode,
-  item: TextListItem,
-  list: ListStyle,
-  digits: number
-): number {
-  const unit = list.em * LIST_INDENT_EMS
-  let inset = item.level * unit
-  if (item.listType === 'ORDERED' && digits > 1) {
-    const digit = glyphAdvanceSync(list.family, list.style, LIST_DIGIT_GLYPH_ID, list.em)
-    inset += (digits - 1) * (digit ?? list.em * FALLBACK_DIGIT_EMS)
-  }
-  return node.hangingList ? inset - unit : inset
-}
-
-function buildMarker(
-  r: TextRenderer,
-  node: ParagraphNode,
-  item: TextListItem,
-  list: ListStyle,
-  color: Float32Array | undefined,
-  options: ParagraphBuildOptions
-): TextLayoutMarker {
-  const paragraph = buildSkParagraph(r, markerNode(node, item, list), color, options)
-  paragraph.layout(1e6)
-  return {
-    paragraph,
-    kind: item.listType === 'ORDERED' ? 'number' : 'bullet',
-    em: list.em,
-    face: { family: list.family, style: list.style },
-    x: 0,
-    y: 0,
-    lineNumber: 0
-  }
-}
-
 function createTextLayout(
   r: TextRenderer,
   node: ParagraphNode,
@@ -499,6 +419,16 @@ function createTextLayout(
       lines: paragraphLines(r, node, color, options, { joiners, index })
     }
   }
+  const joinLater = (): JoinedBlock | SplitBlock =>
+    joinsInBlocksOnceJoined(node, joiners)
+      ? {
+          blocks: buildBlockList(r, node, color, options, {
+            fitting,
+            paragraphsPerBlock: JOINED_PARAGRAPHS_PER_BLOCK,
+            joined: true
+          })
+        }
+      : join()
   const plain = (): JoinedBlock => ({
     paragraph: buildSkParagraph(r, node, color, options),
     joiners: JoinerIndex.EMPTY,
@@ -506,7 +436,7 @@ function createTextLayout(
   })
   const block = paragraphBlock(
     shownText(node).length,
-    firstBuild(node, fitting.spacing, joiners, plain, join)
+    firstBuild(node, fitting.spacing, joiners, plain, join, joinLater)
   )
   return new TextLayout(r.ck, [block], undefined, trimmedCapHeight(node), fitting)
 }
