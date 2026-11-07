@@ -4,6 +4,7 @@ import type { Fill, SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 import { createPatternSourceLookup } from '@open-pencil/scene-graph/paints'
 import { regionFills } from '@open-pencil/scene-graph/vector-network'
 
+import { drawOffOutputGrid } from '#core/canvas/images/sampling'
 import type { SkiaRenderer } from '#core/canvas/renderer'
 import { withWorldViewport } from '#core/canvas/renderer/picture'
 
@@ -97,7 +98,9 @@ function recordWithoutReentry(
 ): Shader {
   tiles.sourcesInProgress.add(source.id)
   try {
-    return recordPatternTile(r, source, graph, patternTileLayout(source, fill), drawSourceFills)
+    return drawOffOutputGrid(r, () =>
+      recordPatternTile(r, source, graph, patternTileLayout(source, fill), drawSourceFills)
+    )
   } finally {
     tiles.sourcesInProgress.delete(source.id)
   }

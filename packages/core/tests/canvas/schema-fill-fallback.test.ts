@@ -48,6 +48,7 @@ function createRenderer() {
       PictureRecorder: mock(() => recorder),
       TileMode: { Repeat: 'repeat' }
     },
+    images: { supersampledOutput: null },
     resolveFillColor: mock((fill: Fill) => fill.color),
     makeRRect: mock(() => 'rrect')
   })
