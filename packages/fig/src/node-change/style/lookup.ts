@@ -7,7 +7,8 @@ export const TEXT_STYLE_FIELDS = [
   'lineHeight',
   'letterSpacing',
   'textDecoration',
-  'textCase'
+  'textCase',
+  'leadingTrim'
 ] as const
 
 export type TextStyleField = (typeof TEXT_STYLE_FIELDS)[number]
@@ -70,14 +71,28 @@ export function createTextStyleLookup(
   }
 }
 
+/** A text style record leaves out a leading trim of NONE. */
+const UNSAVED_LEADING_TRIM = 'NONE'
+
+export function textStyleValue(
+  style: Partial<StyleSource>,
+  field: TextStyleField
+): StyleSource[TextStyleField] {
+  if (field === 'leadingTrim') {
+    return style.leadingTrim ?? UNSAVED_LEADING_TRIM
+  }
+  return style[field]
+}
+
 /** The fields a text style gives a layer; a style without a decoration clears the layer's. */
 export function textStyleValues(
   style: Partial<StyleSource>
 ): Partial<Pick<NodeChange, TextStyleField>> {
   const values: Partial<Pick<NodeChange, TextStyleField>> = { textDecoration: style.textDecoration }
   for (const field of TEXT_STYLE_FIELDS) {
-    if (style[field] !== undefined) {
-      Object.assign(values, { [field]: style[field] })
+    const value = textStyleValue(style, field)
+    if (value !== undefined) {
+      Object.assign(values, { [field]: value })
     }
   }
   return values

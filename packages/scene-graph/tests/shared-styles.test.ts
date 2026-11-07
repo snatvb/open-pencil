@@ -13,7 +13,7 @@ function styledText() {
 }
 
 // Live-verified in Figma: a text style gives the whole text its paragraph spacing, paragraph
-// indent, and list spacing, and setting one on a styled text leaves the style.
+// indent, list spacing, and leading trim, and setting one on a styled text leaves the style.
 describe('an edit to a text style field', () => {
   test.each(['paragraphSpacing', 'paragraphIndent', 'listSpacing'] as const)(
     'of %s leaves the text style and keeps the fill style',
@@ -24,6 +24,13 @@ describe('an edit to a text style field', () => {
       })
     }
   )
+
+  test('of leadingTrim leaves the text style and keeps the fill style', () => {
+    expect(styleDetachmentChanges(styledText(), { leadingTrim: 'CAP_HEIGHT' })).toEqual({
+      leadingTrim: 'CAP_HEIGHT',
+      textStyleId: null
+    })
+  })
 
   test('that names the style too keeps it', () => {
     const changes = { fontSize: 20, textStyleId: 'style:other' }

@@ -22,6 +22,7 @@ export const STYLE_GOVERNED_FIELDS = {
     'textTracking',
     'textDecoration',
     'textCase',
+    'leadingTrim',
     'fontVariantCommonLigatures',
     'fontVariantContextualLigatures',
     'toggledOnOTFeatures',

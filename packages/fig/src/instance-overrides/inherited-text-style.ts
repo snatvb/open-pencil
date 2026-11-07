@@ -2,6 +2,7 @@ import type { NodeChange, VariableConsumptionEntry } from '@open-pencil/kiwi/fig
 
 import {
   TEXT_STYLE_FIELDS,
+  textStyleValue,
   type StyleSource,
   type TextStyleLookup
 } from '../node-change/style/lookup'
@@ -19,7 +20,8 @@ const BINDINGS_OF_FIELD: Record<DetachingField, readonly string[]> = {
   fontName: ['FONT_FAMILY', 'FONT_STYLE'],
   lineHeight: ['LINE_HEIGHT'],
   letterSpacing: ['LETTER_SPACING'],
-  textCase: []
+  textCase: [],
+  leadingTrim: []
 }
 
 const CONSUMPTION_MAPS = ['variableConsumptionMap', 'parameterConsumptionMap'] as const
@@ -102,10 +104,10 @@ export function yieldToInheritedTextStyle(
   }
   const styleBound = boundVariableFields(style)
   const yielded = touched.filter(
-    (field) => style[field] !== undefined || bindsField(styleBound, field)
+    (field) => textStyleValue(style, field) !== undefined || bindsField(styleBound, field)
   )
   for (const field of yielded) {
-    const styleValue = style[field]
+    const styleValue = textStyleValue(style, field)
     Reflect.deleteProperty(claim, field)
     if (styleValue !== undefined) {
       Object.assign(target.properties, { [field]: structuredClone(styleValue) })
