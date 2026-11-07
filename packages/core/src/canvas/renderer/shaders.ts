@@ -6,6 +6,11 @@ interface KeptShader {
   shader: Shader
 }
 
+interface KeptFadeBlender {
+  opacity: number
+  blender: Blender
+}
+
 /** Skia programs a renderer compiles on first use and keeps for the surface's lifetime. */
 export interface CompiledShaders {
   diamondGradient: RuntimeEffect | null
@@ -15,6 +20,8 @@ export interface CompiledShaders {
   dotGrid: KeptShader | null
   linearBurn: Blender | null
   linearDodge: Blender | null
+  fadeEffect: RuntimeEffect | null
+  fade: KeptFadeBlender | null
 }
 
 type EffectSlot = 'diamondGradient' | 'pixelGridEffect' | 'dotGridEffect'
@@ -28,7 +35,9 @@ export function createCompiledShaders(): CompiledShaders {
     dotGridEffect: null,
     dotGrid: null,
     linearBurn: null,
-    linearDodge: null
+    linearDodge: null,
+    fadeEffect: null,
+    fade: null
   }
 }
 
@@ -47,6 +56,10 @@ export function releaseCompiledShaders(shaders: CompiledShaders): void {
   shaders.linearBurn = null
   shaders.linearDodge?.delete()
   shaders.linearDodge = null
+  shaders.fadeEffect?.delete()
+  shaders.fadeEffect = null
+  shaders.fade?.blender.delete()
+  shaders.fade = null
 }
 
 /** The program in `slot`, compiled from `source` the first time; `name` says what failed to compile. */
@@ -85,6 +98,20 @@ export function keptShader(
   const shader = effect.makeShader(uniforms)
   shaders[slot] = { key, shader }
   return shader
+}
+
+/** The fade blender made again only when `opacity` changes, so repaints share one. */
+export function keptFadeBlender(
+  shaders: CompiledShaders,
+  effect: RuntimeEffect,
+  opacity: number
+): Blender {
+  const kept = shaders.fade
+  if (kept?.opacity === opacity) return kept.blender
+  kept?.blender.delete()
+  const blender = effect.makeBlender([opacity])
+  shaders.fade = { opacity, blender }
+  return blender
 }
 
 /**

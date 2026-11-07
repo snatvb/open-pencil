@@ -1,10 +1,11 @@
 import { afterAll, describe, expect, test, mock } from 'bun:test'
-import { expectDefined } from '@open-pencil/test-support/assert'
+
 import { SkiaRenderer } from '@open-pencil/core/canvas'
 import { initCanvasKit } from '@open-pencil/core/io/formats/raster'
 import { SceneGraph, type BlendMode, type Fill, type SceneNode } from '@open-pencil/scene-graph'
-import { figmaBlendModeToSkia } from '#core/canvas/blend'
+import { expectDefined } from '@open-pencil/test-support/assert'
 
+import { figmaBlendModeToSkia } from '#core/canvas/blend'
 import { renderNode, renderSection } from '#core/canvas/scene'
 import { RenderedBoundsCache } from '#core/canvas/renderer/visual-bounds'
 import { asCanvas, asCanvasKit, asRenderer } from './helpers'
@@ -315,5 +316,186 @@ describe('canvas blend modes', () => {
       ['Screen'],
       ['SrcOver']
     ])
+  })
+})
+
+function grey(value: number, opacity = 1): Fill {
+  return { ...solid({ r: value, g: value, b: value }), opacity }
+}
+
+interface Layer {
+  fill: Fill
+  blendMode?: BlendMode
+}
+
+function passThroughGroup(opacity: number, layers: Layer[]): Scene {
+  return (graph, pageId) => {
+    const group = graph.createNode('FRAME', pageId, {
+      width: SIZE,
+      height: SIZE,
+      fills: [],
+      blendMode: 'PASS_THROUGH',
+      opacity
+    })
+    for (const layer of layers) {
+      graph.createNode('RECTANGLE', group.id, {
+        width: SIZE,
+        height: SIZE,
+        fills: [layer.fill],
+        blendMode: layer.blendMode ?? 'NORMAL'
+      })
+    }
+  }
+}
+
+function greyBackdrop(opacity = 1): Scene {
+  return (graph, pageId) => {
+    graph.createNode('RECTANGLE', pageId, {
+      width: SIZE,
+      height: SIZE,
+      fills: [grey(0.5, opacity)]
+    })
+  }
+}
+
+function renderGroupRed(opacity: number, layers: Layer[], under = greyBackdrop()): number {
+  return renderCenter(passThroughGroup(opacity, layers), under)[0]
+}
+
+// Live-measured in Figma: a 50% grey backdrop under a pass-through frame at 50% and 70%.
+const PASS_THROUGH_CASES: { name: string; layers: Layer[]; figma: [number, number] }[] = [
+  {
+    name: 'a multiply layer',
+    layers: [{ fill: grey(0.4), blendMode: 'MULTIPLY' }],
+    figma: [90, 75]
+  },
+  { name: 'a screen layer', layers: [{ fill: grey(0.6), blendMode: 'SCREEN' }], figma: [166, 181] },
+  {
+    name: 'a multiply layer over a half transparent sibling',
+    layers: [{ fill: grey(1, 0.5) }, { fill: grey(0.2), blendMode: 'MULTIPLY' }],
+    figma: [83, 66]
+  },
+  {
+    name: 'a screen layer over a translucent sibling',
+    layers: [{ fill: grey(0.2, 0.6) }, { fill: grey(0.5), blendMode: 'SCREEN' }],
+    figma: [149, 157]
+  },
+  { name: 'a normal layer', layers: [{ fill: grey(0.9) }], figma: [179, 200] }
+]
+
+describe('a pass-through group with opacity', () => {
+  for (const { name, layers, figma } of PASS_THROUGH_CASES) {
+    test(`blends ${name} with what is under the group, as Figma does`, () => {
+      expect(Math.abs(renderGroupRed(0.5, layers) - figma[0])).toBeLessThan(2)
+      expect(Math.abs(renderGroupRed(0.7, layers) - figma[1])).toBeLessThan(2)
+    })
+  }
+
+  test('fades a soft light layer from the backdrop toward the opaque group', () => {
+    const softLight = [{ fill: grey(0.1), blendMode: 'SOFT_LIGHT' as const }]
+    const backdropRed = renderCenter(() => undefined, greyBackdrop())[0]
+    const opaque = renderGroupRed(1, softLight)
+    for (const opacity of [0.5, 0.7]) {
+      const expected = backdropRed + (opaque - backdropRed) * opacity
+      expect(Math.abs(renderGroupRed(opacity, softLight) - expected)).toBeLessThan(2)
+    }
+  })
+
+  test('blends a fill blend mode of a layer with what is under the group', () => {
+    const multiplyFill = [{ fill: { ...grey(0.4), blendMode: 'MULTIPLY' as const } }]
+    expect(Math.abs(renderGroupRed(0.5, multiplyFill) - 90)).toBeLessThan(2)
+  })
+
+  test('keeps a half transparent backdrop as it is where the group draws nothing', () => {
+    const corner: Scene = (graph, pageId) => {
+      const group = graph.createNode('FRAME', pageId, {
+        width: SIZE,
+        height: SIZE,
+        fills: [],
+        blendMode: 'PASS_THROUGH',
+        opacity: 0.5
+      })
+      graph.createNode('RECTANGLE', group.id, {
+        width: 4,
+        height: 4,
+        fills: [grey(0.4)],
+        blendMode: 'MULTIPLY'
+      })
+    }
+    const halfGrey = greyBackdrop(0.5)
+    expectChannelsNear(
+      renderCenter(corner, halfGrey),
+      renderCenter(() => undefined, halfGrey)
+    )
+  })
+
+  test('fades a blending layer over a half transparent backdrop as the opaque group fades', () => {
+    const multiply = [{ fill: grey(0.4), blendMode: 'MULTIPLY' as const }]
+    const halfGrey = greyBackdrop(0.5)
+    const nothing = renderCenter(() => undefined, halfGrey)
+    const opaque = renderCenter(passThroughGroup(1, multiply), halfGrey)
+    const premultiplied = (pixel: number[]) => [
+      ...pixel.slice(0, 3).map((c) => (c * pixel[3]) / 255),
+      pixel[3]
+    ]
+    const expected = premultiplied(nothing).map((c, i) => (c + premultiplied(opaque)[i]) / 2)
+    const actual = premultiplied(renderCenter(passThroughGroup(0.5, multiply), halfGrey))
+    expected.forEach((channel, index) => expect(Math.abs(actual[index] - channel)).toBeLessThan(2))
+  })
+})
+
+describe('a pass-through layer with opacity whose own paints blend', () => {
+  const multiplyAtHalf = 90
+
+  test('blends a child stroke with what is under the group', () => {
+    const strokedChild: Scene = (graph, pageId) => {
+      const group = graph.createNode('FRAME', pageId, {
+        width: SIZE,
+        height: SIZE,
+        fills: [],
+        blendMode: 'PASS_THROUGH',
+        opacity: 0.5
+      })
+      graph.createNode('RECTANGLE', group.id, {
+        width: SIZE,
+        height: SIZE,
+        fills: [],
+        strokes: [{ ...grey(0.4), blendMode: 'MULTIPLY', weight: SIZE * 2, align: 'CENTER' }],
+        strokeWeight: SIZE * 2,
+        strokeAlign: 'CENTER'
+      })
+    }
+    expect(Math.abs(renderCenter(strokedChild, greyBackdrop())[0] - multiplyAtHalf)).toBeLessThan(2)
+  })
+
+  test('blends its own fill with what is under it', () => {
+    const multiplyLeaf: Scene = (graph, pageId) => {
+      graph.createNode('RECTANGLE', pageId, {
+        width: SIZE,
+        height: SIZE,
+        fills: [{ ...grey(0.4), blendMode: 'MULTIPLY' }],
+        blendMode: 'PASS_THROUGH',
+        opacity: 0.5
+      })
+    }
+    expect(Math.abs(renderCenter(multiplyLeaf, greyBackdrop())[0] - multiplyAtHalf)).toBeLessThan(2)
+  })
+
+  test('fades by its own opacity after a translucent mask drew earlier in the frame', () => {
+    const maskThenGroup: Scene = (graph, pageId) => {
+      const masked = graph.createNode('FRAME', pageId, { width: 2, height: 2, fills: [] })
+      graph.createNode('RECTANGLE', masked.id, {
+        width: 2,
+        height: 2,
+        fills: [grey(0)],
+        isMask: true,
+        opacity: 0.5
+      })
+      graph.createNode('RECTANGLE', masked.id, { width: 2, height: 2, fills: [grey(1)] })
+      passThroughGroup(0.5, [{ fill: grey(0.4), blendMode: 'MULTIPLY' }])(graph, pageId)
+    }
+    expect(Math.abs(renderCenter(maskThenGroup, greyBackdrop())[0] - multiplyAtHalf)).toBeLessThan(
+      2
+    )
   })
 })

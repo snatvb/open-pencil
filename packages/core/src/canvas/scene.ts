@@ -16,7 +16,13 @@ import { nodeOrientationMatrix, projectedNode } from '#core/geometry'
 import { drawnLayerBlurReach, mapVisualBounds } from '#core/geometry/render-bounds'
 import { fontManager } from '#core/text/font/manager'
 
-import { needsIsolatedBlendLayer, setPaintBlendMode } from './blend'
+import {
+  childrenBlendWithBackdrop,
+  fadeBlender,
+  needsIsolatedBlendLayer,
+  paintsBlendWithBackdrop,
+  setPaintBlendMode
+} from './blend'
 import { renderBooleanOperation } from './boolean'
 import { drawVectorMultiStyleFills, paintFills } from './fills'
 import { drawLayoutGrids } from './layout-grids'
@@ -358,6 +364,14 @@ function drawsNode(graph: SceneGraph, node: SceneNode, overlays: RenderOverlays)
   return overlays.nodeEditState?.nodeId !== node.id && !overlays.playIslands?.has(node.id)
 }
 
+function fadesOverBackdrop(graph: SceneGraph, node: SceneNode): boolean {
+  return (
+    node.opacity < 1 &&
+    node.blendMode === 'PASS_THROUGH' &&
+    (paintsBlendWithBackdrop(node) || childrenBlendWithBackdrop(graph, node))
+  )
+}
+
 /**
  * Draws a layer and its subtree. `frame` is the world matrix of the nearest transformed ancestor,
  * or null when `parentAbsX`/`parentAbsY` place the layer; a chunk recorded in world space passes
@@ -403,9 +417,15 @@ export function renderNode(
         )
       : null
   if (needsNodeLayer) {
-    r.opacityPaint.setAlphaf(node.opacity)
-    setPaintBlendMode(r, r.opacityPaint, node.blendMode)
-    canvas.saveLayer(r.opacityPaint, layerBounds)
+    if (fadesOverBackdrop(graph, node)) {
+      r.opacityPaint.setAlphaf(1)
+      r.opacityPaint.setBlender(fadeBlender(r, node.opacity))
+      canvas.saveLayer(r.opacityPaint, layerBounds, null, r.ck.SaveLayerInitWithPrevious)
+    } else {
+      r.opacityPaint.setAlphaf(node.opacity)
+      setPaintBlendMode(r, r.opacityPaint, node.blendMode)
+      canvas.saveLayer(r.opacityPaint, layerBounds)
+    }
   }
 
   if (layerBlur) {

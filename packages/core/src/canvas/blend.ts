@@ -1,8 +1,15 @@
-import type { Blender, BlendMode as SkBlendMode, CanvasKit, Paint } from 'canvaskit-wasm'
+import type {
+  Blender,
+  BlendMode as SkBlendMode,
+  CanvasKit,
+  Paint,
+  RuntimeEffect
+} from 'canvaskit-wasm'
 
-import type { BlendMode } from '@open-pencil/scene-graph'
+import type { BlendMode, SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 
 import type { SkiaRenderer } from './renderer'
+import { keptFadeBlender } from './renderer/shaders'
 
 type LinearBlendMode = 'LINEAR_BURN' | 'LINEAR_DODGE'
 
@@ -89,4 +96,48 @@ function compileLinearBlender(ck: CanvasKit, mode: LinearBlendMode): Blender {
 
 export function needsIsolatedBlendLayer(mode?: BlendMode): boolean {
   return mode !== undefined && mode !== 'NORMAL' && mode !== 'PASS_THROUGH'
+}
+
+const FADE_BLENDER_SOURCE = `uniform float opacity;
+half4 main(half4 src, half4 dst) {
+  return mix(dst, src, half(opacity));
+}`
+
+/**
+ * Mixes a layer into what is under it by `opacity`. A layer that starts as a copy of its backdrop
+ * needs it: source-over at that alpha would count the backdrop twice where it is translucent.
+ */
+export function fadeBlender(r: SkiaRenderer, opacity: number): Blender {
+  r.shaders.fadeEffect ??= compileFadeEffect(r.ck)
+  return keptFadeBlender(r.shaders, r.shaders.fadeEffect, opacity)
+}
+
+function compileFadeEffect(ck: CanvasKit): RuntimeEffect {
+  let error = ''
+  const effect = ck.RuntimeEffect.MakeForBlender(FADE_BLENDER_SOURCE, (message) => {
+    error = message
+  })
+  if (!effect) throw new Error(`Cannot compile the fade blender: ${error}`)
+  return effect
+}
+
+export function paintsBlendWithBackdrop(node: SceneNode): boolean {
+  return [node.fills, node.strokes, node.effects].some((paints) =>
+    paints.some((paint) => paint.visible && needsIsolatedBlendLayer(paint.blendMode))
+  )
+}
+
+/**
+ * Whether a pass-through layer's children blend with what is under it, through every child that
+ * opens no isolated layer of its own. Figma blends them with the backdrop under the group and
+ * fades the result by the group's opacity, so such a layer starts as a copy of that backdrop.
+ */
+export function childrenBlendWithBackdrop(graph: SceneGraph, node: SceneNode): boolean {
+  return node.childIds.some((childId) => {
+    const child = graph.getNode(childId)
+    if (!child?.visible) return false
+    if (needsIsolatedBlendLayer(child.blendMode)) return true
+    if (child.opacity < 1 && child.blendMode !== 'PASS_THROUGH') return false
+    return paintsBlendWithBackdrop(child) || childrenBlendWithBackdrop(graph, child)
+  })
 }
