@@ -137,3 +137,47 @@ describe('a drop shadow of a vector with region fills', () => {
     expect(renderRow(ck, renderer, squares(undefined), 165, 110, 130)).toEqual(Array.from({ length: 11 }, () => 255))
   })
 })
+
+describe('a drop shadow of a vector whose regions overlap', () => {
+  const zero = { x: 0, y: 0 }
+  const line = (start: number, end: number) => ({ start, end, tangentStart: zero, tangentEnd: zero })
+  const square = { windingRule: 'NONZERO' as const, loops: [[0, 1, 2, 3]] }
+  const overlapping =
+    (regionCount: number): FigmaRowScene =>
+    (graph, hostId) =>
+      graph.createNode('VECTOR', hostId, {
+        x: 100,
+        y: 100,
+        width: 40,
+        height: 40,
+        fills: [{ ...RED, opacity: 1 }],
+        vectorNetwork: {
+          vertices: [
+            { x: 0, y: 0 },
+            { x: 40, y: 0 },
+            { x: 40, y: 40 },
+            { x: 0, y: 40 }
+          ],
+          segments: [line(0, 1), line(1, 2), line(2, 3), line(3, 0)],
+          regions: Array.from({ length: regionCount }, () => square)
+        },
+        effects: [
+          {
+            type: 'DROP_SHADOW',
+            radius: 0,
+            spread: 0,
+            offset: { x: 0, y: 30 },
+            color: { r: 0, g: 0, b: 0, a: 0.5 },
+            visible: true,
+            blendMode: 'NORMAL',
+            showShadowBehindNode: false
+          }
+        ]
+      })
+
+  test('casts one shadow from the area they cover together', () => {
+    const single = renderRow(ck, renderer, overlapping(1), 165, 110, 130)
+    expect(single).toEqual(Array.from({ length: 11 }, () => 128))
+    expect(renderRow(ck, renderer, overlapping(3), 165, 110, 130)).toEqual(single)
+  })
+})
