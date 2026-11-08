@@ -5,8 +5,10 @@ import type { CanvasKit } from 'canvaskit-wasm'
 import type { SkiaRenderer } from '@open-pencil/core/canvas'
 import { renderNodesToImage } from '@open-pencil/core/io/formats/raster'
 import { SceneGraph } from '@open-pencil/scene-graph'
-
 import { expectDefined } from '@open-pencil/test-support/assert'
+
+import { unpremultipliedPixels } from './pixels'
+
 /** Builds a scene into the frame `hostId`. */
 export type FigmaRowScene = (graph: SceneGraph, hostId: string) => void
 
@@ -42,15 +44,7 @@ export function renderRow(
   const image = expectDefined(ck.MakeImageFromEncoded(png))
   try {
     const offset = (image.width() - 400) / 2
-    const pixels = expectDefined(
-      image.readPixels(0, 0, {
-        width: image.width(),
-        height: image.height(),
-        alphaType: ck.AlphaType.Unpremul,
-        colorType: ck.ColorType.RGBA_8888,
-        colorSpace: ck.ColorSpace.SRGB
-      })
-    )
+    const pixels = unpremultipliedPixels(ck, image)
     const values: number[] = []
     for (let x = x0; x <= x1; x += 2) {
       values.push(pixels[((y + offset) * image.width() + x + offset) * 4 + channel])

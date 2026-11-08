@@ -1,10 +1,12 @@
-import { expectDefined } from '@open-pencil/test-support/assert'
 import type { CanvasKit } from 'canvaskit-wasm'
 
 import type { SkiaRenderer } from '@open-pencil/core/canvas'
 import { renderNodesToImage } from '@open-pencil/core/io/formats/raster'
 import type { Effect, Fill, SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 import type { Color } from '@open-pencil/scene-graph/primitives'
+import { expectDefined } from '@open-pencil/test-support/assert'
+
+import { unpremultipliedPixels } from './pixels'
 
 export const TILE = 10
 export const TARGET = 40
@@ -73,16 +75,7 @@ export function addTarget(
 export function channel(ck: CanvasKit, png: Uint8Array, index: number): number[] {
   const image = expectDefined(ck.MakeImageFromEncoded(png), 'image')
   try {
-    const pixels = expectDefined(
-      image.readPixels(0, 0, {
-        width: image.width(),
-        height: image.height(),
-        alphaType: ck.AlphaType.Unpremul,
-        colorType: ck.ColorType.RGBA_8888,
-        colorSpace: ck.ColorSpace.SRGB
-      }),
-      'pixels'
-    )
+    const pixels = unpremultipliedPixels(ck, image)
     return Array.from({ length: image.width() * image.height() }, (_, i) => pixels[i * 4 + index])
   } finally {
     image.delete()
