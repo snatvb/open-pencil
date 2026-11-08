@@ -158,6 +158,19 @@ export function drawOutline(canvas: Canvas, outline: NodeOutline, paint: Paint):
   }
 }
 
+export function unitePaths(r: SkiaRenderer, paths: readonly Path[]): Path | null {
+  let united: Path | null = paths[0]?.copy() ?? null
+  for (const path of paths.slice(1)) {
+    if (!united) {
+      break
+    }
+    const next = r.ck.Path.MakeFromOp(united, path, r.ck.PathOp.Union)
+    united.delete()
+    united = next
+  }
+  return united
+}
+
 /** `outline` as one path the caller owns. */
 function outlineToPath(r: SkiaRenderer, outline: NodeOutline): Path {
   if (outline.kind === 'paths' && outline.paths.length === 1) return outline.paths[0].copy()

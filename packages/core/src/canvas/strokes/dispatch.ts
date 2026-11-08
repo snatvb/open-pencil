@@ -9,6 +9,7 @@ import {
 import type { Color } from '@open-pencil/scene-graph/primitives'
 
 import type { SkiaRenderer } from '#core/canvas/renderer'
+import { unitePaths } from '#core/canvas/shapes'
 import {
   configureStrokePaint,
   drawArrowHeads,
@@ -372,18 +373,6 @@ function cachedFillUnion(r: SkiaRenderer, node: SceneNode, fillPaths: Path[]): P
   const united = unitePaths(r, fillPaths)
   if (united) {
     r.nodePaths.store(r.nodePaths.strokeOutline, key, [united])
-  }
-  return united
-}
-
-/** One path covering every path given, which a clip can keep the inside of. */
-function unitePaths(r: SkiaRenderer, paths: Path[]): Path | null {
-  let united: Path | null = paths[0]?.copy() ?? null
-  for (const path of paths.slice(1)) {
-    if (!united) break
-    const next = r.ck.Path.MakeFromOp(united, path, r.ck.PathOp.Union)
-    united.delete()
-    united = next
   }
   return united
 }
