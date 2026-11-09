@@ -1,5 +1,4 @@
-import type { Canvas, Path } from 'canvaskit-wasm'
-
+import type { Canvas, Path } from '@open-pencil/canvaskit'
 import type { SceneGraph, SceneNode, VectorNetwork } from '@open-pencil/scene-graph'
 import {
   collectArrowEndpoints,

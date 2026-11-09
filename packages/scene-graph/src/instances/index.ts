@@ -7,6 +7,7 @@ import {
 } from '../slots/frames'
 import type { SceneNode } from '../types'
 import { collectionsReachedBy } from '../variables/reach'
+import { applyBoundPaintColorsIn, keepCopyBoundPaints } from '../variables/paints'
 import { keepOwnContentSize } from './content-size'
 import { createInstanceSyncContext, groupCopyRemovals, removeLeftoverCopies } from './copies'
 import { canCreateInstance } from './cycles'
@@ -79,6 +80,8 @@ export function createInstance(
   const instance = graph.createNode('INSTANCE', parentId, { ...props, ...overrides, componentId })
 
   cloneChildrenWithMapping(graph, component.id, instance.id)
+  // A copy shows its bound paints in its own context, not as its component's paints hold them.
+  applyBoundPaintColorsIn(graph, instance.id)
 
   return instance
 }
@@ -203,6 +206,7 @@ export function swapInstanceComponent(
   if (!keepName && (!previousComponent || instance.name === previousComponent.name))
     updates.name = component.name
 
+  keepCopyBoundPaints(graph, instance, updates)
   const slotContent = detachOwnedSlotContent(graph, instance)
   graph.updateNode(instanceId, updates)
   followComponentLayers(graph, instance, component, {

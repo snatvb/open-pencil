@@ -8,6 +8,7 @@ import { bindingOverrideField, setInstanceOverride } from '../instances/override
 import { siblingOrderKeys } from '../order-keys'
 import type {
   Effect,
+  SceneNode,
   Variable,
   VariableCollection,
   VariableCollectionMode,
@@ -31,14 +32,17 @@ import {
   VISIBILITY_VARIABLE_TYPES
 } from './fields'
 import { unbindRemovedVariables } from './variant-bindings'
+import { applyBoundPaintColor } from './paints'
 
 export * from './resolution'
 export { collectionsReachedBy } from './reach'
 
 export function addVariable(graph: SceneGraph, variable: Variable): void {
+  graph.willChangeVariable(variable.id)
   graph.variables.set(variable.id, variable)
   const collection = graph.variableCollections.get(variable.collectionId)
   if (collection && !collection.variableIds.includes(variable.id)) {
+    graph.willChangeCollection(collection.id)
     collection.variableIds.push(variable.id)
   }
 }
@@ -51,9 +55,11 @@ export function removeVariable(graph: SceneGraph, id: string): void {
 function forgetVariable(graph: SceneGraph, id: string): void {
   const variable = graph.variables.get(id)
   if (!variable) return
+  graph.willChangeVariable(id)
   graph.variables.delete(id)
   const collection = graph.variableCollections.get(variable.collectionId)
   if (collection) {
+    graph.willChangeCollection(collection.id)
     collection.variableIds = collection.variableIds.filter((vid) => vid !== id)
   }
   for (const node of graph.nodes.values()) {
@@ -77,10 +83,8 @@ function forgetVariable(graph: SceneGraph, id: string): void {
 }
 
 export function addCollection(graph: SceneGraph, collection: VariableCollection): void {
+  graph.willChangeCollection(collection.id)
   graph.variableCollections.set(collection.id, collection)
-  if (!graph.activeMode.has(collection.id)) {
-    graph.activeMode.set(collection.id, collection.defaultModeId)
-  }
 }
 
 function defaultVariableValue(type: VariableType, value?: VariableValue): VariableValue {
@@ -147,12 +151,8 @@ export function removeCollection(graph: SceneGraph, id: string): void {
     }
     unbindRemovedVariables(graph, variableIds)
   }
+  graph.willChangeCollection(id)
   graph.variableCollections.delete(id)
-  graph.activeMode.delete(id)
-}
-
-export function setActiveMode(graph: SceneGraph, collectionId: string, modeId: string): void {
-  graph.activeMode.set(collectionId, modeId)
 }
 
 export function addMode(
@@ -164,11 +164,13 @@ export function addMode(
 ): void {
   const collection = graph.variableCollections.get(collectionId)
   if (!collection) return
+  graph.willChangeCollection(collectionId)
   collection.modes.push({ modeId, name })
   const sourceModeId = sourceMode ?? collection.defaultModeId
   for (const varId of collection.variableIds) {
     const variable = graph.variables.get(varId)
     if (!variable) continue
+    graph.willChangeVariable(varId)
     variable.valuesByMode[modeId] = structuredClone(
       variable.valuesByMode[sourceModeId] ?? Object.values(variable.valuesByMode)[0]
     )
@@ -192,16 +194,16 @@ export function createMode(
 export function removeMode(graph: SceneGraph, collectionId: string, modeId: string): void {
   const collection = graph.variableCollections.get(collectionId)
   if (!collection || collection.modes.length <= 1) return
+  graph.willChangeCollection(collectionId)
   collection.modes = collection.modes.filter((m) => m.modeId !== modeId)
   if (collection.defaultModeId === modeId) {
     collection.defaultModeId = collection.modes[0].modeId
   }
   for (const varId of collection.variableIds) {
     const variable = graph.variables.get(varId)
-    if (variable) variable.valuesByMode = omit(variable.valuesByMode, [modeId])
-  }
-  if (graph.activeMode.get(collectionId) === modeId) {
-    graph.activeMode.set(collectionId, collection.defaultModeId)
+    if (!variable) continue
+    graph.willChangeVariable(varId)
+    variable.valuesByMode = omit(variable.valuesByMode, [modeId])
   }
 }
 
@@ -214,13 +216,16 @@ export function renameMode(
   const collection = graph.variableCollections.get(collectionId)
   if (!collection) return
   const mode = collection.modes.find((m) => m.modeId === modeId)
-  if (mode) mode.name = name
+  if (!mode) return
+  graph.willChangeCollection(collectionId)
+  mode.name = name
 }
 
 export function setDefaultMode(graph: SceneGraph, collectionId: string, modeId: string): void {
   const collection = graph.variableCollections.get(collectionId)
   if (!collection) return
   if (!collection.modes.some((m) => m.modeId === modeId)) return
+  graph.willChangeCollection(collectionId)
   collection.defaultModeId = modeId
   collection.modes = withSortPositionsInOrder(modesDefaultFirst(collection))
 }
@@ -270,6 +275,30 @@ function assertEffectBinding(
   }
 }
 
+/** Checks a paint binding and drops the list's dead top-level binding it replaces. */
+function preparePaintBinding(
+  graph: SceneGraph,
+  node: SceneNode,
+  paint: { list: 'fills' | 'strokes'; index: number },
+  variable: Variable,
+  field: string
+): void {
+  // Color fields require COLOR variable type
+  if (variable.type !== 'COLOR') {
+    throw new Error(`Cannot bind ${variable.type} variable to color field "${field}"`)
+  }
+  // Validate index is within current array bounds
+  const currentLength = node[paint.list].length
+  if (paint.index >= currentLength) {
+    throw new Error(`Index ${paint.index} out of range for ${paint.list} (length ${currentLength})`)
+  }
+  // Auto-remove top-level dead binding (e.g. 'fills') when setting indexed binding
+  if (paint.list in node.boundVariables) {
+    graph.willChangeNode(node)
+    node.boundVariables = omit(node.boundVariables, [paint.list])
+  }
+}
+
 export function bindVariable(
   graph: SceneGraph,
   nodeId: string,
@@ -285,25 +314,8 @@ export function bindVariable(
     throw new Error(`Variable "${variableId}" not found`)
   }
 
-  // Color fields require COLOR variable type
   const paint = paintBindingTarget(field)
-  if (paint) {
-    if (variable.type !== 'COLOR') {
-      throw new Error(`Cannot bind ${variable.type} variable to color field "${field}"`)
-    }
-    // Validate index is within current array bounds
-    const currentLength = node[paint.list].length
-    if (paint.index >= currentLength) {
-      throw new Error(
-        `Index ${paint.index} out of range for ${paint.list} (length ${currentLength})`
-      )
-    }
-    // Auto-remove top-level dead binding (e.g. 'fills') when setting indexed binding
-    if (paint.list in node.boundVariables) {
-      graph.willChangeNode(node)
-      node.boundVariables = omit(node.boundVariables, [paint.list])
-    }
-  }
+  if (paint) preparePaintBinding(graph, node, paint, variable, field)
 
   const effect = effectBindingTarget(field)
   if (effect) assertEffectBinding(node.effects, effect, variable.type, field)
@@ -344,6 +356,8 @@ export function bindVariable(
     boundVariables: { ...node.boundVariables },
     variableBindingScales: { ...node.variableBindingScales }
   })
+  // A paint takes its variable's color, alpha as opacity, when it binds, as Figma's does.
+  if (paint) applyBoundPaintColor(graph, node, field)
 }
 
 export function unbindVariable(graph: SceneGraph, nodeId: string, field: string): void {
@@ -375,14 +389,17 @@ function markBoundVariablesOverrideOnInstance(
   for (const instance of instances) graph.willChangeNode(instance)
   if (nearest) setInstanceOverride(nearest.instanceOverrides, nearest.id, nodeId, 'boundVariables')
   setInstanceOverride(owner.instanceOverrides, owner.id, nodeId, 'boundVariables')
+  // Each instance claims the binding it changed alone, so the layer's other bindings keep
+  // following their components, as Figma claims only the paint or effect a script edits.
   if (field)
-    setInstanceOverride(
-      owner.instanceOverrides,
-      owner.id,
-      nodeId,
-      bindingOverrideField(field),
-      node.boundVariables[field] ?? null
-    )
+    for (const instance of uniq(compact([nearest, owner])))
+      setInstanceOverride(
+        instance.instanceOverrides,
+        instance.id,
+        nodeId,
+        bindingOverrideField(field),
+        node.boundVariables[field] ?? null
+      )
   for (const instance of instances)
     graph.updateNode(instance.id, { instanceOverrides: instance.instanceOverrides })
 }
@@ -392,6 +409,7 @@ export * from './style-bindings'
 export * from './corners'
 export * from './formula'
 export * from './formula/schema'
+export * from './paints'
 export * from './schema'
 export * from './text'
 export * from './token'

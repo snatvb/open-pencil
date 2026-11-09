@@ -1,6 +1,5 @@
 import { isEqual } from 'es-toolkit/predicate'
 
-import type { VariableModeFallback } from '.'
 import type { SceneGraph } from '../graph'
 import { hasInstanceOverride } from '../instances/overrides'
 import { pixelLength } from '../text/lengths'
@@ -34,24 +33,22 @@ export function boundNumberValue(field: string, value: number): number | TextLen
 export function resolvedNumericBindings(
   graph: SceneGraph,
   node: SceneNode,
-  fallback: VariableModeFallback = 'active',
   styles: TextStyleLookup = createTextStyleLookup(graph)
 ): Partial<SceneNode> {
-  return resolvedNumbers(graph, node, effectiveBoundVariables(node, styles), fallback)
+  return resolvedNumbers(graph, node, effectiveBoundVariables(node, styles))
 }
 
 export function resolvedNumbers(
   graph: SceneGraph,
   node: SceneNode,
-  bindings: VariableBindings,
-  fallback: VariableModeFallback
+  bindings: VariableBindings
 ): Partial<SceneNode> {
   const updates: Partial<SceneNode> = {}
   for (const [field, variableId] of Object.entries(bindings)) {
     if (!NUMERIC_FIELDS.has(field)) continue
     if ((field === 'width' || field === 'height') && overriddenInInstance(graph, node.id, field))
       continue
-    const value = graph.resolveNumberVariableForNode(node.id, variableId, fallback)
+    const value = graph.resolveNumberVariableForNode(node.id, variableId)
     if (value === undefined || !Number.isFinite(value)) continue
     const scale = node.variableBindingScales[field] ?? 1
     const effective = value * scale

@@ -1,5 +1,4 @@
-import type { SkPicture } from 'canvaskit-wasm'
-
+import type { SkPicture } from '@open-pencil/canvaskit'
 import type { SceneNode } from '@open-pencil/scene-graph'
 
 import { clearPatternTiles, invalidatePatternTargets } from '#core/canvas/patterns/tiles'

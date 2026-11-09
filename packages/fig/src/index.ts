@@ -11,18 +11,26 @@ export {
 export type { SavedVariant } from './document/component/set-variants'
 export { figArchiveMetaSchema, type FigArchiveMetaJSON } from './schema'
 export {
-  compressFigDataSync,
   figArchiveKind,
   figArchiveMetaJSON,
   parseFigBuffer,
   readFigArchiveMeta,
   renameFigArchive,
+  streamFigArchive,
   writeFigArchive,
+  type FigArchiveContents,
   type FigArchiveMeta,
   type FigImageEntry,
   type FigParseResult,
   type WriteFigArchiveInput
 } from './archive'
+export {
+  readZipDirectory,
+  zipEntryContents,
+  type FigRangeReader,
+  type ZipEntry
+} from './zip/directory'
+export { bytesStream, readStreamBytes, zipStream, type ZipStreamEntry } from './zip/stream'
 export {
   figArchiveComponentUsePages,
   figArchiveRecordInfo,
@@ -39,11 +47,7 @@ export {
   type FigRecordFieldPatch,
   type FigRecordPatch
 } from './record-patch'
-export {
-  extractFigThumbnailFromReader,
-  type FigRangeReader,
-  type FigThumbnailLimits
-} from './thumbnail'
+export { extractFigThumbnailFromReader, type FigThumbnailLimits } from './thumbnail'
 export {
   effectiveFigmaRawNodeFields,
   effectiveFigmaSourcePayload,

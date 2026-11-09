@@ -4,8 +4,7 @@ import type {
   CanvasKit,
   Paint,
   RuntimeEffect
-} from 'canvaskit-wasm'
-
+} from '@open-pencil/canvaskit'
 import type { BlendMode, SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 
 import type { SkiaRenderer } from './renderer'
