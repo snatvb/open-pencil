@@ -1,4 +1,5 @@
 import type { Path } from 'canvaskit-wasm'
+import { clamp } from 'es-toolkit'
 
 import type { SceneNode, VectorNetwork } from '@open-pencil/scene-graph'
 import type { Vector } from '@open-pencil/scene-graph/primitives'
@@ -33,6 +34,44 @@ function leavingDirection(network: VectorNetwork, segmentIndex: number, vertex: 
   const from = network.vertices[vertex]
   const to = network.vertices[forward ? segment.end : segment.start]
   return { x: to.x - from.x, y: to.y - from.y }
+}
+
+function holdsPoint(bounds: Float32Array, x: number, y: number): boolean {
+  return x >= bounds[0] && x <= bounds[2] && y >= bounds[1] && y <= bounds[3]
+}
+
+function enclosingBounds(boxes: Float32Array[]): Float32Array {
+  const enclosing = Float32Array.of(Infinity, Infinity, -Infinity, -Infinity)
+  for (const box of boxes) {
+    enclosing[0] = Math.min(enclosing[0], box[0])
+    enclosing[1] = Math.min(enclosing[1], box[1])
+    enclosing[2] = Math.max(enclosing[2], box[2])
+    enclosing[3] = Math.max(enclosing[3], box[3])
+  }
+  return enclosing
+}
+
+function indexedFillTest(fills: Path[]): FillTest {
+  const bounds = fills.map((fill) => fill.getBounds())
+  const enclosing = enclosingBounds(bounds)
+  const side = Math.max(1, Math.ceil(Math.sqrt(fills.length)))
+  const cellWidth = (enclosing[2] - enclosing[0]) / side || 1
+  const cellHeight = (enclosing[3] - enclosing[1]) / side || 1
+  const column = (x: number) => clamp(Math.floor((x - enclosing[0]) / cellWidth), 0, side - 1)
+  const row = (y: number) => clamp(Math.floor((y - enclosing[1]) / cellHeight), 0, side - 1)
+  const buckets: number[][] = Array.from({ length: side * side }, () => [])
+  for (const [index, box] of bounds.entries()) {
+    for (let y = row(box[1]); y <= row(box[3]); y++) {
+      for (let x = column(box[0]); x <= column(box[2]); x++) {
+        buckets[y * side + x].push(index)
+      }
+    }
+  }
+  return (x, y) =>
+    holdsPoint(enclosing, x, y) &&
+    buckets[row(y) * side + column(x)].some(
+      (index) => holdsPoint(bounds[index], x, y) && fills[index].contains(x, y)
+    )
 }
 
 function regionSegmentsByVertex(network: VectorNetwork, counts: number[]): Map<number, number[]> {
@@ -158,9 +197,7 @@ export function regionStrokeOutline(
   sided: boolean
 ): Path | null {
   const counts = regionsPerSegment(network)
-  const partners = outlinePartners(network, counts, (x, y) =>
-    fills.some((fill) => fill.contains(x, y))
-  )
+  const partners = outlinePartners(network, counts, indexedFillTest(fills))
   const options = (width: number) => ({
     width,
     miter_limit: node.strokeMiterLimit,
