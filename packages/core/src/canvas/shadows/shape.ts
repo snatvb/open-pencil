@@ -9,7 +9,7 @@ import {
   drawOutline,
   makeNodeShapePath,
   nodeHasRadius,
-  unitePaths,
+  unitedOutline,
   withNodeOutline,
   type NodeOutline
 } from '#core/canvas/shapes'
@@ -170,13 +170,26 @@ export function drawShapeDropShadow(
   blendMode: BlendMode | undefined
 ): void {
   drawMaskShadow(r, canvas, effect, blendMode, () =>
-    withNodeOutline(r, node, (outline) => drawUnitedOutline(r, canvas, outline), spread)
+    withNodeOutline(
+      r,
+      node,
+      (outline) => drawUnitedOutline(r, canvas, node, outline, spread),
+      spread
+    )
   )
 }
 
-function drawUnitedOutline(r: SkiaRenderer, canvas: Canvas, outline: NodeOutline): void {
+function drawUnitedOutline(
+  r: SkiaRenderer,
+  canvas: Canvas,
+  node: SceneNode,
+  outline: NodeOutline,
+  spread: number
+): void {
   const united =
-    outline.kind === 'paths' && outline.paths.length > 1 ? unitePaths(r, outline.paths) : null
+    outline.kind === 'paths' && outline.paths.length > 1
+      ? unitedOutline(r, node, outline.paths, spread)
+      : null
   if (!united) {
     drawOutline(canvas, outline, r.auxFill)
     return

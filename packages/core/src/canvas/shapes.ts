@@ -192,7 +192,7 @@ function outlineToPath(
   return path.detachAndDelete()
 }
 
-function unitedOutline(
+export function unitedOutline(
   r: SkiaRenderer,
   node: SceneNode,
   paths: readonly Path[],
