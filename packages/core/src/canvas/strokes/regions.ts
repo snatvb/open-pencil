@@ -4,7 +4,6 @@ import type { SceneNode, VectorNetwork } from '@open-pencil/scene-graph'
 import type { Vector } from '@open-pencil/scene-graph/primitives'
 
 import type { SkiaRenderer } from '#core/canvas/renderer'
-import { unitePaths } from '#core/canvas/shapes'
 import { getStrokeCapEntity, getStrokeJoinEntity } from '#core/canvas/strokes'
 import { addStrokeRunToPath, strokeRuns } from '#core/vector'
 
@@ -138,11 +137,14 @@ function strokedSegments(
   return outline
 }
 
-function united(r: SkiaRenderer, outlines: Path[]): Path | null {
-  const path = unitePaths(r, outlines)
+function mergedNonzero(r: SkiaRenderer, outlines: Path[]): Path {
+  const merged = new r.ck.PathBuilder()
   for (const outline of outlines) {
+    merged.addPath(outline)
     outline.delete()
   }
+  const path = merged.detachAndDelete()
+  path.setFillType(r.ck.FillType.Winding)
   return path
 }
 
@@ -175,5 +177,7 @@ export function regionStrokeOutline(
     strokedSegments(r, network, plain, partners, options(stroke.weight)),
     strokedSegments(r, network, doubled, partners, options(stroke.weight * 2))
   ].filter((outline) => outline !== null)
-  return outlines.length > 1 ? united(r, outlines) : (outlines[0] ?? null)
+  // Skia's stroke outlines all wind the same way, so one nonzero path fills their overlaps once;
+  // a PathOps union of them costs several times the whole render on large networks.
+  return outlines.length > 1 ? mergedNonzero(r, outlines) : (outlines[0] ?? null)
 }

@@ -235,6 +235,30 @@ const TOP_LEFT_QUARTER = network(
   ],
   [[[0, 1, 2, 3, 4, 5]], [[0, 6, 7, 5]]]
 )
+const CROSSED_LOOPS = network(
+  [
+    [0, 0],
+    [30, 0],
+    [30, 30],
+    [0, 30],
+    [10, 10],
+    [10, 40],
+    [40, 40],
+    [40, 10]
+  ],
+  [
+    [0, 1],
+    [1, 2],
+    [2, 3],
+    [3, 0],
+    [4, 5],
+    [5, 6],
+    [6, 7],
+    [7, 4]
+  ],
+  [[[0, 1, 2, 3]], [[4, 5, 6, 7]]]
+)
+
 describe('corners where regions meet on the outline', () => {
   test('join where the outline turns past an edge between regions', () => {
     const stroke = [127, 127, 127, 127, 127, 127, 127, 127, 127]
@@ -247,6 +271,11 @@ describe('corners where regions meet on the outline', () => {
     const stroke = (width: number) => Array.from({ length: width }, () => 127)
     expect(redRow(TOP_LEFT_QUARTER, 'OUTSIDE', 37, 50, 65)).toEqual([...white, ...stroke(6)])
     expect(redRow(TOP_LEFT_QUARTER, 'OUTSIDE', 38, 50, 65)).toEqual(stroke(16))
+  })
+
+  test('loops wound opposite ways stroke their crossing once', () => {
+    const crossing = [127, 127, 127, 127, 127, 127, 127, 127, 127]
+    expect(redRow(CROSSED_LOOPS, 'CENTER', 50, 66, 74)).toEqual(crossing)
   })
 })
 
