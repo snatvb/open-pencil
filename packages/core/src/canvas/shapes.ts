@@ -7,6 +7,7 @@ import { shapeWithTextGeometry } from '@open-pencil/scene-graph/shape-with-text'
 import { isWholeArc } from '#core/geometry'
 import { vectorNetworkToPath, geometryBlobToPath } from '#core/vector'
 
+import { sharedPath } from './paths/shared'
 import { traceSmoothRect } from './paths/smooth-corners'
 import type { SkiaRenderer } from './renderer'
 
@@ -172,8 +173,17 @@ export function unitePaths(r: SkiaRenderer, paths: readonly Path[]): Path | null
 }
 
 /** `outline` as one path the caller owns. */
-function outlineToPath(r: SkiaRenderer, outline: NodeOutline): Path {
+function outlineToPath(
+  r: SkiaRenderer,
+  node: SceneNode,
+  outline: NodeOutline,
+  spread: number
+): Path {
   if (outline.kind === 'paths' && outline.paths.length === 1) return outline.paths[0].copy()
+  const united = outline.kind === 'paths' ? unitedOutline(r, node, outline.paths, spread) : null
+  if (united) {
+    return united
+  }
   const path = new r.ck.PathBuilder()
   if (outline.kind === 'rect') path.addRect(outline.rect)
   else if (outline.kind === 'rrect') path.addRRect(outline.rrect)
@@ -182,9 +192,23 @@ function outlineToPath(r: SkiaRenderer, outline: NodeOutline): Path {
   return path.detachAndDelete()
 }
 
+function unitedOutline(
+  r: SkiaRenderer,
+  node: SceneNode,
+  paths: readonly Path[],
+  spread: number
+): Path | null {
+  if (paths.length === 0) {
+    return null
+  }
+  return sharedPath(r.nodePaths, `${node.id}|outline|${spread}`, 'outline', [...paths], () =>
+    unitePaths(r, paths)
+  )
+}
+
 /** The layer's outline grown by `spread`, as one path the caller owns. */
 export function makeNodeShapePath(r: SkiaRenderer, node: SceneNode, spread = 0): Path {
-  return withNodeOutline(r, node, (outline) => outlineToPath(r, outline), spread)
+  return withNodeOutline(r, node, (outline) => outlineToPath(r, node, outline, spread), spread)
 }
 
 function outlinePath(r: SkiaRenderer, commands: PolygonOutlineCommand[]): Path {
@@ -286,7 +310,7 @@ export function clipNodeShape(
     else if (outline.kind === 'paths' && outline.paths.length === 1) {
       canvas.clipPath(outline.paths[0], op, true)
     } else {
-      const path = outlineToPath(r, outline)
+      const path = outlineToPath(r, node, outline, 0)
       canvas.clipPath(path, op, true)
       path.delete()
     }

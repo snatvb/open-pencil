@@ -5,7 +5,7 @@ import { expectFigmaRow, renderRow, type FigmaRowScene } from '#core-tests/helpe
 
 import { SkiaRenderer } from '@open-pencil/core/canvas'
 import { initCanvasKit } from '@open-pencil/core/io/formats/raster'
-import { SceneGraph, type Fill } from '@open-pencil/scene-graph'
+import { SceneGraph, type Effect, type Fill } from '@open-pencil/scene-graph'
 
 import { isolatesInnerShadows } from '#core/canvas/shadows'
 
@@ -220,5 +220,93 @@ describe('a drop shadow of a vector whose regions overlap', () => {
         ]
       })
     expect(renderRow(ck, renderer, shifted, 165, 104, 156)).toEqual(Array.from({ length: 27 }, () => 128))
+  })
+})
+
+describe('a vector whose overlapping regions wind in opposite directions', () => {
+  const zero = { x: 0, y: 0 }
+  const line = (start: number, end: number) => ({
+    start,
+    end,
+    tangentStart: zero,
+    tangentEnd: zero
+  })
+  const WHITE = {
+    type: 'SOLID' as const,
+    color: { r: 1, g: 1, b: 1, a: 1 },
+    opacity: 1,
+    visible: true
+  }
+  const twoSquares =
+    (secondLoop: number[], effect: Effect): FigmaRowScene =>
+    (graph, hostId) => {
+      graph.createNode('RECTANGLE', hostId, { width: 400, height: 300, fills: [WHITE] })
+      graph.createNode('VECTOR', hostId, {
+        x: 100,
+        y: 100,
+        width: 60,
+        height: 40,
+        fills: [{ ...RED, opacity: 0.1 }],
+        vectorNetwork: {
+          vertices: [
+            { x: 0, y: 0 },
+            { x: 40, y: 0 },
+            { x: 40, y: 40 },
+            { x: 0, y: 40 },
+            { x: 20, y: 0 },
+            { x: 60, y: 0 },
+            { x: 60, y: 40 },
+            { x: 20, y: 40 }
+          ],
+          segments: [
+            line(0, 1),
+            line(1, 2),
+            line(2, 3),
+            line(3, 0),
+            line(4, 5),
+            line(5, 6),
+            line(6, 7),
+            line(7, 4)
+          ],
+          regions: [
+            { windingRule: 'NONZERO', loops: [[0, 1, 2, 3]] },
+            { windingRule: 'NONZERO', loops: [secondLoop] }
+          ]
+        },
+        effects: [effect]
+      })
+    }
+  const SAME = [4, 5, 6, 7]
+  const OPPOSITE = [7, 6, 5, 4]
+  const shadow = (type: 'DROP_SHADOW' | 'INNER_SHADOW'): Effect => ({
+    type,
+    radius: 0,
+    spread: 0,
+    offset: { x: 0, y: 10 },
+    color: { r: 0, g: 0, b: 0, a: 0.5 },
+    visible: true,
+    blendMode: 'NORMAL',
+    showShadowBehindNode: false
+  })
+  const greenRow = (secondLoop: number[], effect: Effect) =>
+    renderRow(ck, renderer, twoSquares(secondLoop, effect), 130, 122, 138, 1)
+
+  // Figma reads 206 in the green channel over the overlap: both 10% fills, no shadow under them.
+  test('hides the drop shadow under the overlap', () => {
+    expectFigmaRow(
+      greenRow(OPPOSITE, shadow('DROP_SHADOW')),
+      Array.from({ length: 9 }, () => 206)
+    )
+    expect(greenRow(SAME, shadow('DROP_SHADOW'))).toEqual(greenRow(OPPOSITE, shadow('DROP_SHADOW')))
+  })
+
+  test('casts the inner shadow from the outline they cover together', () => {
+    const rows = [110, 130, 148].map((y) =>
+      renderRow(ck, renderer, twoSquares(OPPOSITE, shadow('INNER_SHADOW')), y, 102, 158, 1)
+    )
+    const same = [110, 130, 148].map((y) =>
+      renderRow(ck, renderer, twoSquares(SAME, shadow('INNER_SHADOW')), y, 102, 158, 1)
+    )
+    expect(rows).toEqual(same)
   })
 })
