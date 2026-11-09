@@ -1,6 +1,6 @@
 import type { Canvas, Path } from 'canvaskit-wasm'
 
-import type { SceneGraph, SceneNode } from '@open-pencil/scene-graph'
+import type { SceneGraph, SceneNode, VectorNetwork } from '@open-pencil/scene-graph'
 import {
   collectArrowEndpoints,
   hasTrimmedShaft,
@@ -30,6 +30,7 @@ import { isOpenVectorNetwork } from '#core/vector/connectivity'
 
 import { drawLineStroke } from './line'
 import { drawOutlinedDashes } from './outlined-dashes'
+import { regionStrokeOutlines } from './regions'
 import { drawDashedRectStroke, strokeDashesByOutline, strokeSideWeights } from './sides'
 
 function drawVectorStrokeGeometry(
@@ -66,7 +67,7 @@ export function vectorStrokePaths(r: SkiaRenderer, node: SceneNode): Path[] | nu
 function strokeOutlineKey(
   node: SceneNode,
   stroke: SceneNode['strokes'][0],
-  source: 'runs' | 'regions' | 'closed' | 'open' | 'trimmed'
+  source: 'runs' | 'regions' | 'closed' | 'open' | 'trimmed' | 'united' | 'united-sided'
 ): string {
   return `${node.id}|${source}|${stroke.weight}|${stroke.cap ?? node.strokeCap}|${stroke.join ?? node.strokeJoin}|${node.strokeMiterLimit}`
 }
@@ -307,6 +308,10 @@ function drawAlignedVectorPathStrokes(
   sc: Color
 ): void {
   const miter = node.strokeMiterLimit
+  if (node.vectorNetwork && node.vectorNetwork.regions.length > 1) {
+    drawUnitedRegionStrokes(r, canvas, node, node.vectorNetwork, vectorPaths, stroke, sc)
+    return
+  }
   // `vectorNetworkToPath` lists a path for each region, then one for the open segments.
   const regions = node.vectorNetwork?.regions.length ?? 0
   const closed = vectorPaths.slice(0, regions)
@@ -340,6 +345,48 @@ function drawAlignedVectorPathStrokes(
       miter,
       strokeOutlineKey(node, stroke, 'open')
     )
+}
+
+function drawUnitedRegionStrokes(
+  r: SkiaRenderer,
+  canvas: Canvas,
+  node: SceneNode,
+  network: VectorNetwork,
+  vectorPaths: Path[],
+  stroke: SceneNode['strokes'][0],
+  sc: Color
+): void {
+  const regions = network.regions.length
+  const closed = vectorPaths.slice(0, regions)
+  const inside = stroke.align === 'INSIDE' ? unitePaths(r, closed) : null
+  const sided = clipToStrokeSide(r, canvas, closed, stroke.align, inside)
+  inside?.delete()
+  const key = strokeOutlineKey(node, stroke, sided ? 'united-sided' : 'united')
+  let outlines = r.nodePaths.strokeOutline.get(key)
+  if (!outlines) {
+    outlines = regionStrokeOutlines(r, node, network, stroke, sided)
+    r.nodePaths.store(r.nodePaths.strokeOutline, key, outlines)
+  }
+  r.fillPaint.setColorComponents(sc.r, sc.g, sc.b, sc.a)
+  r.fillPaint.setAlphaf(stroke.opacity)
+  for (const outline of outlines) {
+    canvas.drawPath(outline, r.fillPaint)
+  }
+  if (sided) {
+    canvas.restore()
+  }
+  const open = vectorPaths.slice(regions)
+  if (open.length > 0) {
+    drawVectorPathStrokes(
+      r,
+      canvas,
+      open,
+      stroke,
+      sc,
+      node.strokeMiterLimit,
+      strokeOutlineKey(node, stroke, 'open')
+    )
+  }
 }
 
 function clipToStrokeSide(
