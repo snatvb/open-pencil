@@ -1,7 +1,7 @@
 import { expect, spyOn, test } from 'bun:test'
 
-import * as archiveModule from '#fig/archive'
-import { writeFigArchive } from '#fig/archive'
+import * as archiveModule from '#fig/archive/index'
+import { writeFigArchive } from '#fig/archive/index'
 import { createFigDocumentSession, materializeFigArchive } from '#fig/document/materialize'
 import { deflateSync } from 'fflate'
 
