@@ -24,7 +24,12 @@ import { addLoopToPath, addOpenSegmentsToPath } from './path-helpers'
 export { vectorNetworkToCenterlinePath, fitCircleArc, isClosedThinCrescent } from './centerline'
 export { regenerateFillGeometry } from './fill-geometry'
 export { regionAtPoint, regionHatchPeriod, regionVertexIndices } from './regions/hit'
-export { addStrokeRunToPath, strokeRuns, type StrokeRun } from './path-helpers'
+export {
+  addStrokeRunToPath,
+  strokeRuns,
+  type RunContinuation,
+  type StrokeRun
+} from './path-helpers'
 export { vectorChangesFromPagePath, type VectorPathChanges } from './placement'
 
 /**
