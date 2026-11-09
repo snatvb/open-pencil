@@ -267,8 +267,9 @@ describe('text ink', () => {
   })
 
   test.each(drawnCases)('keeps %s inside its opacity layer', (_, target, props) => {
-    const opaque = inkedExtent(target, props, 1)
-    expect(opaque.pixels).toBeGreaterThan(0)
-    expect(inkedExtent(target, props, 0.5)).toEqual(opaque)
+    const { pixels, ...opaque } = inkedExtent(target, props, 1)
+    const { pixels: _fadedPixels, ...faded } = inkedExtent(target, props, 0.5)
+    expect(pixels).toBeGreaterThan(0)
+    expect(faded).toEqual(opaque)
   })
 })

@@ -63,6 +63,7 @@ import type {
   MaskFilter,
   Paint,
   Path,
+  SaveLayerFlag,
   Surface,
   TextureSource,
   TypefaceFontProvider
@@ -192,6 +193,7 @@ export class SkiaRenderer {
   // Images and the geometry, pictures, and tiles that hold the drawn scene.
   readonly images = createRendererImages()
   viewportImageRendering = false
+  halfFloatLayers = false
   nodePaths = new NodePathCaches()
   /** Each node's picture of itself with its effects, good for the font generation it was recorded at. */
   readonly nodePictures = new Map<string, NodePictureEntry>()
@@ -356,6 +358,10 @@ export class SkiaRenderer {
     this.surface = surface
     this.profiler = new RenderProfiler(ck, gl ?? null)
     initializeRendererPaints(this)
+  }
+
+  compositingLayerFlags(): SaveLayerFlag {
+    return this.halfFloatLayers ? this.ck.SaveLayerF16ColorType : 0
   }
 
   getFontProvider(): TypefaceFontProvider | null {

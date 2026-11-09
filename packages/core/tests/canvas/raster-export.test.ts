@@ -50,6 +50,7 @@ describe('raster export', () => {
       editingTextId: null,
       invalidateNodePicture: mock(() => undefined),
       viewportImageRendering: true,
+      halfFloatLayers: false,
       worldViewport: viewport,
       nodePaths: new NodePathCaches(),
       renderNode() {
@@ -76,6 +77,7 @@ describe('raster export', () => {
         invalidated.push(id)
       }),
       viewportImageRendering: false,
+      halfFloatLayers: false,
       worldViewport: { x: 0, y: 0, w: 1, h: 1 },
       nodePaths: new NodePathCaches(),
       renderNode() {

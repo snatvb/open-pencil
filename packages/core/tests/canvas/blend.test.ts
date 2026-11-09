@@ -228,6 +228,7 @@ function createRenderer(overrides: Partial<SkiaRenderer> = {}) {
       setShader: mock(() => undefined)
     },
     getCachedBlur: mock(() => null),
+    compositingLayerFlags: mock(() => 0),
     applyFill: mock(() => true),
     makeRRect: mock(() => new Float32Array(12)),
     renderShape: mock(() => undefined),
@@ -287,7 +288,12 @@ describe('canvas blend modes', () => {
 
     expect(renderer.opacityPaint.setAlphaf).toHaveBeenCalledWith(1)
     expect(renderer.opacityPaint.setBlendMode).toHaveBeenCalledWith('Multiply')
-    expect(canvas.saveLayer).toHaveBeenCalledWith(renderer.opacityPaint, expect.any(Float32Array))
+    expect(canvas.saveLayer).toHaveBeenCalledWith(
+      renderer.opacityPaint,
+      expect.any(Float32Array),
+      null,
+      0
+    )
     expect(renderer.ck.LTRBRect).toHaveBeenCalledWith(0, 0, 100, 100)
     expect(renderer.renderShape).toHaveBeenCalled()
     expect(renderer.opacityPaint.setBlendMode).toHaveBeenLastCalledWith('SrcOver')

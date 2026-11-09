@@ -420,11 +420,16 @@ export function renderNode(
     if (fadesOverBackdrop(graph, node)) {
       r.opacityPaint.setAlphaf(1)
       r.opacityPaint.setBlender(fadeBlender(r, node.opacity))
-      canvas.saveLayer(r.opacityPaint, layerBounds, null, r.ck.SaveLayerInitWithPrevious)
+      canvas.saveLayer(
+        r.opacityPaint,
+        layerBounds,
+        null,
+        r.ck.SaveLayerInitWithPrevious | r.compositingLayerFlags()
+      )
     } else {
       r.opacityPaint.setAlphaf(node.opacity)
       setPaintBlendMode(r, r.opacityPaint, node.blendMode)
-      canvas.saveLayer(r.opacityPaint, layerBounds)
+      canvas.saveLayer(r.opacityPaint, layerBounds, null, r.compositingLayerFlags())
     }
   }
 

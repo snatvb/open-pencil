@@ -123,6 +123,7 @@ function createRenderer() {
       setBlendMode: mock(() => undefined)
     },
     getCachedBlur: mock(() => null),
+    compositingLayerFlags: mock(() => 0),
     renderShape: mock((_canvas: Canvas, node) => {
       rendered.push(node.id)
     }),

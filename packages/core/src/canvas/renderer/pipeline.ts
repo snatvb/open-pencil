@@ -20,6 +20,7 @@ export function renderSceneToCanvas(
     SkiaRenderer,
     | 'worldViewport'
     | 'viewportImageRendering'
+    | 'halfFloatLayers'
     | 'renderNode'
     | 'nodePaths'
     | 'editingTextId'
@@ -33,7 +34,10 @@ export function renderSceneToCanvas(
   const prevViewport = r.worldViewport
   const previewMode = r.viewportImageRendering
   const editing = r.editingTextId
+  const halfFloatLayers = r.halfFloatLayers
   r.viewportImageRendering = false
+  // Skia's CPU raster rounds each faded 8-bit layer, and nested faded groups add that up to a level.
+  r.halfFloatLayers = true
   // An export or thumbnail shows the document, saved glyphs included, whatever is being edited;
   // the edited text's picture is of its live layout, so it is dropped on the way in and out.
   r.editingTextId = null
@@ -47,6 +51,7 @@ export function renderSceneToCanvas(
   } finally {
     r.worldViewport = prevViewport
     r.viewportImageRendering = previewMode
+    r.halfFloatLayers = halfFloatLayers
     r.editingTextId = editing
     if (editing) r.invalidateNodePicture(editing)
   }

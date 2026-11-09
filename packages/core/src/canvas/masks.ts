@@ -89,24 +89,24 @@ export function renderMaskedChildIds(
     try {
       resetMaskPaint(r)
       canvas.save()
-      canvas.saveLayer(r.effectLayerPaint, layerBounds)
+      canvas.saveLayer(r.effectLayerPaint, layerBounds, null, r.compositingLayerFlags())
       for (let maskedIndex = start; maskedIndex < end; maskedIndex++)
         renderChild(childIds[maskedIndex])
 
       resetMaskPaint(r)
       r.effectLayerPaint.setBlendMode(r.ck.BlendMode.DstIn)
-      canvas.saveLayer(r.effectLayerPaint, layerBounds)
+      canvas.saveLayer(r.effectLayerPaint, layerBounds, null, r.compositingLayerFlags())
       for (const mask of masks) {
         if (mask.type === 'LUMINANCE' && lumaFilter) {
           resetMaskPaint(r)
           r.effectLayerPaint.setColorFilter(lumaFilter)
-          canvas.saveLayer(r.effectLayerPaint, layerBounds)
+          canvas.saveLayer(r.effectLayerPaint, layerBounds, null, r.compositingLayerFlags())
           renderMask(mask.id)
           // Skia's luma is that of the premultiplied color; Figma also scales it by the mask's
           // alpha, so a mask at half opacity shows a quarter of what it masks.
           resetMaskPaint(r)
           r.effectLayerPaint.setBlendMode(r.ck.BlendMode.DstIn)
-          canvas.saveLayer(r.effectLayerPaint, layerBounds)
+          canvas.saveLayer(r.effectLayerPaint, layerBounds, null, r.compositingLayerFlags())
           renderMask(mask.id)
           canvas.restore()
           canvas.restore()

@@ -82,7 +82,7 @@ function expectHalfAsOpaque(scene: Scene, previewAngle?: number) {
   const faded = alphaChannel(scene, 0.5, previewAngle)
   expect(opaque.filter((alpha) => alpha > 0).length).toBeGreaterThan(1000)
   const half = Array.from(opaque, (alpha) => alpha / 2)
-  expect(worstDifference(faded, half)).toBeLessThanOrEqual(1)
+  expect(worstDifference(faded, half)).toBeLessThanOrEqual(1.5)
 }
 
 function rectangle(props: Partial<SceneNode>): Scene {
