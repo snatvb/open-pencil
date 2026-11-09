@@ -4,7 +4,7 @@ import { expectDefined } from '@open-pencil/test-support/assert'
 import { deflateSync } from 'fflate'
 
 import { exportFigFile, parseFigFile } from '@open-pencil/core/io/formats/fig'
-import { compressFigDataSync, materializeDocument, parseFigBuffer } from '@open-pencil/fig'
+import { materializeDocument, parseFigBuffer, writeFigArchive } from '@open-pencil/fig'
 import { symbolOverridesOf } from '@open-pencil/fig/instance-overrides'
 import {
   getCompiledSchema,
@@ -109,13 +109,12 @@ function occurrenceRecord(file: Uint8Array): NodeChange | undefined {
 test('saving an edit keeps a variant binding as it was read', async () => {
   const parsed = records(await exportFigFile(chipFile().graph))
   delete expectDefined(boundProperty(variantEntry(parsed.nodeChanges)).value).resolvedDataType
-  const file = compressFigDataSync(
-    deflateSync(getSchemaBytes()),
-    getCompiledSchema().encodeMessage(parsed),
-    new Uint8Array(),
-    '{}',
-    []
-  )
+  const file = writeFigArchive({
+    schemaDeflated: deflateSync(getSchemaBytes()),
+    kiwiData: getCompiledSchema().encodeMessage(parsed),
+    thumbnailPNG: new Uint8Array(),
+    metaJSON: '{}'
+  })
   const opened = await parseFigFile(file.slice().buffer)
   opened.updateNode(named(opened, 'Bound chip').id, { name: 'Bound chip renamed' })
 

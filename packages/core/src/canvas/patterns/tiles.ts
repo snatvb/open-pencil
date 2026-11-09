@@ -1,5 +1,4 @@
-import type { Shader } from 'canvaskit-wasm'
-
+import type { Shader } from '@open-pencil/canvaskit'
 import type { SceneGraph } from '@open-pencil/scene-graph'
 
 import { ResourceCache } from '#core/cache/resource'

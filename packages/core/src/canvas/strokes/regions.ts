@@ -1,6 +1,6 @@
-import type { Path } from 'canvaskit-wasm'
 import { clamp } from 'es-toolkit'
 
+import type { Path } from '@open-pencil/canvaskit'
 import type { SceneNode, VectorNetwork } from '@open-pencil/scene-graph'
 import type { Vector } from '@open-pencil/scene-graph/primitives'
 

@@ -11,6 +11,8 @@ import {
   type EffectBindingProperty
 } from './fields'
 import { boundNumberValue, overriddenInInstance, resolvedNumbers } from './numeric-bindings'
+import { refreshBoundPaints } from './paints'
+import { collectionsResolving } from './resolution'
 import {
   createTextStyleLookup,
   effectiveBoundVariables,
@@ -21,8 +23,6 @@ import {
   type TextStyleLookup,
   type VariableBindings
 } from './style-bindings'
-import { refreshBoundPaints } from './paints'
-import { collectionsResolving } from './resolution'
 import { subtreeNodes } from './subtree'
 import { variableText, variableTruthy } from './text'
 import { variableValueReferences } from './value'

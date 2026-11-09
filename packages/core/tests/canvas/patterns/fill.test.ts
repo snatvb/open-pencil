@@ -17,12 +17,12 @@ import {
 } from '#core-tests/helpers/patterns'
 
 import { SkiaRenderer } from '@open-pencil/core/canvas'
-import { initCanvasKit } from '@open-pencil/core/io/formats/raster'
+import { getCanvasKit } from '@open-pencil/core/canvaskit'
 import { SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
 
 const SURFACE = 100
 
-const ck = await initCanvasKit()
+const ck = await getCanvasKit()
 const renderer = new SkiaRenderer(ck, expectDefined(ck.MakeSurface(SURFACE, SURFACE), 'surface'))
 afterAll(() => renderer.destroy())
 

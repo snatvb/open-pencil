@@ -381,7 +381,7 @@ describe('variant bindings of nested instances', () => {
     const cardInstance = present(graph.createInstance(card.id, page, { x: 900 }))
     const occurrence = present(graph.getChildren(cardInstance.id)[0])
 
-    graph.setActiveMode(collection.id, roomy)
+    graph.updateNode(page, { variableModes: { [collection.id]: roomy } })
     reconcileVariableBindings(graph, { variables: [scale.id] })
 
     expect(mainComponentName(graph, source)).toBe('Scale=loose, Tone=plain')

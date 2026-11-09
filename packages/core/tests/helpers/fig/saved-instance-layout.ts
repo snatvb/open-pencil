@@ -1,7 +1,7 @@
 import { deflateSync } from 'fflate'
 
 import { exportFigFile, parseFigFile, populateAllFigPages } from '@open-pencil/core/io/formats/fig'
-import { compressFigDataSync, parseFigBuffer } from '@open-pencil/fig'
+import { parseFigBuffer, writeFigArchive } from '@open-pencil/fig'
 import {
   derivedSymbolDataOf,
   type DerivedSymbolOverride
@@ -130,13 +130,12 @@ export async function archiveWithSavedLayout(
   if (!thumbnail) {
     throw new Error('Missing thumbnail')
   }
-  return compressFigDataSync(
-    deflateSync(getSchemaBytes()),
-    kiwi,
-    thumbnail,
-    parsed.metaJSON ?? '{}',
-    []
-  )
+  return writeFigArchive({
+    schemaDeflated: deflateSync(getSchemaBytes()),
+    kiwiData: kiwi,
+    thumbnailPNG: thumbnail,
+    metaJSON: parsed.metaJSON ?? '{}'
+  })
 }
 
 export async function openLaidOut(bytes: Uint8Array): Promise<SceneGraph> {

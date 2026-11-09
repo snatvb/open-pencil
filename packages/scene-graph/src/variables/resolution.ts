@@ -252,7 +252,7 @@ export function createBatchVariableResolver(graph: SceneGraph): BatchVariableRes
     }
     return context
   }
-  const rootContext = contextFor(collections.map((id) => getActiveModeId(graph, id)))
+  const rootContext = contextFor(collections.map((id) => defaultModeId(graph, id)))
   function contextOf(nodeId: string | undefined): ModeContext {
     const node = nodeId ? graph.nodes.get(nodeId) : undefined
     if (!node) {

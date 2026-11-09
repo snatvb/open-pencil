@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import { expectDefined } from '@open-pencil/test-support/assert'
-import { boundChip, layerNamed, withOwnLayers } from '#core-tests/helpers/bound-variants'
+import { boundChip, layerNamed, showMode, withOwnLayers } from '#core-tests/helpers/bound-variants'
 
 describe('variant bindings in the editor', () => {
   test('choosing a variant removes the binding of its property, and undo brings it back', () => {
@@ -122,8 +122,8 @@ describe('variant bindings in the editor', () => {
     editor.updateNodeWithUndo(badgeId, { opacity: 0.3 })
     editor.updateNodeWithUndo(badgeId, { visible: false })
 
-    editor.setActiveMode(collection.id, roomy)
-    editor.setActiveMode(collection.id, compact)
+    showMode(editor, collection.id, roomy)
+    showMode(editor, collection.id, compact)
 
     expect(layerNamed(graph, chip.id, 'Badge').id).toBe(badgeId)
     expect(layerNamed(graph, chip.id, 'Badge').opacity).toBe(0.3)

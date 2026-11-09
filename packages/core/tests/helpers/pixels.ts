@@ -1,4 +1,4 @@
-import type { CanvasKit, Image } from 'canvaskit-wasm'
+import type { CanvasKit, Image } from '@open-pencil/canvaskit'
 
 import { expectDefined } from '@open-pencil/test-support/assert'
 

@@ -221,6 +221,8 @@ describe('syncing a nested instance', () => {
 
     expect(copy.componentId).toBe(link)
   })
+})
+
 const paint = (color: Color): Stroke => ({ ...colorToFill(color), weight: 1, align: 'INSIDE' })
 
 test.each(['fills', 'strokes'] as const)(

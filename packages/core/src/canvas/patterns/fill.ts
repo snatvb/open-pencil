@@ -1,5 +1,4 @@
-import type { Canvas, Shader } from 'canvaskit-wasm'
-
+import type { Canvas, Shader } from '@open-pencil/canvaskit'
 import type { Fill, SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 import { createPatternSourceLookup } from '@open-pencil/scene-graph/paints'
 import { regionFills } from '@open-pencil/scene-graph/vector-network'

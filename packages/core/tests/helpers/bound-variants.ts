@@ -77,6 +77,17 @@ export function withOwnLayers() {
   return chip
 }
 
+/** Shows a collection's mode on the editor's current page, as Figma sets a page's mode. */
+export function showMode(
+  editor: ReturnType<typeof createEditor>,
+  collectionId: string,
+  modeId: string
+): void {
+  const pageId = editor.state.currentPageId
+  const modes = editor.graph.getNode(pageId)?.variableModes
+  editor.updateNode(pageId, { variableModes: { ...modes, [collectionId]: modeId } })
+}
+
 export function layerNamed(
   graph: ReturnType<typeof createEditor>['graph'],
   parentId: string,

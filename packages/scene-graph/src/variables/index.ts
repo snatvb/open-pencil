@@ -31,8 +31,8 @@ import {
   TEXT_CONTENT_VARIABLE_TYPES,
   VISIBILITY_VARIABLE_TYPES
 } from './fields'
-import { unbindRemovedVariables } from './variant-bindings'
 import { applyBoundPaintColor } from './paints'
+import { unbindRemovedVariables } from './variant-bindings'
 
 export * from './resolution'
 export { collectionsReachedBy } from './reach'

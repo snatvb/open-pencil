@@ -6,8 +6,8 @@ import {
   type ParkedSlotContent
 } from '../slots/frames'
 import type { SceneNode } from '../types'
-import { collectionsReachedBy } from '../variables/reach'
 import { applyBoundPaintColorsIn, keepCopyBoundPaints } from '../variables/paints'
+import { collectionsReachedBy } from '../variables/reach'
 import { keepOwnContentSize } from './content-size'
 import { createInstanceSyncContext, groupCopyRemovals, removeLeftoverCopies } from './copies'
 import { canCreateInstance } from './cycles'

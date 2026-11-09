@@ -40,7 +40,7 @@ export function applyDocumentTextStyleBindings(
 ): void {
   const styles = createTextStyleLookup(graph)
   for (const node of materialized) {
-    const updates = resolvedTextStyleBindings(graph, node, 'active', styles)
+    const updates = resolvedTextStyleBindings(graph, node, styles)
     if (!isEmptyObject(updates)) {
       graph.updateNode(node.id, keepingSavedTextLayout(node, updates, styles))
     }

@@ -4,12 +4,12 @@ import { expectDefined } from '@open-pencil/test-support/assert'
 import { TARGET, addOutlineSource, addTarget } from '#core-tests/helpers/patterns'
 
 import { SkiaRenderer } from '@open-pencil/core/canvas'
-import { initCanvasKit } from '@open-pencil/core/io/formats/raster'
+import { getCanvasKit } from '@open-pencil/core/canvaskit'
 import { SceneGraph } from '@open-pencil/scene-graph'
 
 import { patternTilesOf } from '#core/canvas/patterns/tiles'
 
-const ck = await initCanvasKit()
+const ck = await getCanvasKit()
 const renderer = new SkiaRenderer(ck, expectDefined(ck.MakeSurface(TARGET, TARGET), 'surface'))
 afterAll(() => renderer.destroy())
 

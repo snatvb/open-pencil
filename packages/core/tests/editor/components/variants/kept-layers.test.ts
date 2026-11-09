@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import { expectDefined } from '@open-pencil/test-support/assert'
-import { badgedCard, layerNamed, withOwnLayers } from '#core-tests/helpers/bound-variants'
+import { badgedCard, layerNamed, showMode, withOwnLayers } from '#core-tests/helpers/bound-variants'
 
 import { FigmaAPI } from '@open-pencil/core/figma-api'
 import { createEditor } from '#core/editor'
@@ -17,9 +17,9 @@ describe('layers a mode switch sets aside', () => {
     const badgeId = layerNamed(graph, chip.id, 'Badge').id
     editor.updateNodeWithUndo(badgeId, { opacity: 0.3 })
 
-    editor.setActiveMode(collection.id, roomy)
+    showMode(editor, collection.id, roomy)
     editor.undo.undo()
-    editor.setActiveMode(collection.id, compact)
+    showMode(editor, collection.id, compact)
 
     expect(layerNamed(graph, chip.id, 'Badge').id).toBe(badgeId)
     expect(layerNamed(graph, chip.id, 'Badge').opacity).toBe(1)
@@ -32,9 +32,9 @@ describe('layers a mode switch sets aside', () => {
     editor.updateNodeWithUndo(badgeId, { opacity: 0.3 })
     editor.undo.undo()
 
-    editor.setActiveMode(collection.id, roomy)
+    showMode(editor, collection.id, roomy)
     editor.undo.redo()
-    editor.setActiveMode(collection.id, compact)
+    showMode(editor, collection.id, compact)
 
     expect(layerNamed(graph, chip.id, 'Badge').opacity).toBe(0.3)
     expect(chip.instanceOverrides.descendants.get(badgeId)?.has('opacity')).toBe(true)
@@ -45,10 +45,10 @@ describe('layers a mode switch sets aside', () => {
     const badgeId = layerNamed(graph, chip.id, 'Badge').id
     editor.updateNodeWithUndo(badgeId, { opacity: 0.3 })
 
-    editor.setActiveMode(collection.id, roomy)
+    showMode(editor, collection.id, roomy)
     editor.switchInstanceVariant(chip.id, 'Scale', 'tight')
     editor.undo.undo()
-    editor.setActiveMode(collection.id, compact)
+    showMode(editor, collection.id, compact)
 
     expect(layerNamed(graph, chip.id, 'Badge').id).toBe(badgeId)
     expect(layerNamed(graph, chip.id, 'Badge').opacity).toBe(0.3)
@@ -59,9 +59,9 @@ describe('layers a mode switch sets aside', () => {
     graph.updateNode(tight.id, { variableModes: { [collection.id]: compact } })
     graph.updateNode(loose.id, { variableModes: { [collection.id]: roomy } })
 
-    editor.setActiveMode(collection.id, roomy)
+    showMode(editor, collection.id, roomy)
     expect(chip.componentId).toBe(loose.id)
-    editor.setActiveMode(collection.id, compact)
+    showMode(editor, collection.id, compact)
 
     expect(chip.componentId).toBe(tight.id)
   })
@@ -71,8 +71,8 @@ describe('layers a mode switch sets aside', () => {
     const ring = expectDefined(graph.getChildren(badge.id).find((node) => node.name === 'Ring'))
     editor.updateNodeWithUndo(ring.id, { opacity: 0.25 })
 
-    editor.setActiveMode(density.id, roomy)
-    editor.setActiveMode(density.id, compact)
+    showMode(editor, density.id, roomy)
+    showMode(editor, density.id, compact)
 
     const back = expectDefined(graph.getChildren(badge.id).find((node) => node.name === 'Ring'))
     expect(back.id).toBe(ring.id)
@@ -84,7 +84,7 @@ describe('layers a mode switch sets aside', () => {
     graph.updateNode(badge.id, { variantBindings: {} })
     const widths: number[] = []
     for (const mode of [roomy, compact, roomy, compact]) {
-      editor.setActiveMode(density.id, mode)
+      showMode(editor, density.id, mode)
       widths.push(dotWidth())
     }
     expect(widths).toEqual([4, 4, 4, 4])
@@ -94,7 +94,7 @@ describe('layers a mode switch sets aside', () => {
     const { editor, density, roomy, compact, dotWidth } = badgedCard()
     const widths: number[] = []
     for (const mode of [roomy, compact, roomy, compact]) {
-      editor.setActiveMode(density.id, mode)
+      showMode(editor, density.id, mode)
       widths.push(dotWidth())
     }
     expect(widths).toEqual([8, 4, 8, 4])
@@ -105,13 +105,13 @@ describe('layers a mode switch sets aside', () => {
     const badgeId = layerNamed(graph, chip.id, 'Badge').id
     const bindings = { ...chip.variantBindings }
     editor.updateNodeWithUndo(badgeId, { opacity: 0.3 })
-    editor.setActiveMode(collection.id, roomy)
+    showMode(editor, collection.id, roomy)
 
     editor.select([chip.id])
     editor.detachInstance()
     expect(keptNodeCount(graph)).toBe(0)
     editor.undo.undo()
-    editor.setActiveMode(collection.id, compact)
+    showMode(editor, collection.id, compact)
 
     expect(chip.variantBindings).toEqual(bindings)
     expect(layerNamed(graph, chip.id, 'Badge').id).toBe(badgeId)
@@ -122,12 +122,12 @@ describe('layers a mode switch sets aside', () => {
     const { editor, graph, collection, compact, roomy, chip } = withOwnLayers()
     const badgeId = layerNamed(graph, chip.id, 'Badge').id
     editor.updateNodeWithUndo(badgeId, { opacity: 0.3 })
-    editor.setActiveMode(collection.id, roomy)
+    showMode(editor, collection.id, roomy)
 
     editor.select([chip.id])
     editor.deleteSelected()
     editor.undo.undo()
-    editor.setActiveMode(collection.id, compact)
+    showMode(editor, collection.id, compact)
 
     const restored = expectDefined(graph.getNode(chip.id))
     expect(layerNamed(graph, chip.id, 'Badge').id).toBe(badgeId)
@@ -174,10 +174,10 @@ describe('layers a mode switch sets aside', () => {
     const ring = layerNamed(graph, dot.id, 'Ring')
     editor.updateNodeWithUndo(ring.id, { opacity: 0.25 })
 
-    editor.setActiveMode(sizes.id, big)
-    editor.setActiveMode(collection.id, roomy)
-    editor.setActiveMode(collection.id, compact)
-    editor.setActiveMode(sizes.id, sizes.defaultModeId)
+    showMode(editor, sizes.id, big)
+    showMode(editor, collection.id, roomy)
+    showMode(editor, collection.id, compact)
+    showMode(editor, sizes.id, sizes.defaultModeId)
 
     const ringBack = layerNamed(graph, layerNamed(graph, chip.id, 'Dot').id, 'Ring')
     expect(ringBack.id).toBe(ring.id)
@@ -189,8 +189,8 @@ describe('layers a mode switch sets aside', () => {
     const { editor, graph, density, roomy, compact, card, source, large, badge, dotWidth } =
       badgedCard()
     graph.updateNode(source.id, { variantBindings: {} })
-    editor.setActiveMode(density.id, roomy)
-    editor.setActiveMode(density.id, compact)
+    showMode(editor, density.id, roomy)
+    showMode(editor, density.id, compact)
 
     graph.swapInstanceComponent(source.id, large.id)
     graph.syncInstances(card.id)
@@ -208,7 +208,7 @@ describe('layers a mode switch sets aside', () => {
     graph.updateNode(chip.id, { variantBindings: { 'prop:scale': alias.id } })
     graph.updateNode(loose.id, { variableModes: { [collection.id]: compact } })
 
-    editor.setActiveMode(collection.id, roomy)
+    showMode(editor, collection.id, roomy)
     const shown = [chip.componentId]
     for (let round = 0; round < 3; round++) {
       reconcileVariableBindings(graph)
@@ -222,10 +222,10 @@ describe('layers a mode switch sets aside', () => {
     const { editor, graph, collection, compact, roomy, chip } = withOwnLayers()
     const badgeId = layerNamed(graph, chip.id, 'Badge').id
     const proxy = expectDefined(new FigmaAPI(graph).getNodeById(badgeId))
-    editor.setActiveMode(collection.id, roomy)
+    showMode(editor, collection.id, roomy)
 
     proxy.opacity = 0.5
-    editor.setActiveMode(collection.id, compact)
+    showMode(editor, collection.id, compact)
 
     expect(layerNamed(graph, chip.id, 'Badge').opacity).toBe(1)
     expect(chip.instanceOverrides.descendants.get(badgeId)?.has('opacity')).not.toBe(true)
@@ -235,14 +235,14 @@ describe('layers a mode switch sets aside', () => {
     const { editor, graph, collection, compact, roomy, chip } = withOwnLayers()
     const badgeId = layerNamed(graph, chip.id, 'Badge').id
     editor.updateNodeWithUndo(badgeId, { opacity: 0.3 })
-    editor.setActiveMode(collection.id, roomy)
+    showMode(editor, collection.id, roomy)
 
     editor.select([chip.id])
     editor.deleteSelected()
     editor.undo.undo()
     editor.undo.redo()
     editor.undo.undo()
-    editor.setActiveMode(collection.id, compact)
+    showMode(editor, collection.id, compact)
 
     const restored = expectDefined(graph.getNode(chip.id))
     expect(layerNamed(graph, chip.id, 'Badge').id).toBe(badgeId)
@@ -254,7 +254,7 @@ describe('layers a mode switch sets aside', () => {
     const { editor, graph, collection, compact, roomy, chip } = withOwnLayers()
     const badgeId = layerNamed(graph, chip.id, 'Badge').id
     editor.updateNodeWithUndo(badgeId, { opacity: 0.3 })
-    editor.setActiveMode(collection.id, roomy)
+    showMode(editor, collection.id, roomy)
     const source = createEditor()
     const pasted = source.graph.createNode('RECTANGLE', source.state.currentPageId, {
       name: 'Pasted',
@@ -268,7 +268,7 @@ describe('layers a mode switch sets aside', () => {
     editor.select([chip.id])
     await editor.pasteSnapshot(expectDefined(snapshot), undefined, { replaceSelection: true })
     editor.undo.undo()
-    editor.setActiveMode(collection.id, compact)
+    showMode(editor, collection.id, compact)
 
     expect(layerNamed(graph, chip.id, 'Badge').id).toBe(badgeId)
     expect(layerNamed(graph, chip.id, 'Badge').opacity).toBe(0.3)
@@ -278,13 +278,13 @@ describe('layers a mode switch sets aside', () => {
     const { editor, graph, collection, compact, roomy, chip } = withOwnLayers()
     const badgeId = layerNamed(graph, chip.id, 'Badge').id
     editor.updateNodeWithUndo(badgeId, { opacity: 0.3 })
-    editor.setActiveMode(collection.id, roomy)
+    showMode(editor, collection.id, roomy)
     const snapshot = snapshotSubtree(graph, chip.id)
     const parentId = expectDefined(chip.parentId)
 
     graph.deleteNode(chip.id)
     restoreSubtree(graph, expectDefined(snapshot.get(chip.id)), parentId, snapshot)
-    editor.setActiveMode(collection.id, compact)
+    showMode(editor, collection.id, compact)
 
     expect(layerNamed(graph, chip.id, 'Badge').id).toBe(badgeId)
     expect(layerNamed(graph, chip.id, 'Badge').opacity).toBe(0.3)
@@ -293,8 +293,8 @@ describe('layers a mode switch sets aside', () => {
   test('a duplicate of an instance with a nested instance kept on its variant follows its source', () => {
     const { editor, graph, density, roomy, compact, card, source, large } = badgedCard()
     const original = expectDefined(graph.getInstances(card.id)[0])
-    editor.setActiveMode(density.id, roomy)
-    editor.setActiveMode(density.id, compact)
+    showMode(editor, density.id, roomy)
+    showMode(editor, density.id, compact)
 
     editor.select([original.id])
     editor.duplicateSelected()
@@ -311,8 +311,8 @@ describe('layers a mode switch sets aside', () => {
   test('an instance reset after a nested instance was kept on its variant follows its source', () => {
     const { editor, graph, density, roomy, compact, card, source, large, badge } = badgedCard()
     const original = expectDefined(graph.getInstances(card.id)[0])
-    editor.setActiveMode(density.id, roomy)
-    editor.setActiveMode(density.id, compact)
+    showMode(editor, density.id, roomy)
+    showMode(editor, density.id, compact)
 
     expectDefined(new FigmaAPI(graph).getNodeById(original.id)).resetOverrides()
     graph.updateNode(source.id, { variantBindings: {} })
@@ -335,12 +335,12 @@ describe('layers a mode switch sets aside', () => {
     }
     const badgeIds = chips.map((placed) => layerNamed(graph, placed.id, 'Badge').id)
     editor.updateNodeWithUndo(expectDefined(badgeIds[0]), { opacity: 0.3 })
-    editor.setActiveMode(collection.id, roomy)
+    showMode(editor, collection.id, roomy)
 
     editor.select([frame.id])
     editor.deleteSelected()
     editor.undo.undo()
-    editor.setActiveMode(collection.id, compact)
+    showMode(editor, collection.id, compact)
 
     expect(chips.map((placed) => layerNamed(graph, placed.id, 'Badge').id)).toEqual(badgeIds)
     expect(layerNamed(graph, chip.id, 'Badge').opacity).toBe(0.3)
