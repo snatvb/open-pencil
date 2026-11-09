@@ -179,6 +179,77 @@ describe('a centred stroke on a vector with several regions', () => {
   })
 })
 
+function network(
+  points: [number, number][],
+  segments: [number, number][],
+  regionLoops: number[][][]
+): VectorNetwork {
+  return {
+    vertices: points.map(([x, y]) => ({ x, y })),
+    segments: segments.map(([start, end]) => ({
+      start,
+      end,
+      tangentStart: zero,
+      tangentEnd: zero
+    })),
+    regions: regionLoops.map((loops) => ({ windingRule: 'NONZERO', loops }))
+  }
+}
+
+const SQUARE_CORNERS: [number, number][] = [
+  [0, 0],
+  [40, 0],
+  [40, 40],
+  [0, 40]
+]
+const DIAGONAL_HALVES = network(
+  SQUARE_CORNERS,
+  [
+    [0, 1],
+    [1, 2],
+    [2, 3],
+    [3, 0],
+    [0, 2]
+  ],
+  [[[0, 1, 4]], [[4, 2, 3]]]
+)
+const TOP_LEFT_QUARTER = network(
+  [
+    [0, 0],
+    [20, 0],
+    [40, 0],
+    [40, 40],
+    [0, 40],
+    [0, 20],
+    [20, 20]
+  ],
+  [
+    [0, 1],
+    [1, 2],
+    [2, 3],
+    [3, 4],
+    [4, 5],
+    [5, 0],
+    [1, 6],
+    [6, 5]
+  ],
+  [[[0, 1, 2, 3, 4, 5]], [[0, 6, 7, 5]]]
+)
+describe('corners where regions meet on the outline', () => {
+  test('join where the outline turns past an edge between regions', () => {
+    const stroke = [127, 127, 127, 127, 127, 127, 127, 127, 127]
+    expect(redRow(DIAGONAL_HALVES, 'CENTER', 38, 34, 46)).toEqual([255, 255, 255, 255, ...stroke])
+    expect(redRow(DIAGONAL_HALVES, 'OUTSIDE', 36, 34, 46)).toEqual([255, 255, ...stroke, 127, 127])
+  })
+
+  test('outside: a doubled edge stops at its end where a shared edge goes on', () => {
+    const white = Array.from({ length: 10 }, () => 255)
+    const stroke = (width: number) => Array.from({ length: width }, () => 127)
+    expect(redRow(TOP_LEFT_QUARTER, 'OUTSIDE', 37, 50, 65)).toEqual([...white, ...stroke(6)])
+    expect(redRow(TOP_LEFT_QUARTER, 'OUTSIDE', 38, 50, 65)).toEqual(stroke(16))
+  })
+})
+
 function topColumn(network: VectorNetwork, align: Stroke['align']): number[] {
   const transposed: VectorNetwork = {
     ...network,

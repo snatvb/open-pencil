@@ -30,7 +30,7 @@ import { isOpenVectorNetwork } from '#core/vector/connectivity'
 
 import { drawLineStroke } from './line'
 import { drawOutlinedDashes } from './outlined-dashes'
-import { regionStrokeOutlines } from './regions'
+import { regionStrokeOutline } from './regions'
 import { drawDashedRectStroke, strokeDashesByOutline, strokeSideWeights } from './sides'
 
 function drawVectorStrokeGeometry(
@@ -364,7 +364,8 @@ function drawUnitedRegionStrokes(
   const key = strokeOutlineKey(node, stroke, sided ? 'united-sided' : 'united')
   let outlines = r.nodePaths.strokeOutline.get(key)
   if (!outlines) {
-    outlines = regionStrokeOutlines(r, node, network, stroke, sided)
+    const outline = regionStrokeOutline(r, node, network, closed, stroke, sided)
+    outlines = outline ? [outline] : []
     r.nodePaths.store(r.nodePaths.strokeOutline, key, outlines)
   }
   r.fillPaint.setColorComponents(sc.r, sc.g, sc.b, sc.a)
