@@ -266,6 +266,13 @@ describe('corners where regions meet on the outline', () => {
     expect(redRow(DIAGONAL_HALVES, 'OUTSIDE', 36, 34, 46)).toEqual([255, 255, ...stroke, 127, 127])
   })
 
+  test('join at a corner only one region reaches', () => {
+    const white = (width: number) => Array.from({ length: width }, () => 255)
+    const stroke = (width: number) => Array.from({ length: width }, () => 127)
+    expect(redRow(DIAGONAL_HALVES, 'CENTER', 38, 76, 85)).toEqual([...stroke(6), ...white(4)])
+    expect(redRow(DIAGONAL_HALVES, 'CENTER', 81, 34, 43)).toEqual([...white(4), ...stroke(6)])
+  })
+
   test('outside: a doubled edge stops at its end where a shared edge goes on', () => {
     const white = Array.from({ length: 10 }, () => 255)
     const stroke = (width: number) => Array.from({ length: width }, () => 127)
