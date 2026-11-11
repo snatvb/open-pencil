@@ -102,6 +102,24 @@ function clipToBlendedLayer(r: SkiaRenderer, canvas: Canvas, bounds: Float32Arra
   canvas.clipRect(grown, r.ck.ClipOp.Intersect, true)
 }
 
+/** Opens a layer clipped to its bounds; returns the saves `restoreBlendedLayer` closes. */
+export function saveClippedLayer(
+  r: SkiaRenderer,
+  canvas: Canvas,
+  paint: Paint,
+  bounds: Float32Array | null,
+  flags = 0
+): number {
+  if (!bounds) {
+    canvas.saveLayer(paint, bounds, null, flags)
+    return 1
+  }
+  canvas.save()
+  clipToBlendedLayer(r, canvas, bounds)
+  canvas.saveLayer(paint, bounds, null, flags)
+  return 2
+}
+
 /** Opens a layer composited with `mode`; returns the saves `restoreBlendedLayer` closes. */
 export function saveBlendedLayer(
   r: SkiaRenderer,
@@ -112,13 +130,11 @@ export function saveBlendedLayer(
   flags = 0
 ): number {
   setPaintBlendMode(r, paint, mode)
-  const clips = bounds !== null && blenderFor(r, mode) !== null
-  if (clips) {
-    canvas.save()
-    clipToBlendedLayer(r, canvas, bounds)
+  if (blenderFor(r, mode)) {
+    return saveClippedLayer(r, canvas, paint, bounds, flags)
   }
   canvas.saveLayer(paint, bounds, null, flags)
-  return clips ? 2 : 1
+  return 1
 }
 
 export function restoreBlendedLayer(canvas: Canvas, saves: number): void {

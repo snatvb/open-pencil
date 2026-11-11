@@ -16,7 +16,8 @@ import {
   needsIsolatedBlendLayer,
   paintsBlendWithBackdrop,
   restoreBlendedLayer,
-  saveBlendedLayer
+  saveBlendedLayer,
+  saveClippedLayer
 } from './blend'
 import { blurredContent, layerBlurFilter } from './blur/layer'
 import { renderBooleanOperation } from './boolean'
@@ -411,13 +412,13 @@ export function renderNode(
     if (fadesOverBackdrop(graph, node)) {
       r.opacityPaint.setAlphaf(1)
       r.opacityPaint.setBlender(fadeBlender(r, node.opacity))
-      canvas.saveLayer(
+      nodeLayerSaves = saveClippedLayer(
+        r,
+        canvas,
         r.opacityPaint,
         layerBounds,
-        null,
         r.ck.SaveLayerInitWithPrevious | r.compositingLayerFlags()
       )
-      nodeLayerSaves = 1
     } else {
       r.opacityPaint.setAlphaf(node.opacity)
       nodeLayerSaves = saveBlendedLayer(
