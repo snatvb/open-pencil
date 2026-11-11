@@ -16,7 +16,8 @@ import {
   fadeBlender,
   needsIsolatedBlendLayer,
   paintsBlendWithBackdrop,
-  setPaintBlendMode
+  restoreBlendedLayer,
+  saveBlendedLayer
 } from './blend'
 import { blurredContent, layerBlurFilter } from './blur/layer'
 import { renderBooleanOperation } from './boolean'
@@ -413,6 +414,7 @@ export function renderNode(
           overlays.rotationPreview
         )
       : null
+  let nodeLayerSaves = 0
   if (needsNodeLayer) {
     if (fadesOverBackdrop(graph, node)) {
       r.opacityPaint.setAlphaf(1)
@@ -423,10 +425,17 @@ export function renderNode(
         null,
         r.ck.SaveLayerInitWithPrevious | r.compositingLayerFlags()
       )
+      nodeLayerSaves = 1
     } else {
       r.opacityPaint.setAlphaf(node.opacity)
-      setPaintBlendMode(r, r.opacityPaint, node.blendMode)
-      canvas.saveLayer(r.opacityPaint, layerBounds, null, r.compositingLayerFlags())
+      nodeLayerSaves = saveBlendedLayer(
+        r,
+        canvas,
+        r.opacityPaint,
+        node.blendMode,
+        layerBounds,
+        r.compositingLayerFlags()
+      )
     }
   }
 
@@ -465,7 +474,7 @@ export function renderNode(
     r.effectLayerPaint.setBlendMode(r.ck.BlendMode.SrcOver)
   }
   if (needsNodeLayer) {
-    canvas.restore()
+    restoreBlendedLayer(canvas, nodeLayerSaves)
     r.opacityPaint.setAlphaf(1)
     r.opacityPaint.setBlendMode(r.ck.BlendMode.SrcOver)
   }

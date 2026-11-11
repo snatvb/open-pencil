@@ -16,12 +16,13 @@ interface Swatch {
 }
 
 const CELL = 4
-const MAX_SWATCHES = 16
+const SURFACE_WIDTH = CELL * 16
+const SURFACE_HEIGHT = 32
 
 const ck = await getCanvasKit()
 const renderer = new SkiaRenderer(
   ck,
-  expectDefined(ck.MakeSurface(CELL * MAX_SWATCHES, CELL), 'surface')
+  expectDefined(ck.MakeSurface(SURFACE_WIDTH, SURFACE_HEIGHT), 'surface')
 )
 afterAll(() => renderer.destroy())
 
@@ -70,19 +71,10 @@ function groupBlend(opacity: number): SourceLayer {
   }
 }
 
-function renderSwatches(swatches: Swatch[], sourceLayer: SourceLayer): RGB[] {
+function renderScene(build: (graph: SceneGraph, pageId: string) => void): Uint8Array {
   const graph = new SceneGraph()
   const page = graph.getPages()[0]
-  swatches.forEach(({ backdrop, source }, index) => {
-    const x = index * CELL
-    graph.createNode('RECTANGLE', page.id, {
-      x,
-      width: CELL,
-      height: CELL,
-      fills: [solid(backdrop)]
-    })
-    sourceLayer(graph, page.id, x, source)
-  })
+  build(graph, page.id)
   renderer.pageId = page.id
   const canvas = renderer.surface.getCanvas()
   canvas.clear(ck.TRANSPARENT)
@@ -90,22 +82,37 @@ function renderSwatches(swatches: Swatch[], sourceLayer: SourceLayer): RGB[] {
   renderer.surface.flush()
   const image = renderer.surface.makeImageSnapshot()
   try {
-    const pixels = expectRgbaPixels(
-      image.readPixels(0, CELL / 2, {
-        width: CELL * swatches.length,
-        height: 1,
+    return expectRgbaPixels(
+      image.readPixels(0, 0, {
+        width: SURFACE_WIDTH,
+        height: SURFACE_HEIGHT,
         colorType: ck.ColorType.RGBA_8888,
         alphaType: ck.AlphaType.Unpremul,
         colorSpace: ck.ColorSpace.SRGB
       })
     )
-    return swatches.map((_, index) => {
-      const offset = (index * CELL + CELL / 2) * 4
-      return [pixels[offset], pixels[offset + 1], pixels[offset + 2]]
-    })
   } finally {
     image.delete()
   }
+}
+
+function renderSwatches(swatches: Swatch[], sourceLayer: SourceLayer): RGB[] {
+  const pixels = renderScene((graph, pageId) => {
+    swatches.forEach(({ backdrop, source }, index) => {
+      const x = index * CELL
+      graph.createNode('RECTANGLE', pageId, {
+        x,
+        width: CELL,
+        height: CELL,
+        fills: [solid(backdrop)]
+      })
+      sourceLayer(graph, pageId, x, source)
+    })
+  })
+  return swatches.map((_, index) => {
+    const offset = ((CELL / 2) * SURFACE_WIDTH + index * CELL + CELL / 2) * 4
+    return [pixels[offset], pixels[offset + 1], pixels[offset + 2]]
+  })
 }
 
 function greys(cells: [number, number, number][]): Swatch[] {
@@ -191,5 +198,38 @@ describe('soft light, as Figma draws it', () => {
 
   test('a soft light group at a fifth opacity mixes its blend into the backdrop', () => {
     expectFigmaPixels(GROUP_AT_A_FIFTH, groupBlend(0.2))
+  })
+
+  test('a group blends its anti-aliased edge as a fill does, turned and off the pixel grid', () => {
+    const turnedSource = (blend: 'group' | 'fill') => (graph: SceneGraph, pageId: string) => {
+      graph.createNode('RECTANGLE', pageId, {
+        width: SURFACE_WIDTH,
+        height: SURFACE_HEIGHT,
+        fills: [solid([128, 128, 128])]
+      })
+      const placement = { x: 20.5, y: 4.3, width: 20.6, height: 14.4, rotation: 17 }
+      if (blend === 'fill') {
+        graph.createNode('RECTANGLE', pageId, {
+          ...placement,
+          fills: [solid([0, 0, 0], 'SOFT_LIGHT')]
+        })
+        return
+      }
+      const group = graph.createNode('FRAME', pageId, {
+        ...placement,
+        fills: [],
+        blendMode: 'SOFT_LIGHT'
+      })
+      graph.createNode('RECTANGLE', group.id, {
+        width: placement.width,
+        height: placement.height,
+        fills: [solid([0, 0, 0])]
+      })
+    }
+    const group = renderScene(turnedSource('group'))
+    const fill = renderScene(turnedSource('fill'))
+    const worst = Math.max(...group.map((channel, index) => Math.abs(channel - fill[index])))
+    expect(worst).toBeLessThanOrEqual(1)
+    expect(Math.min(...group.filter((_, index) => index % 4 === 0))).toBeLessThan(80)
   })
 })

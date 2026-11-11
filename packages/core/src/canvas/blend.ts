@@ -1,4 +1,10 @@
-import type { Blender, BlendMode as SkBlendMode, CanvasKit, Paint } from '@open-pencil/canvaskit'
+import type {
+  Blender,
+  BlendMode as SkBlendMode,
+  Canvas,
+  CanvasKit,
+  Paint
+} from '@open-pencil/canvaskit'
 import type { BlendMode, SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 
 import { compiledBlender, keptBlender } from '#core/canvas/renderer/shaders'
@@ -67,6 +73,51 @@ export function setPaintBlendMode(r: SkiaRenderer, paint: Paint, mode?: BlendMod
     return
   }
   paint.setBlendMode(figmaBlendModeToSkia(r.ck, mode))
+}
+
+/**
+ * Skia blends a layer restored through a runtime blender over the whole clip, as such a blender
+ * may change what lies under transparent pixels. Ours keep it as is, so the clip shrinks to the
+ * layer, grown by a device pixel so the layer's anti-aliased edge keeps full coverage.
+ */
+function clipToBlendedLayer(r: SkiaRenderer, canvas: Canvas, bounds: Float32Array): void {
+  const matrix = canvas.getTotalMatrix()
+  const pixelX = 1 / Math.hypot(matrix[0], matrix[3])
+  const pixelY = 1 / Math.hypot(matrix[1], matrix[4])
+  if (!Number.isFinite(pixelX) || !Number.isFinite(pixelY)) {
+    return
+  }
+  const [left, top, right, bottom] = bounds
+  const grown = r.ck.LTRBRect(left - pixelX, top - pixelY, right + pixelX, bottom + pixelY)
+  canvas.clipRect(grown, r.ck.ClipOp.Intersect, true)
+}
+
+/**
+ * Opens a layer `paint` composites through with `mode`, behind a clip to its bounds when the mode
+ * draws through a runtime blender. Returns how many saves `restoreBlendedLayer` closes.
+ */
+export function saveBlendedLayer(
+  r: SkiaRenderer,
+  canvas: Canvas,
+  paint: Paint,
+  mode: BlendMode | undefined,
+  bounds: Float32Array | null,
+  flags = 0
+): number {
+  setPaintBlendMode(r, paint, mode)
+  const clips = bounds !== null && isBlenderMode(mode)
+  if (clips) {
+    canvas.save()
+    clipToBlendedLayer(r, canvas, bounds)
+  }
+  canvas.saveLayer(paint, bounds, null, flags)
+  return clips ? 2 : 1
+}
+
+export function restoreBlendedLayer(canvas: Canvas, saves: number): void {
+  for (let restored = 0; restored < saves; restored++) {
+    canvas.restore()
+  }
 }
 
 export function needsIsolatedBlendLayer(mode?: BlendMode): boolean {
