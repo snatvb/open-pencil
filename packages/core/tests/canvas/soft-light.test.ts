@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 
 import { SkiaRenderer } from '@open-pencil/core/canvas'
 import { getCanvasKit } from '@open-pencil/core/canvaskit'
-import { SceneGraph, type BlendMode, type Fill } from '@open-pencil/scene-graph'
+import { SceneGraph, type BlendMode, type Effect, type Fill } from '@open-pencil/scene-graph'
 import { expectDefined } from '@open-pencil/test-support/assert'
 
 import { expectRgbaPixels } from './helpers'
@@ -231,5 +231,123 @@ describe('soft light, as Figma draws it', () => {
     const worst = Math.max(...group.map((channel, index) => Math.abs(channel - fill[index])))
     expect(worst).toBeLessThanOrEqual(1)
     expect(Math.min(...group.filter((_, index) => index % 4 === 0))).toBeLessThan(80)
+  })
+})
+
+function pixelAt(pixels: Uint8Array, x: number, y: number): number[] {
+  const offset = (y * SURFACE_WIDTH + x) * 4
+  return Array.from(pixels.subarray(offset, offset + 4))
+}
+
+interface TranslucentSwatch {
+  backdrop: { grey: number; opacity: number } | null
+  source: { grey: number; opacity: number }
+  figma: [number, number]
+}
+
+// Live-measured in Figma: grey and alpha of a soft light layer over a translucent or empty backdrop.
+const TRANSLUCENT: TranslucentSwatch[] = [
+  { backdrop: null, source: { grey: 0, opacity: 1 }, figma: [0, 255] },
+  { backdrop: null, source: { grey: 192, opacity: 0.5 }, figma: [191, 128] },
+  { backdrop: { grey: 128, opacity: 0.5 }, source: { grey: 0, opacity: 1 }, figma: [37, 255] },
+  { backdrop: { grey: 128, opacity: 0.5 }, source: { grey: 64, opacity: 0.5 }, figma: [97, 192] },
+  { backdrop: { grey: 32, opacity: 0.5 }, source: { grey: 255, opacity: 0.5 }, figma: [114, 192] },
+  { backdrop: { grey: 200, opacity: 0.25 }, source: { grey: 0, opacity: 0.5 }, figma: [75, 160] },
+  { backdrop: { grey: 200, opacity: 0.25 }, source: { grey: 255, opacity: 1 }, figma: [252, 255] }
+]
+
+describe('soft light over a translucent backdrop, as Figma draws it', () => {
+  test('keeps the source where nothing is under it and mixes by both alphas elsewhere', () => {
+    const pixels = renderScene((graph, pageId) => {
+      TRANSLUCENT.forEach(({ backdrop, source }, index) => {
+        const x = index * CELL
+        if (backdrop) {
+          const fill = {
+            ...solid([backdrop.grey, backdrop.grey, backdrop.grey]),
+            opacity: backdrop.opacity
+          }
+          graph.createNode('RECTANGLE', pageId, { x, width: CELL, height: CELL, fills: [fill] })
+        }
+        graph.createNode('RECTANGLE', pageId, {
+          x,
+          width: CELL,
+          height: CELL,
+          fills: [solid([source.grey, source.grey, source.grey])],
+          blendMode: 'SOFT_LIGHT',
+          opacity: source.opacity
+        })
+      })
+    })
+    const misses = TRANSLUCENT.map((swatch, index) => {
+      const [grey, , , alpha] = pixelAt(pixels, index * CELL + CELL / 2, CELL / 2)
+      return { ...swatch, rendered: [grey, alpha] }
+    }).filter(({ figma, rendered }) => rendered.some((value, i) => Math.abs(value - figma[i]) > 2))
+    expect(misses).toEqual([])
+  })
+})
+
+const BLACK_SOFT_LIGHT_SHADOW = {
+  color: { r: 0, g: 0, b: 0, a: 1 },
+  radius: 0,
+  spread: 0,
+  visible: true,
+  blendMode: 'SOFT_LIGHT' as const
+}
+
+// Live-measured in Figma for a layer: black soft light over a 128 grey backdrop.
+const BLACK_OVER_MID_GREY = 75
+
+function shadowedOverlap(effect: Effect) {
+  return (graph: SceneGraph, pageId: string) => {
+    graph.createNode('RECTANGLE', pageId, {
+      width: SURFACE_WIDTH,
+      height: SURFACE_HEIGHT,
+      fills: [solid([128, 128, 128])]
+    })
+    const frame = graph.createNode('FRAME', pageId, {
+      x: 4,
+      y: 4,
+      width: 16,
+      height: 8,
+      fills: [],
+      effects: [effect]
+    })
+    graph.createNode('RECTANGLE', frame.id, {
+      width: 10,
+      height: 8,
+      fills: [solid([128, 128, 128])]
+    })
+    graph.createNode('RECTANGLE', frame.id, {
+      x: 6,
+      width: 10,
+      height: 8,
+      fills: [solid([128, 128, 128])],
+      opacity: 0.5
+    })
+  }
+}
+
+describe('soft light shadows of overlapping layers, as Figma draws them', () => {
+  for (const showShadowBehindNode of [false, true]) {
+    test(`a drop shadow ${showShadowBehindNode ? 'shown' : 'cut out'} behind its layer`, () => {
+      const pixels = renderScene(
+        shadowedOverlap({
+          ...BLACK_SOFT_LIGHT_SHADOW,
+          type: 'DROP_SHADOW',
+          offset: { x: 24, y: 0 },
+          showShadowBehindNode
+        })
+      )
+      expect(Math.abs(pixelAt(pixels, 36, 8)[0] - BLACK_OVER_MID_GREY)).toBeLessThanOrEqual(1)
+      expect(pixelAt(pixels, 12, 8)[0]).toBe(128)
+    })
+  }
+
+  test('an inner shadow', () => {
+    const pixels = renderScene(
+      shadowedOverlap({ ...BLACK_SOFT_LIGHT_SHADOW, type: 'INNER_SHADOW', offset: { x: 6, y: 0 } })
+    )
+    expect(Math.abs(pixelAt(pixels, 6, 8)[0] - BLACK_OVER_MID_GREY)).toBeLessThanOrEqual(1)
+    expect(pixelAt(pixels, 16, 8)[0]).toBe(128)
   })
 })
