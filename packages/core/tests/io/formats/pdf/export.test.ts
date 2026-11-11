@@ -3,10 +3,18 @@ import { join } from 'node:path'
 
 import { unzlibSync } from 'fflate'
 
+import {
+  SceneGraph,
+  type BlendMode,
+  type Effect,
+  type Fill,
+  type SceneNode
+} from '@open-pencil/scene-graph'
 import { expectDefined } from '@open-pencil/test-support/assert'
 import { FIXTURES } from '@open-pencil/test-support/paths'
-import { SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
 
+import { SkiaRenderer } from '#core/canvas'
+import { getCanvasKit } from '#core/canvaskit'
 import { exportPDFDocument } from '#core/io/formats/pdf'
 import { fontManager } from '#core/text/font/manager'
 
@@ -136,9 +144,7 @@ test('is null when no page has anything to draw', async () => {
   const hidden = card(graph, 'Hidden')
   graph.updateNode(hidden.id, { visible: false })
   expect(
-    await exportPDFDocument(graph, [
-      { pageId: graph.getPages()[0].id, nodeIds: [hidden.id] }
-    ])
+    await exportPDFDocument(graph, [{ pageId: graph.getPages()[0].id, nodeIds: [hidden.id] }])
   ).toBeNull()
 })
 
@@ -155,4 +161,65 @@ test('keeps Arabic as the letters it draws, joining forms included', async () =>
   expect(objects).toContain('/FontFile2')
   const mapped = mappedCharacters(objects)
   for (const letter of 'مرحبابكم') expect(mapped).toContain(letter)
+})
+
+function grey(value: number, blendMode: BlendMode = 'NORMAL'): Fill {
+  return {
+    type: 'SOLID',
+    color: { r: value, g: value, b: value, a: 1 },
+    opacity: 1,
+    visible: true,
+    blendMode
+  }
+}
+
+const SHADOW: Effect = {
+  type: 'DROP_SHADOW',
+  color: { r: 0, g: 0, b: 0, a: 0.5 },
+  offset: { x: 2, y: 2 },
+  radius: 0,
+  spread: 0,
+  visible: true,
+  blendMode: 'NORMAL',
+  showShadowBehindNode: false
+}
+
+function blendedSquare(layer: BlendMode, fill: BlendMode, effects: Effect[] = []) {
+  const graph = new SceneGraph()
+  const pageId = graph.getPages()[0].id
+  const frame = graph.createNode('FRAME', pageId, { width: 40, height: 40, fills: [grey(0.5)] })
+  graph.createNode('RECTANGLE', frame.id, {
+    width: 20,
+    height: 20,
+    fills: [grey(0.1, fill)],
+    blendMode: layer,
+    effects
+  })
+  return { graph, specs: [{ pageId, nodeIds: [frame.id] }] }
+}
+
+async function exportBlendedSquare(layer: BlendMode, fill: BlendMode): Promise<string> {
+  const { graph, specs } = blendedSquare(layer, fill)
+  return pdfObjects(expectDefined(await exportPDFDocument(graph, specs), 'PDF').data)
+}
+
+// Skia's PDF backend writes only built-in blend modes; a runtime blender comes out as Normal.
+test('writes a soft light layer and a soft light fill as PDF soft light', async () => {
+  expect(await exportBlendedSquare('SOFT_LIGHT', 'NORMAL')).toMatch(/\/BM\s*\/SoftLight/)
+  expect(await exportBlendedSquare('PASS_THROUGH', 'SOFT_LIGHT')).toMatch(/\/BM\s*\/SoftLight/)
+})
+
+test('writes soft light into the PDF even after the canvas recorded the layer in a picture', async () => {
+  const { graph, specs } = blendedSquare('PASS_THROUGH', 'SOFT_LIGHT', [SHADOW])
+  const ck = await getCanvasKit()
+  const renderer = new SkiaRenderer(ck, expectDefined(ck.MakeSurface(40, 40), 'surface'))
+  try {
+    await renderer.prepareForExport(graph, specs[0].pageId, specs[0].nodeIds)
+    renderer.renderSceneToCanvas(renderer.surface.getCanvas(), graph, specs[0].pageId)
+    expect(renderer.nodePictures.size).toBeGreaterThan(0)
+    const result = await exportPDFDocument(graph, specs, { renderer })
+    expect(pdfObjects(expectDefined(result, 'PDF').data)).toMatch(/\/BM\s*\/SoftLight/)
+  } finally {
+    renderer.destroy()
+  }
 })

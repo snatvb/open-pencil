@@ -1,6 +1,4 @@
-// Figma's soft light: the W3C formula with its two source branches swapped, in premultiplied sRGB
-// with source-over coverage; opacity mixes the unclamped blend, clamped after (live-measured).
-// Branch-free: per-channel branches draw about twice as slow on CanvasKit's CPU backend.
+// Figma's soft light (live-measured): W3C's with its two source branches swapped, clamped late.
 half4 main(half4 src, half4 dst) {
   half3 s = src.rgb / max(src.a, 0.0001);
   half3 b = dst.rgb / max(dst.a, 0.0001);

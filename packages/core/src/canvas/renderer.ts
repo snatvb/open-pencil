@@ -197,6 +197,8 @@ export class SkiaRenderer {
   readonly images = createRendererImages()
   viewportImageRendering = false
   halfFloatLayers = false
+  /** Skia's PDF backend writes only built-in blend modes, never a runtime blender. */
+  builtInBlendModesOnly = false
   nodePaths = new NodePathCaches()
   /** Each node's picture of itself with its effects, good for the font generation it was recorded at. */
   readonly nodePictures = new Map<string, NodePictureEntry>()

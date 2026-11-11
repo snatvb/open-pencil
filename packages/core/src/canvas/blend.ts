@@ -16,22 +16,33 @@ import plusLighterSource from './blenders/plus-lighter.sksl?raw'
 import softLightSource from './blenders/soft-light.sksl?raw'
 import type { SkiaRenderer } from './renderer'
 
-type BlenderMode = 'LINEAR_BURN' | 'LINEAR_DODGE' | 'SOFT_LIGHT'
+type LinearBlendMode = 'LINEAR_BURN' | 'LINEAR_DODGE'
 
-/** Figma modes Skia draws differently or not at all: plus darker, plus lighter, soft light. */
-const BLENDERS: Record<BlenderMode, SkslProgram<NoUniforms>> = {
+/** Figma's plus darker and plus lighter: Skia has no blend mode for either. */
+const LINEAR_BLENDERS: Record<LinearBlendMode, SkslProgram<NoUniforms>> = {
   LINEAR_BURN: defineBlender('plus darker blender', plusDarkerSource),
-  LINEAR_DODGE: defineBlender('plus lighter blender', plusLighterSource),
-  SOFT_LIGHT: defineBlender('soft light blender', softLightSource)
+  LINEAR_DODGE: defineBlender('plus lighter blender', plusLighterSource)
 }
 
-function isBlenderMode(mode?: BlendMode): mode is BlenderMode {
-  return mode !== undefined && mode in BLENDERS
+const SOFT_LIGHT_BLENDER = defineBlender('soft light blender', softLightSource)
+
+function isLinearBlendMode(mode?: BlendMode): mode is LinearBlendMode {
+  return mode === 'LINEAR_BURN' || mode === 'LINEAR_DODGE'
+}
+
+function blenderFor(r: SkiaRenderer, mode?: BlendMode): SkslProgram<NoUniforms> | null {
+  if (isLinearBlendMode(mode)) {
+    return LINEAR_BLENDERS[mode]
+  }
+  if (mode === 'SOFT_LIGHT' && !r.builtInBlendModesOnly) {
+    return SOFT_LIGHT_BLENDER
+  }
+  return null
 }
 
 export function figmaBlendModeToSkia(
   ck: CanvasKit,
-  mode?: Exclude<BlendMode, BlenderMode>
+  mode?: Exclude<BlendMode, LinearBlendMode>
 ): SkBlendMode {
   switch (mode) {
     case 'DARKEN':
@@ -48,6 +59,8 @@ export function figmaBlendModeToSkia(
       return ck.BlendMode.ColorDodge
     case 'OVERLAY':
       return ck.BlendMode.Overlay
+    case 'SOFT_LIGHT':
+      return ck.BlendMode.SoftLight
     case 'HARD_LIGHT':
       return ck.BlendMode.HardLight
     case 'DIFFERENCE':
@@ -68,18 +81,15 @@ export function figmaBlendModeToSkia(
 }
 
 export function setPaintBlendMode(r: SkiaRenderer, paint: Paint, mode?: BlendMode): void {
-  if (isBlenderMode(mode)) {
-    paint.setBlender(compiledBlender(r.ck, r.shaders, BLENDERS[mode]))
+  const blender = blenderFor(r, mode)
+  if (blender) {
+    paint.setBlender(compiledBlender(r.ck, r.shaders, blender))
     return
   }
-  paint.setBlendMode(figmaBlendModeToSkia(r.ck, mode))
+  paint.setBlendMode(figmaBlendModeToSkia(r.ck, isLinearBlendMode(mode) ? 'NORMAL' : mode))
 }
 
-/**
- * Skia blends a layer restored through a runtime blender over the whole clip, as such a blender
- * may change what lies under transparent pixels. Ours keep it as is, so the clip shrinks to the
- * layer, grown by a device pixel so the layer's anti-aliased edge keeps full coverage.
- */
+// Skia restores a runtime-blender layer over the whole clip; ours leave transparent pixels as is.
 function clipToBlendedLayer(r: SkiaRenderer, canvas: Canvas, bounds: Float32Array): void {
   const matrix = canvas.getTotalMatrix()
   const pixelX = 1 / Math.hypot(matrix[0], matrix[3])
@@ -92,10 +102,7 @@ function clipToBlendedLayer(r: SkiaRenderer, canvas: Canvas, bounds: Float32Arra
   canvas.clipRect(grown, r.ck.ClipOp.Intersect, true)
 }
 
-/**
- * Opens a layer `paint` composites through with `mode`, behind a clip to its bounds when the mode
- * draws through a runtime blender. Returns how many saves `restoreBlendedLayer` closes.
- */
+/** Opens a layer composited with `mode`; returns the saves `restoreBlendedLayer` closes. */
 export function saveBlendedLayer(
   r: SkiaRenderer,
   canvas: Canvas,
@@ -105,7 +112,7 @@ export function saveBlendedLayer(
   flags = 0
 ): number {
   setPaintBlendMode(r, paint, mode)
-  const clips = bounds !== null && isBlenderMode(mode)
+  const clips = bounds !== null && blenderFor(r, mode) !== null
   if (clips) {
     canvas.save()
     clipToBlendedLayer(r, canvas, bounds)
