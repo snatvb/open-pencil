@@ -248,8 +248,8 @@ function calls(fn: ReturnType<typeof mock>): unknown[][] {
 describe('canvas blend modes', () => {
   test('maps Figma blend modes to CanvasKit blend modes', () => {
     const ck = asCanvasKit({ BlendMode: blendModes })
-    // Plus darker and plus lighter have no CanvasKit mode; they draw through runtime blenders.
-    const cases: Array<[Exclude<BlendMode, 'LINEAR_BURN' | 'LINEAR_DODGE'>, string]> = [
+    type SkiaBlendMode = Exclude<BlendMode, 'LINEAR_BURN' | 'LINEAR_DODGE' | 'SOFT_LIGHT'>
+    const cases: Array<[SkiaBlendMode, string]> = [
       ['NORMAL', 'SrcOver'],
       ['PASS_THROUGH', 'SrcOver'],
       ['DARKEN', 'Darken'],
@@ -259,7 +259,6 @@ describe('canvas blend modes', () => {
       ['SCREEN', 'Screen'],
       ['COLOR_DODGE', 'ColorDodge'],
       ['OVERLAY', 'Overlay'],
-      ['SOFT_LIGHT', 'SoftLight'],
       ['HARD_LIGHT', 'HardLight'],
       ['DIFFERENCE', 'Difference'],
       ['EXCLUSION', 'Exclusion'],

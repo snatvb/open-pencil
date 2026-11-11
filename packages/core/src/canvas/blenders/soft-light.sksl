@@ -1,0 +1,25 @@
+// Figma's soft light: the W3C formula with its two source branches swapped, in premultiplied sRGB
+// with source-over coverage; opacity mixes the unclamped blend, clamped after (live-measured).
+half lifted(half b) {
+  return b <= 0.25 ? ((16 * b - 12) * b + 4) * b : sqrt(b);
+}
+
+half softLight(half s, half b) {
+  if (s <= 0.5) {
+    return b - (1 - 2 * s) * (lifted(b) - b);
+  }
+  return b + (2 * s - 1) * b * (1 - b);
+}
+
+half3 unpremultiplied(half4 color) {
+  return color.a > 0 ? color.rgb / color.a : half3(0);
+}
+
+half4 main(half4 src, half4 dst) {
+  half3 s = unpremultiplied(src);
+  half3 b = unpremultiplied(dst);
+  half3 blended = half3(softLight(s.r, b.r), softLight(s.g, b.g), softLight(s.b, b.b));
+  half3 rgb = src.rgb * (1 - dst.a) + dst.rgb * (1 - src.a) + src.a * dst.a * blended;
+  half alpha = src.a + dst.a * (1 - src.a);
+  return half4(clamp(rgb, half3(0), half3(alpha)), alpha);
+}

@@ -7,19 +7,25 @@ import { defineBlender, type NoUniforms, type SkslProgram } from '#core/canvas/s
 import fadeSource from './blenders/fade.sksl?raw'
 import plusDarkerSource from './blenders/plus-darker.sksl?raw'
 import plusLighterSource from './blenders/plus-lighter.sksl?raw'
+import softLightSource from './blenders/soft-light.sksl?raw'
 import type { SkiaRenderer } from './renderer'
 
-type LinearBlendMode = 'LINEAR_BURN' | 'LINEAR_DODGE'
+type BlenderMode = 'LINEAR_BURN' | 'LINEAR_DODGE' | 'SOFT_LIGHT'
 
-/** Figma's plus darker and plus lighter: Skia has no blend mode for either. */
-const LINEAR_BLENDERS: Record<LinearBlendMode, SkslProgram<NoUniforms>> = {
+/** Figma modes Skia draws differently or not at all: plus darker, plus lighter, soft light. */
+const BLENDERS: Record<BlenderMode, SkslProgram<NoUniforms>> = {
   LINEAR_BURN: defineBlender('plus darker blender', plusDarkerSource),
-  LINEAR_DODGE: defineBlender('plus lighter blender', plusLighterSource)
+  LINEAR_DODGE: defineBlender('plus lighter blender', plusLighterSource),
+  SOFT_LIGHT: defineBlender('soft light blender', softLightSource)
+}
+
+function isBlenderMode(mode?: BlendMode): mode is BlenderMode {
+  return mode !== undefined && mode in BLENDERS
 }
 
 export function figmaBlendModeToSkia(
   ck: CanvasKit,
-  mode?: Exclude<BlendMode, LinearBlendMode>
+  mode?: Exclude<BlendMode, BlenderMode>
 ): SkBlendMode {
   switch (mode) {
     case 'DARKEN':
@@ -36,8 +42,6 @@ export function figmaBlendModeToSkia(
       return ck.BlendMode.ColorDodge
     case 'OVERLAY':
       return ck.BlendMode.Overlay
-    case 'SOFT_LIGHT':
-      return ck.BlendMode.SoftLight
     case 'HARD_LIGHT':
       return ck.BlendMode.HardLight
     case 'DIFFERENCE':
@@ -58,8 +62,8 @@ export function figmaBlendModeToSkia(
 }
 
 export function setPaintBlendMode(r: SkiaRenderer, paint: Paint, mode?: BlendMode): void {
-  if (mode === 'LINEAR_BURN' || mode === 'LINEAR_DODGE') {
-    paint.setBlender(compiledBlender(r.ck, r.shaders, LINEAR_BLENDERS[mode]))
+  if (isBlenderMode(mode)) {
+    paint.setBlender(compiledBlender(r.ck, r.shaders, BLENDERS[mode]))
     return
   }
   paint.setBlendMode(figmaBlendModeToSkia(r.ck, mode))
