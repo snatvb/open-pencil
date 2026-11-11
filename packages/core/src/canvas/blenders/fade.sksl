@@ -1,0 +1,5 @@
+uniform float opacity;
+
+half4 main(half4 src, half4 dst) {
+  return mix(dst, src, half(opacity));
+}

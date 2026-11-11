@@ -1,12 +1,11 @@
-import type {
-  Blender,
-  Canvas,
-  CanvasKit,
-  Paint,
-  Rect,
-  RuntimeEffect,
-  Shader
-} from '@open-pencil/canvaskit'
+import type { Blender, Canvas, CanvasKit, Paint, Rect, Shader } from '@open-pencil/canvaskit'
+
+import {
+  type CompiledProgram,
+  compileProgram,
+  type NoUniforms,
+  type SkslProgram
+} from '#core/canvas/sksl'
 
 /** A shader kept while the uniforms it was made with, joined as `key`, still hold. */
 interface KeptShader {
@@ -14,111 +13,99 @@ interface KeptShader {
   shader: Shader
 }
 
-interface KeptFadeBlender {
-  opacity: number
+/** A blender kept while the uniforms it was made with, joined as `key`, still hold. */
+interface KeptBlender {
+  key: string
   blender: Blender
 }
 
 /** Skia programs a renderer compiles on first use and keeps for the surface's lifetime. */
 export interface CompiledShaders {
-  diamondGradient: RuntimeEffect | null
-  pixelGridEffect: RuntimeEffect | null
-  pixelGrid: KeptShader | null
-  dotGridEffect: RuntimeEffect | null
-  dotGrid: KeptShader | null
-  linearBurn: Blender | null
-  linearDodge: Blender | null
-  fadeEffect: RuntimeEffect | null
-  fade: KeptFadeBlender | null
+  programs: Map<SkslProgram, CompiledProgram>
+  blenders: Map<SkslProgram, Blender>
+  kept: Map<SkslProgram, KeptShader>
+  keptBlenders: Map<SkslProgram, KeptBlender>
 }
 
-type EffectSlot = 'diamondGradient' | 'pixelGridEffect' | 'dotGridEffect'
-type ShaderSlot = 'pixelGrid' | 'dotGrid'
-
 export function createCompiledShaders(): CompiledShaders {
-  return {
-    diamondGradient: null,
-    pixelGridEffect: null,
-    pixelGrid: null,
-    dotGridEffect: null,
-    dotGrid: null,
-    linearBurn: null,
-    linearDodge: null,
-    fadeEffect: null,
-    fade: null
-  }
+  return { programs: new Map(), blenders: new Map(), kept: new Map(), keptBlenders: new Map() }
 }
 
 export function releaseCompiledShaders(shaders: CompiledShaders): void {
-  shaders.diamondGradient?.delete()
-  shaders.diamondGradient = null
-  shaders.pixelGridEffect?.delete()
-  shaders.pixelGridEffect = null
-  shaders.pixelGrid?.shader.delete()
-  shaders.pixelGrid = null
-  shaders.dotGridEffect?.delete()
-  shaders.dotGridEffect = null
-  shaders.dotGrid?.shader.delete()
-  shaders.dotGrid = null
-  shaders.linearBurn?.delete()
-  shaders.linearBurn = null
-  shaders.linearDodge?.delete()
-  shaders.linearDodge = null
-  shaders.fadeEffect?.delete()
-  shaders.fadeEffect = null
-  shaders.fade?.blender.delete()
-  shaders.fade = null
+  for (const { effect } of shaders.programs.values()) effect.delete()
+  for (const blender of shaders.blenders.values()) blender.delete()
+  for (const { shader } of shaders.kept.values()) shader.delete()
+  for (const { blender } of shaders.keptBlenders.values()) blender.delete()
+  shaders.programs.clear()
+  shaders.blenders.clear()
+  shaders.kept.clear()
+  shaders.keptBlenders.clear()
 }
 
-/** The program in `slot`, compiled from `source` the first time; `name` says what failed to compile. */
-export function compiledEffect(
+/** `program`, compiled the first time this renderer draws with it. */
+export function compiledProgram<U extends object>(
   ck: CanvasKit,
   shaders: CompiledShaders,
-  slot: EffectSlot,
-  source: string,
-  name: string
-): RuntimeEffect {
-  const kept = shaders[slot]
+  program: SkslProgram<U>
+): CompiledProgram<U> {
+  const kept = shaders.programs.get(program)
   if (kept) return kept
-  let error = ''
-  const effect = ck.RuntimeEffect.Make(source, (message) => {
-    error = message
-  })
-  if (!effect) throw new Error(`Cannot compile the ${name}: ${error}`)
-  shaders[slot] = effect
-  return effect
+  const compiled = compileProgram(ck, program)
+  shaders.programs.set(program, compiled)
+  return compiled
+}
+
+/** The blender `program` makes, with no uniforms, made the first time this renderer uses it. */
+export function compiledBlender(
+  ck: CanvasKit,
+  shaders: CompiledShaders,
+  program: SkslProgram<NoUniforms>
+): Blender {
+  const kept = shaders.blenders.get(program)
+  if (kept) return kept
+  const blender = compiledProgram(ck, shaders, program).effect.makeBlender([])
+  shaders.blenders.set(program, blender)
+  return blender
 }
 
 /**
- * The shader in `slot`, made again from `effect` only when `uniforms` change, so repaints at the
- * same view, or tiles at the same zoom, share one.
+ * `program`'s shader, made again only when its uniform `values` change, so repaints at the same
+ * view, or tiles at the same zoom, share one.
  */
-export function keptShader(
+export function keptShader<U extends object>(
+  ck: CanvasKit,
   shaders: CompiledShaders,
-  slot: ShaderSlot,
-  effect: RuntimeEffect,
-  uniforms: number[]
+  program: SkslProgram<U>,
+  values: NoInfer<U>
 ): Shader {
+  const compiled = compiledProgram(ck, shaders, program)
+  const uniforms = compiled.uniforms(values)
   const key = uniforms.join(',')
-  const kept = shaders[slot]
+  const kept = shaders.kept.get(program)
   if (kept?.key === key) return kept.shader
   kept?.shader.delete()
-  const shader = effect.makeShader(uniforms)
-  shaders[slot] = { key, shader }
+  const shader = compiled.effect.makeShader(uniforms)
+  shaders.kept.set(program, { key, shader })
   return shader
 }
 
-/** The fade blender made again only when `opacity` changes, so repaints share one. */
-export function keptFadeBlender(
+/** `program`'s blender, made again only when its uniform `values` change, so repaints share one. */
+export function keptBlender<U extends object>(
+  ck: CanvasKit,
   shaders: CompiledShaders,
-  effect: RuntimeEffect,
-  opacity: number
+  program: SkslProgram<U>,
+  values: NoInfer<U>
 ): Blender {
-  const kept = shaders.fade
-  if (kept?.opacity === opacity) return kept.blender
+  const compiled = compiledProgram(ck, shaders, program)
+  const uniforms = compiled.uniforms(values)
+  const key = uniforms.join(',')
+  const kept = shaders.keptBlenders.get(program)
+  if (kept?.key === key) {
+    return kept.blender
+  }
   kept?.blender.delete()
-  const blender = effect.makeBlender([opacity])
-  shaders.fade = { opacity, blender }
+  const blender = compiled.effect.makeBlender(uniforms)
+  shaders.keptBlenders.set(program, { key, blender })
   return blender
 }
 

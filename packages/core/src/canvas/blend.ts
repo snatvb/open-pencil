@@ -1,31 +1,20 @@
-import type {
-  Blender,
-  BlendMode as SkBlendMode,
-  CanvasKit,
-  Paint,
-  RuntimeEffect
-} from '@open-pencil/canvaskit'
+import type { Blender, BlendMode as SkBlendMode, CanvasKit, Paint } from '@open-pencil/canvaskit'
 import type { BlendMode, SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 
+import { compiledBlender, keptBlender } from '#core/canvas/renderer/shaders'
+import { defineBlender, type NoUniforms, type SkslProgram } from '#core/canvas/sksl'
+
+import fadeSource from './blenders/fade.sksl?raw'
+import plusDarkerSource from './blenders/plus-darker.sksl?raw'
+import plusLighterSource from './blenders/plus-lighter.sksl?raw'
 import type { SkiaRenderer } from './renderer'
-import { keptFadeBlender } from './renderer/shaders'
 
 type LinearBlendMode = 'LINEAR_BURN' | 'LINEAR_DODGE'
 
-/**
- * Figma's plus darker and plus lighter, in premultiplied sRGB with source-over coverage: the sum
- * less the overlap clamped at zero, and the sum clamped at the coverage (live-measured).
- */
-const LINEAR_BLEND_COLORS: Record<LinearBlendMode, string> = {
-  LINEAR_BURN: 'max(src.rgb + dst.rgb - src.a * dst.a, half3(0))',
-  LINEAR_DODGE: 'min(src.rgb + dst.rgb, half3(alpha))'
-}
-
-function linearBlendSource(mode: LinearBlendMode): string {
-  return `half4 main(half4 src, half4 dst) {
-  half alpha = src.a + dst.a * (1 - src.a);
-  return half4(${LINEAR_BLEND_COLORS[mode]}, alpha);
-}`
+/** Figma's plus darker and plus lighter: Skia has no blend mode for either. */
+const LINEAR_BLENDERS: Record<LinearBlendMode, SkslProgram<NoUniforms>> = {
+  LINEAR_BURN: defineBlender('plus darker blender', plusDarkerSource),
+  LINEAR_DODGE: defineBlender('plus lighter blender', plusLighterSource)
 }
 
 export function figmaBlendModeToSkia(
@@ -70,54 +59,24 @@ export function figmaBlendModeToSkia(
 
 export function setPaintBlendMode(r: SkiaRenderer, paint: Paint, mode?: BlendMode): void {
   if (mode === 'LINEAR_BURN' || mode === 'LINEAR_DODGE') {
-    paint.setBlender(linearBlender(r, mode))
+    paint.setBlender(compiledBlender(r.ck, r.shaders, LINEAR_BLENDERS[mode]))
     return
   }
   paint.setBlendMode(figmaBlendModeToSkia(r.ck, mode))
-}
-
-/** Skia has no blend mode for either: they are runtime blenders, compiled once per renderer. */
-function linearBlender(r: SkiaRenderer, mode: LinearBlendMode): Blender {
-  if (mode === 'LINEAR_BURN') return (r.shaders.linearBurn ??= compileLinearBlender(r.ck, mode))
-  return (r.shaders.linearDodge ??= compileLinearBlender(r.ck, mode))
-}
-
-function compileLinearBlender(ck: CanvasKit, mode: LinearBlendMode): Blender {
-  let error = ''
-  const effect = ck.RuntimeEffect.MakeForBlender(linearBlendSource(mode), (message) => {
-    error = message
-  })
-  if (!effect) throw new Error(`Cannot compile ${mode} blender: ${error}`)
-  const blender = effect.makeBlender([])
-  effect.delete()
-  return blender
 }
 
 export function needsIsolatedBlendLayer(mode?: BlendMode): boolean {
   return mode !== undefined && mode !== 'NORMAL' && mode !== 'PASS_THROUGH'
 }
 
-const FADE_BLENDER_SOURCE = `uniform float opacity;
-half4 main(half4 src, half4 dst) {
-  return mix(dst, src, half(opacity));
-}`
+const FADE_BLENDER = defineBlender<{ opacity: number }>('fade blender', fadeSource)
 
 /**
  * Mixes a layer into what is under it by `opacity`. A layer that starts as a copy of its backdrop
  * needs it: source-over at that alpha would count the backdrop twice where it is translucent.
  */
 export function fadeBlender(r: SkiaRenderer, opacity: number): Blender {
-  r.shaders.fadeEffect ??= compileFadeEffect(r.ck)
-  return keptFadeBlender(r.shaders, r.shaders.fadeEffect, opacity)
-}
-
-function compileFadeEffect(ck: CanvasKit): RuntimeEffect {
-  let error = ''
-  const effect = ck.RuntimeEffect.MakeForBlender(FADE_BLENDER_SOURCE, (message) => {
-    error = message
-  })
-  if (!effect) throw new Error(`Cannot compile the fade blender: ${error}`)
-  return effect
+  return keptBlender(r.ck, r.shaders, FADE_BLENDER, { opacity })
 }
 
 export function paintsBlendWithBackdrop(node: SceneNode): boolean {
