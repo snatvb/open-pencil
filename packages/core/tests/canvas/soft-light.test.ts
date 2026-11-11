@@ -352,8 +352,10 @@ describe('soft light shadows of overlapping layers, as Figma draws them', () => 
   })
 })
 
-describe('a pass-through group fading a soft light layer', () => {
-  test('fades it by the group opacity up to its anti-aliased edge, turned and off the grid', () => {
+describe('a pass-through group fading a blended layer', () => {
+  test.each(['SOFT_LIGHT', 'MULTIPLY'] as const)(
+    'fades a %s child by the group opacity up to its anti-aliased edge, turned and off the grid',
+    (childBlendMode) => {
     const scene = (opacity: number | null) => (graph: SceneGraph, pageId: string) => {
       graph.createNode('RECTANGLE', pageId, {
         width: SURFACE_WIDTH,
@@ -374,7 +376,7 @@ describe('a pass-through group fading a soft light layer', () => {
         width: placement.width,
         height: placement.height,
         fills: [solid([0, 0, 0])],
-        blendMode: 'SOFT_LIGHT'
+        blendMode: childBlendMode
       })
     }
     const backdrop = renderScene(scene(null))
@@ -385,5 +387,6 @@ describe('a pass-through group fading a soft light layer', () => {
     )
     expect(worst).toBeLessThanOrEqual(1.5)
     expect(Math.min(...opaque.filter((_, i) => i % 4 === 0))).toBeLessThan(80)
-  })
+    }
+  )
 })
