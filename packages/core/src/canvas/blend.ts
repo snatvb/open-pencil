@@ -1,4 +1,10 @@
-import type { Blender, BlendMode as SkBlendMode, CanvasKit, Paint } from '@open-pencil/canvaskit'
+import type {
+  Blender,
+  BlendMode as SkBlendMode,
+  Canvas,
+  CanvasKit,
+  Paint
+} from '@open-pencil/canvaskit'
 import type { BlendMode, SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 
 import { compiledBlender, keptBlender } from '#core/canvas/renderer/shaders'
@@ -7,6 +13,7 @@ import { defineBlender, type NoUniforms, type SkslProgram } from '#core/canvas/s
 import fadeSource from './blenders/fade.sksl?raw'
 import plusDarkerSource from './blenders/plus-darker.sksl?raw'
 import plusLighterSource from './blenders/plus-lighter.sksl?raw'
+import softLightSource from './blenders/soft-light.sksl?raw'
 import type { SkiaRenderer } from './renderer'
 
 type LinearBlendMode = 'LINEAR_BURN' | 'LINEAR_DODGE'
@@ -15,6 +22,22 @@ type LinearBlendMode = 'LINEAR_BURN' | 'LINEAR_DODGE'
 const LINEAR_BLENDERS: Record<LinearBlendMode, SkslProgram<NoUniforms>> = {
   LINEAR_BURN: defineBlender('plus darker blender', plusDarkerSource),
   LINEAR_DODGE: defineBlender('plus lighter blender', plusLighterSource)
+}
+
+const SOFT_LIGHT_BLENDER = defineBlender('soft light blender', softLightSource)
+
+function isLinearBlendMode(mode?: BlendMode): mode is LinearBlendMode {
+  return mode === 'LINEAR_BURN' || mode === 'LINEAR_DODGE'
+}
+
+function blenderFor(r: SkiaRenderer, mode?: BlendMode): SkslProgram<NoUniforms> | null {
+  if (isLinearBlendMode(mode)) {
+    return LINEAR_BLENDERS[mode]
+  }
+  if (mode === 'SOFT_LIGHT' && !r.builtInBlendModesOnly) {
+    return SOFT_LIGHT_BLENDER
+  }
+  return null
 }
 
 export function figmaBlendModeToSkia(
@@ -58,11 +81,66 @@ export function figmaBlendModeToSkia(
 }
 
 export function setPaintBlendMode(r: SkiaRenderer, paint: Paint, mode?: BlendMode): void {
-  if (mode === 'LINEAR_BURN' || mode === 'LINEAR_DODGE') {
-    paint.setBlender(compiledBlender(r.ck, r.shaders, LINEAR_BLENDERS[mode]))
+  const blender = blenderFor(r, mode)
+  if (blender) {
+    paint.setBlender(compiledBlender(r.ck, r.shaders, blender))
     return
   }
-  paint.setBlendMode(figmaBlendModeToSkia(r.ck, mode))
+  paint.setBlendMode(figmaBlendModeToSkia(r.ck, isLinearBlendMode(mode) ? 'NORMAL' : mode))
+}
+
+// Skia restores a runtime-blender layer over the whole clip; ours leave transparent pixels as is.
+function clipToBlendedLayer(r: SkiaRenderer, canvas: Canvas, bounds: Float32Array): void {
+  const matrix = canvas.getTotalMatrix()
+  const pixelX = 1 / Math.hypot(matrix[0], matrix[3])
+  const pixelY = 1 / Math.hypot(matrix[1], matrix[4])
+  if (!Number.isFinite(pixelX) || !Number.isFinite(pixelY)) {
+    return
+  }
+  const [left, top, right, bottom] = bounds
+  const grown = r.ck.LTRBRect(left - pixelX, top - pixelY, right + pixelX, bottom + pixelY)
+  canvas.clipRect(grown, r.ck.ClipOp.Intersect, true)
+}
+
+/** Opens a layer clipped to its bounds; returns the saves `restoreBlendedLayer` closes. */
+export function saveClippedLayer(
+  r: SkiaRenderer,
+  canvas: Canvas,
+  paint: Paint,
+  bounds: Float32Array | null,
+  flags = 0
+): number {
+  if (!bounds) {
+    canvas.saveLayer(paint, bounds, null, flags)
+    return 1
+  }
+  canvas.save()
+  clipToBlendedLayer(r, canvas, bounds)
+  canvas.saveLayer(paint, bounds, null, flags)
+  return 2
+}
+
+/** Opens a layer composited with `mode`; returns the saves `restoreBlendedLayer` closes. */
+export function saveBlendedLayer(
+  r: SkiaRenderer,
+  canvas: Canvas,
+  paint: Paint,
+  mode: BlendMode | undefined,
+  bounds: Float32Array | null,
+  flags = 0
+): number {
+  setPaintBlendMode(r, paint, mode)
+  if (blenderFor(r, mode)) {
+    return saveClippedLayer(r, canvas, paint, bounds, flags)
+  }
+  canvas.saveLayer(paint, bounds, null, flags)
+  return 1
+}
+
+export function restoreBlendedLayer(canvas: Canvas, saves: number): void {
+  for (let restored = 0; restored < saves; restored++) {
+    canvas.restore()
+  }
 }
 
 export function needsIsolatedBlendLayer(mode?: BlendMode): boolean {

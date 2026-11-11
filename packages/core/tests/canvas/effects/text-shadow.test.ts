@@ -37,7 +37,12 @@ describe('Text shadows follow the glyphs, not the bounding box (Behavioral)', ()
     renderEffects(r, asCanvas(canvas), node, TEST_GRAPH, 'behind')
 
     expect(r.getCachedDropShadow).toHaveBeenCalled()
-    expect(canvas.saveLayer).toHaveBeenCalledWith(expect.anything(), expect.any(Float32Array))
+    expect(canvas.saveLayer).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(Float32Array),
+      null,
+      0
+    )
     expect(r.ck.LTRBRect).toHaveBeenCalledWith(-20, -20, 125, 125)
     expect(r.paintShapeContent).toHaveBeenCalledTimes(1)
   })

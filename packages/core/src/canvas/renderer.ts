@@ -83,6 +83,7 @@ import type { TransientCanvasPreview } from './renderer/transient-previews'
 import type { RenderOverlays, RulerTheme, SelectionTheme } from './renderer/types'
 import { RenderedBoundsCache } from './renderer/visual-bounds'
 import * as Scene from './scene'
+import * as Sections from './sections'
 import { type EffectPass, renderEffects as renderShadowEffects } from './shadows'
 import * as Shapes from './shapes'
 import * as Strokes from './strokes'
@@ -196,6 +197,8 @@ export class SkiaRenderer {
   readonly images = createRendererImages()
   viewportImageRendering = false
   halfFloatLayers = false
+  /** Skia's PDF backend writes only built-in blend modes, never a runtime blender. */
+  builtInBlendModesOnly = false
   nodePaths = new NodePathCaches()
   /** Each node's picture of itself with its effects, good for the font generation it was recorded at. */
   readonly nodePictures = new Map<string, NodePictureEntry>()
@@ -817,11 +820,11 @@ export class SkiaRenderer {
   }
 
   renderSection(canvas: Canvas, node: SceneNode, graph: SceneGraph): void {
-    Scene.renderSection(this, canvas, node, graph)
+    Sections.renderSection(this, canvas, node, graph)
   }
 
   renderComponentSet(canvas: Canvas, node: SceneNode, graph: SceneGraph): void {
-    Scene.renderComponentSet(this, canvas, node, graph)
+    Sections.renderComponentSet(this, canvas, node, graph)
   }
 
   renderShape(canvas: Canvas, node: SceneNode, graph: SceneGraph): void {

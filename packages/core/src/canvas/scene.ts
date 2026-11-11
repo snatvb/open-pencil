@@ -6,7 +6,6 @@ import Matrix, { type Mat3 } from '@open-pencil/scene-graph/matrix'
 import { isLayerContainer } from '@open-pencil/scene-graph/node-defaults'
 import { textLinesReach } from '@open-pencil/scene-graph/text'
 
-import { drawIndividualSideStrokes } from '#core/canvas/strokes/sides'
 import { nodeOrientationMatrix, projectedNode } from '#core/geometry'
 import { drawnLayerBlurReach, mapVisualBounds } from '#core/geometry/render-bounds'
 import { fontManager } from '#core/text/font/manager'
@@ -16,7 +15,9 @@ import {
   fadeBlender,
   needsIsolatedBlendLayer,
   paintsBlendWithBackdrop,
-  setPaintBlendMode
+  restoreBlendedLayer,
+  saveBlendedLayer,
+  saveClippedLayer
 } from './blend'
 import { blurredContent, layerBlurFilter } from './blur/layer'
 import { renderBooleanOperation } from './boolean'
@@ -31,15 +32,8 @@ import {
   visibleLayerBlur
 } from './renderer/visual-bounds'
 import { isolatesInnerShadows, renderLayerShadows } from './shadows'
+import { forVisibleStrokes } from './strokes'
 import {
-  configureStrokePaint,
-  drawDashedRRectWithSolidCorners,
-  drawRRectStrokeWithAlign,
-  drawStyledRRectStroke,
-  forVisibleStrokes
-} from './strokes'
-import {
-  drawFigmaDashes,
   isPathTextWithStrokeGeometry,
   paintNodeStrokes,
   vectorStrokePaths
@@ -413,20 +407,28 @@ export function renderNode(
           overlays.rotationPreview
         )
       : null
+  let nodeLayerSaves = 0
   if (needsNodeLayer) {
     if (fadesOverBackdrop(graph, node)) {
       r.opacityPaint.setAlphaf(1)
       r.opacityPaint.setBlender(fadeBlender(r, node.opacity))
-      canvas.saveLayer(
+      nodeLayerSaves = saveClippedLayer(
+        r,
+        canvas,
         r.opacityPaint,
         layerBounds,
-        null,
         r.ck.SaveLayerInitWithPrevious | r.compositingLayerFlags()
       )
     } else {
       r.opacityPaint.setAlphaf(node.opacity)
-      setPaintBlendMode(r, r.opacityPaint, node.blendMode)
-      canvas.saveLayer(r.opacityPaint, layerBounds, null, r.compositingLayerFlags())
+      nodeLayerSaves = saveBlendedLayer(
+        r,
+        canvas,
+        r.opacityPaint,
+        node.blendMode,
+        layerBounds,
+        r.compositingLayerFlags()
+      )
     }
   }
 
@@ -465,74 +467,11 @@ export function renderNode(
     r.effectLayerPaint.setBlendMode(r.ck.BlendMode.SrcOver)
   }
   if (needsNodeLayer) {
-    canvas.restore()
+    restoreBlendedLayer(canvas, nodeLayerSaves)
     r.opacityPaint.setAlphaf(1)
     r.opacityPaint.setBlendMode(r.ck.BlendMode.SrcOver)
   }
   canvas.restore()
-}
-
-function makeNodeRRect(r: SkiaRenderer, node: SceneNode, radius: number): Float32Array {
-  const rect = r.ck.LTRBRect(0, 0, node.width, node.height)
-  return r.ck.RRectXY(rect, radius, radius)
-}
-
-/** Fill a section's or set's rounded bounds and return them, for its strokes to follow. */
-function fillRoundedBounds(
-  r: SkiaRenderer,
-  canvas: Canvas,
-  node: SceneNode,
-  graph: SceneGraph
-): Float32Array {
-  const rrect = makeNodeRRect(r, node, node.cornerRadius)
-  drawVisibleFills(r, node, graph, () => canvas.drawRRect(rrect, r.fillPaint))
-  return rrect
-}
-
-export function renderSection(
-  r: SkiaRenderer,
-  canvas: Canvas,
-  node: SceneNode,
-  graph: SceneGraph
-): void {
-  const rrect = fillRoundedBounds(r, canvas, node, graph)
-  forVisibleStrokes(r, node, graph, (stroke, color) => {
-    configureStrokePaint(r, node, stroke, color)
-
-    if (node.independentStrokeWeights) drawIndividualSideStrokes(r, canvas, node, stroke)
-    else if (!drawFigmaDashes(r, canvas, node, stroke)) {
-      drawRRectStrokeWithAlign(r, canvas, rrect, node, stroke)
-    }
-  })
-}
-
-export function renderComponentSet(
-  r: SkiaRenderer,
-  canvas: Canvas,
-  node: SceneNode,
-  graph: SceneGraph
-): void {
-  const rrect = fillRoundedBounds(r, canvas, node, graph)
-  // A set without a stroke gets its dashed editing border from the overlay pass.
-  forVisibleStrokes(r, node, graph, (stroke, color) => {
-    configureStrokePaint(r, node, stroke, color)
-    if (drawFigmaDashes(r, canvas, node, stroke)) return
-    const dashPhase = stroke.dashPattern?.[1] ?? 0
-    if (stroke.dashPattern && stroke.dashPattern.length > 0) {
-      drawDashedRRectWithSolidCorners(
-        r,
-        canvas,
-        node,
-        stroke,
-        color,
-        // Skia fits a rounded rect's radii to its bounds; the dashed outline must match the fill.
-        Math.min(node.cornerRadius, node.width / 2, node.height / 2),
-        dashPhase
-      )
-    } else {
-      drawStyledRRectStroke(r, canvas, rrect, node, stroke, color, dashPhase)
-    }
-  })
 }
 
 /** The effects `renderShape` draws: a container's shadows are drawn around its children instead. */
