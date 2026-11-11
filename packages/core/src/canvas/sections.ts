@@ -41,8 +41,9 @@ export function renderSection(
   forVisibleStrokes(r, node, graph, (stroke, color) => {
     configureStrokePaint(r, node, stroke, color)
 
-    if (node.independentStrokeWeights) drawIndividualSideStrokes(r, canvas, node, stroke)
-    else if (!drawFigmaDashes(r, canvas, node, stroke)) {
+    if (node.independentStrokeWeights) {
+      drawIndividualSideStrokes(r, canvas, node, stroke)
+    } else if (!drawFigmaDashes(r, canvas, node, stroke)) {
       drawRRectStrokeWithAlign(r, canvas, rrect, node, stroke)
     }
   })
@@ -58,7 +59,9 @@ export function renderComponentSet(
   // A set without a stroke gets its dashed editing border from the overlay pass.
   forVisibleStrokes(r, node, graph, (stroke, color) => {
     configureStrokePaint(r, node, stroke, color)
-    if (drawFigmaDashes(r, canvas, node, stroke)) return
+    if (drawFigmaDashes(r, canvas, node, stroke)) {
+      return
+    }
     const dashPhase = stroke.dashPattern?.[1] ?? 0
     if (stroke.dashPattern && stroke.dashPattern.length > 0) {
       drawDashedRRectWithSolidCorners(
