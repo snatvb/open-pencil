@@ -1,7 +1,6 @@
 import { expect } from 'bun:test'
 
 import type { CanvasKit } from '@open-pencil/canvaskit'
-
 import type { SkiaRenderer } from '@open-pencil/core/canvas'
 import { renderNodesToImage } from '@open-pencil/core/io/formats/raster'
 import { SceneGraph } from '@open-pencil/scene-graph'
