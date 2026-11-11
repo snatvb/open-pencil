@@ -6,7 +6,8 @@ import { SceneGraph, type BlendMode, type Fill, type SceneNode } from '@open-pen
 import { expectDefined } from '@open-pencil/test-support/assert'
 
 import { figmaBlendModeToSkia } from '#core/canvas/blend'
-import { renderNode, renderSection } from '#core/canvas/scene'
+import { renderNode } from '#core/canvas/scene'
+import { renderSection } from '#core/canvas/sections'
 import { RenderedBoundsCache } from '#core/canvas/renderer/visual-bounds'
 import { asCanvas, asCanvasKit, asRenderer } from './helpers'
 
