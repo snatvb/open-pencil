@@ -26,8 +26,8 @@ import { wrapNodes } from '#core/editor/structure/container-wrap'
 import { graphOf } from '#core/figma-api/graph'
 import { measurePropertyText } from '#core/layout/property-text'
 
-import type { NodeProxyInternals, ProxyThis } from './accessor-utils'
-import { assertProxyEditable, raw, updateNode } from './accessor-utils'
+import type { NodeProxyInternals, ProxyThis } from './accessors/utils'
+import { assertProxyEditable, raw, updateNode } from './accessors/utils'
 import type { FigmaNodeProxy } from './proxy'
 import {
   assertSlotSettings,
