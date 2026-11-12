@@ -10,7 +10,6 @@ import {
   type PropertyBinding
 } from './bindings/properties'
 import { declareSourceVariableBindingUnits } from './bindings/variables'
-import { applyDerivedEntry } from './derived-symbol-data'
 import {
   ownLayers,
   type AssignmentGroup,
@@ -18,12 +17,12 @@ import {
   type PropertyLayer,
   type StructuralLayer
 } from './layers'
+import { applyDerivedBounds, applyPropertyClaims, createClaimContext } from './occurrence/claims'
 import { createOccurrence, type Subtree } from './occurrence/create'
 import { createModeScopes, type ModeScope } from './occurrence/modes'
 import { isRootGuid, pathError, SegmentError } from './occurrence/path'
 import { resolveRoot, type RootResolution } from './occurrence/root'
 import type { InstanceOccurrence, InterpretInstanceOptions } from './occurrence/types'
-import { createPropertyClaims } from './property-claims'
 import { applyPlacedConstraints } from './resize'
 import { applyInstanceLayoutScale } from './scale/layout'
 import {
@@ -36,7 +35,7 @@ import {
   type InterpreterIndex
 } from './source-index'
 import { laidOutAround, placedRootRecord } from './swapped-root'
-import { assignedSlotContent, type DerivedSymbolOverride } from './types'
+import { assignedSlotContent } from './types'
 
 /**
  * Figma's instance model reduces to three things: an instance expands its component's
@@ -95,10 +94,7 @@ function interpretRoot(
   const { sources, children } = index
   const expanding = new Set<string>()
   const modeScopes = createModeScopes(index)
-  /** Fields set by an owner's assignment, by the rank of that owner. */
-  const assignedFields = new WeakMap<InstanceOccurrence, Map<string, number>>()
-  /** Components an occurrence expanded before an outer decision replaced them. */
-  const replacedComponents = new WeakMap<InstanceOccurrence, readonly GUID[]>()
+  const claimContext = createClaimContext(index, options)
 
   /** A layer written against a component that an outer decision replaced is stale, not wrong. */
   const isStaleLayer = ({ boundary }: StructuralLayer): boolean =>
@@ -142,25 +138,6 @@ function interpretRoot(
       else routed.set(childId, [next])
     }
     return routed
-  }
-
-  const { applyPropertyClaim, resolveClaimTarget } = createPropertyClaims({
-    index,
-    options,
-    assignedFields,
-    replacedComponents
-  })
-
-  const applyDerivedBounds = (owner: InstanceOccurrence, source: NodeChange): void => {
-    if (!options.derivedBounds) return
-    const derived = source.derivedSymbolData as DerivedSymbolOverride[] | undefined
-    for (const entry of derived ?? []) {
-      const path = entry.guidPath?.guids
-      if (!path?.length) continue
-      const target = resolveClaimTarget(owner, path)
-      if (!target || target === owner) continue // Placed root bounds belong to its NodeChange.
-      applyDerivedEntry(target, entry)
-    }
   }
 
   /** Bind the record's fields from the enclosing component scope, recording provenance. */
@@ -237,8 +214,10 @@ function interpretRoot(
       const placed = placedRootRecord(source, raw, expandedComponent, sources)
       const occurrence = createOccurrence(sources, id, raw, placed, root, subtree, record.claims)
       if (record.slotContent) occurrence.slotContentId = record.slotContent
-      assignedFields.set(occurrence, record.bound)
-      if (subtree.base && root.replaced.length) replacedComponents.set(occurrence, root.replaced)
+      claimContext.assignedFields.set(occurrence, record.bound)
+      if (subtree.base && root.replaced.length) {
+        claimContext.replacedComponents.set(occurrence, root.replaced)
+      }
       declareSourceVariableBindingUnits(occurrence, placed)
       const claims = subtree.dangling
         ? own.claims.filter(({ path }) => path.length === 1 && isRootGuid(occurrence, path[0]))
@@ -357,14 +336,13 @@ function interpretRoot(
     modes: ModeScope,
     pinsSize: boolean
   ): void => {
-    for (const claim of claims) {
-      const target = resolveClaimTarget(occurrence, claim.path)
-      if (target) applyPropertyClaim(occurrence, rank, target, claim)
-    }
+    applyPropertyClaims(claimContext, occurrence, rank, claims)
     applyInstanceLayoutScale(occurrence, source)
     applyPlacedConstraints(occurrence, base, source)
     modeScopes.applySavedSize(occurrence, source, modes, pinsSize)
-    if (derived) applyDerivedBounds(occurrence, source)
+    if (derived) {
+      applyDerivedBounds(claimContext, occurrence, source)
+    }
   }
 
   if (sources.get(rootId)?.type !== expectedType) {
