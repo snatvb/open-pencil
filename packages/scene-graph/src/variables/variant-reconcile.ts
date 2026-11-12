@@ -1,6 +1,5 @@
 import { partition } from 'es-toolkit/array'
 
-import { appendAll } from '../arrays'
 import {
   createVariantLookup,
   instanceVariant,
@@ -11,6 +10,7 @@ import type { SceneGraph } from '../graph'
 import { instanceMainComponent } from '../instances/main-component'
 import type { ComponentPropertyDefinition, SceneNode } from '../types'
 import { createBatchVariableResolver, type BatchVariableResolver } from './resolution'
+import { subtreeNodes } from './subtree'
 import {
   boundVariantTarget,
   followOccurrences,
@@ -40,20 +40,6 @@ export function createVariantWalk(
     lookup: createVariantLookup(graph),
     onVariantSwap
   }
-}
-
-export function subtreeNodes(graph: SceneGraph, roots: Iterable<string>): SceneNode[] {
-  const nodes: SceneNode[] = []
-  const pending = [...roots]
-  for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
-    const node = graph.getNode(id)
-    if (!node) {
-      continue
-    }
-    nodes.push(node)
-    appendAll(pending, node.childIds)
-  }
-  return nodes
 }
 
 function nodeDepth(graph: SceneGraph, node: SceneNode): number {
