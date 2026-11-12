@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import { SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
+import { appendAll } from '@open-pencil/scene-graph/arrays'
 import { recordInstanceOverride } from '@open-pencil/scene-graph/instances'
 import {
   collectionsBoundIn,
@@ -158,7 +159,10 @@ describe('variant bindings', () => {
       { subtrees: [frame.id] },
       {
         onVariantSwap: (instanceId, definitions) => {
-          reapplied.push(...definitions.map((definition) => `${instanceId}/${definition.id}`))
+          appendAll(
+            reapplied,
+            definitions.map((definition) => `${instanceId}/${definition.id}`)
+          )
         }
       }
     )

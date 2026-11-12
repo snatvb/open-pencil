@@ -4,6 +4,7 @@ import { SkiaRenderer } from '@open-pencil/core/canvas'
 import { getCanvasKit } from '@open-pencil/core/canvaskit'
 import { renderNodesToImage } from '@open-pencil/core/io/formats/raster'
 import { SceneGraph, type Fill } from '@open-pencil/scene-graph'
+import { maxOf } from '@open-pencil/scene-graph/arrays'
 import { expectDefined } from '@open-pencil/test-support/assert'
 
 const ck = await getCanvasKit()
@@ -106,12 +107,12 @@ test('a shade masked by a ramp inside nested faded groups exports as dark as Fig
   const errors = exportErrors({ outer: 0.7, inner: 0.85, shade: 0.7 })
 
   expect(Math.abs(mean(errors))).toBeLessThan(0.15)
-  expect(Math.max(...errors.map(Math.abs))).toBeLessThanOrEqual(0.6)
+  expect(maxOf(errors.map(Math.abs))).toBeLessThanOrEqual(0.6)
 })
 
 test('an opaque shade masked by a ramp exports at 2x as dark as Figma draws it', () => {
   const errors = exportErrors({ outer: 1, inner: 1, shade: 1 }, 2)
 
   expect(Math.abs(mean(errors))).toBeLessThan(0.15)
-  expect(Math.max(...errors.map(Math.abs))).toBeLessThanOrEqual(0.6)
+  expect(maxOf(errors.map(Math.abs))).toBeLessThanOrEqual(0.6)
 })

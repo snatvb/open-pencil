@@ -4,6 +4,7 @@ import { SkiaRenderer } from '@open-pencil/core/canvas'
 import { getCanvasKit } from '@open-pencil/core/canvaskit'
 import { renderNodesToImage } from '@open-pencil/core/io/formats/raster'
 import { SceneGraph, type Stroke, type VectorNetwork } from '@open-pencil/scene-graph'
+import { maxOf } from '@open-pencil/scene-graph/arrays'
 import { expectDefined } from '@open-pencil/test-support/assert'
 
 const ck = await getCanvasKit()
@@ -58,8 +59,8 @@ function redRow(
     fills: [{ type: 'SOLID', color: { r: 1, g: 1, b: 1, a: 1 }, opacity: 1, visible: true }],
     clipsContent: true
   })
-  const width = Math.max(...network.vertices.map((vertex) => vertex.x))
-  const height = Math.max(...network.vertices.map((vertex) => vertex.y))
+  const width = maxOf(network.vertices.map((vertex) => vertex.x))
+  const height = maxOf(network.vertices.map((vertex) => vertex.y))
   graph.createNode('VECTOR', host.id, {
     x: LEFT,
     y: TOP,

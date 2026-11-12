@@ -13,6 +13,7 @@ import { isEmptyObject } from 'es-toolkit/predicate'
 import type { GUID } from '@open-pencil/kiwi/fig'
 import type { NodeChange, VariableDataEntry } from '@open-pencil/kiwi/fig/codec'
 import { guidToString } from '@open-pencil/kiwi/fig/guid'
+import { appendAll } from '@open-pencil/scene-graph/arrays'
 import { parseVariantName } from '@open-pencil/scene-graph/variant-name'
 
 type ResolveReference = (reference: NodeChange['variableSetID']) => string | undefined
@@ -282,7 +283,7 @@ export function createVariantDependencies({
         ? [override.overriddenSymbolID]
         : symbolsAtPath(root, path, swaps)
       for (const symbol of symbols) {
-        variants.push(...variantsFor(symbol, bindings))
+        appendAll(variants, variantsFor(symbol, bindings))
       }
     }
     return variants

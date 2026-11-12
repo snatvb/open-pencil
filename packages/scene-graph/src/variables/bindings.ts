@@ -56,6 +56,7 @@ export {
   VISIBILITY_VARIABLE_TYPES,
   type PaintBindingList
 } from './fields'
+import { appendAll } from '../arrays'
 
 /** New declarations belong to the outermost occurrence, bounded by a component definition. */
 export function variableBindingOwner(graph: SceneGraph, node: SceneNode): SceneNode {
@@ -163,7 +164,7 @@ function boundVariableIds(node: SceneNode, styles: TextStyleLookup): string[] {
     ...node.styleRuns.flatMap((run) => Object.values(effectiveRunBoundVariables(run, styles)))
   ]
   if (hasVariantBindings(node)) {
-    ids.push(...Object.values(node.variantBindings))
+    appendAll(ids, Object.values(node.variantBindings))
   }
   return ids.filter((id): id is string => typeof id === 'string')
 }

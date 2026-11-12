@@ -1,3 +1,4 @@
+import { appendAll } from '../arrays'
 import type { SceneGraph } from '../graph'
 import { variableValueReferences } from './value'
 
@@ -16,7 +17,7 @@ export function collectionsReachedBy(
     }
     collections.add(variable.collectionId)
     for (const value of Object.values(variable.valuesByMode)) {
-      queue.push(...variableValueReferences(value))
+      appendAll(queue, variableValueReferences(value))
     }
   }
   return collections

@@ -18,6 +18,7 @@ import {
 import { SkiaRenderer } from '@open-pencil/core/canvas'
 import { getCanvasKit } from '@open-pencil/core/canvaskit'
 import { SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
+import { appendAll } from '@open-pencil/scene-graph/arrays'
 import { expectDefined } from '@open-pencil/test-support/assert'
 
 const SURFACE = 100
@@ -83,7 +84,7 @@ function regionAt(pixels: Uint8Array, left: number): number[] {
   const region: number[] = []
   for (let y = 0; y < TARGET; y++) {
     for (let x = left; x < left + TARGET; x++) {
-      region.push(...pixelAt(pixels, x, y))
+      appendAll(region, pixelAt(pixels, x, y))
     }
   }
   return region

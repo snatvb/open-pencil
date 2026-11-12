@@ -1,5 +1,6 @@
 import { partition } from 'es-toolkit/array'
 
+import { appendAll } from '../arrays'
 import {
   createVariantLookup,
   instanceVariant,
@@ -50,7 +51,7 @@ export function subtreeNodes(graph: SceneGraph, roots: Iterable<string>): SceneN
       continue
     }
     nodes.push(node)
-    pending.push(...node.childIds)
+    appendAll(pending, node.childIds)
   }
   return nodes
 }

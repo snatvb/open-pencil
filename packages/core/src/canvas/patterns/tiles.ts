@@ -1,5 +1,6 @@
 import type { Shader } from '@open-pencil/canvaskit'
 import type { SceneGraph } from '@open-pencil/scene-graph'
+import { appendAll } from '@open-pencil/scene-graph/arrays'
 
 import { ResourceCache } from '#core/cache/resource'
 import type { SkiaRenderer } from '#core/canvas/renderer'
@@ -60,7 +61,7 @@ export class PatternTiles {
         const sourceId = current.id
         this.targetsBySource.delete(sourceId)
         this.shaders.deleteWhere((tile) => tile.sourceId === sourceId)
-        targets.push(...sourceTargets)
+        appendAll(targets, sourceTargets)
       }
       current = current.parentId ? graph.getNode(current.parentId) : undefined
     }

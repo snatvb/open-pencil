@@ -3,6 +3,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { SkiaRenderer } from '@open-pencil/core/canvas'
 import { getCanvasKit } from '@open-pencil/core/canvaskit'
 import { SceneGraph, type BlendMode, type Effect, type Fill } from '@open-pencil/scene-graph'
+import { maxOf, minOf } from '@open-pencil/scene-graph/arrays'
 import { expectDefined } from '@open-pencil/test-support/assert'
 
 import { expectRgbaPixels } from './helpers'
@@ -228,9 +229,9 @@ describe('soft light, as Figma draws it', () => {
     }
     const group = renderScene(turnedSource('group'))
     const fill = renderScene(turnedSource('fill'))
-    const worst = Math.max(...group.map((channel, index) => Math.abs(channel - fill[index])))
+    const worst = maxOf(group.map((channel, index) => Math.abs(channel - fill[index])))
     expect(worst).toBeLessThanOrEqual(1)
-    expect(Math.min(...group.filter((_, index) => index % 4 === 0))).toBeLessThan(80)
+    expect(minOf(group.filter((_, index) => index % 4 === 0))).toBeLessThan(80)
   })
 })
 
@@ -382,11 +383,11 @@ describe('a pass-through group fading a blended layer', () => {
       const backdrop = renderScene(scene(null))
       const opaque = renderScene(scene(1))
       const half = renderScene(scene(0.5))
-      const worst = Math.max(
-        ...half.map((channel, i) => Math.abs(channel - (backdrop[i] + opaque[i]) / 2))
+      const worst = maxOf(
+        half.map((channel, i) => Math.abs(channel - (backdrop[i] + opaque[i]) / 2))
       )
       expect(worst).toBeLessThanOrEqual(1.5)
-      expect(Math.min(...opaque.filter((_, i) => i % 4 === 0))).toBeLessThan(80)
+      expect(minOf(opaque.filter((_, i) => i % 4 === 0))).toBeLessThan(80)
     }
   )
 })

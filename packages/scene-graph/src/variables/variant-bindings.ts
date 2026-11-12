@@ -1,5 +1,6 @@
 import { partition } from 'es-toolkit/array'
 
+import { appendAll } from '../arrays'
 import {
   findComponentPropertyTargets,
   reapplyComponentPropertyAssignments,
@@ -219,7 +220,8 @@ export function followOccurrences(
       hasInstanceOverride(owner.instanceOverrides, owner.id, occurrence.id, 'componentId')
     if (owner && occurrence.id !== source.id && !swapped) {
       show(occurrence)
-      followed.push(occurrence, ...followOccurrences(graph, occurrence, show))
+      followed.push(occurrence)
+      appendAll(followed, followOccurrences(graph, occurrence, show))
     }
   }
   return followed

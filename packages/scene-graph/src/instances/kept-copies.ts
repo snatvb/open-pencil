@@ -1,6 +1,7 @@
 import { omitBy } from 'es-toolkit/object'
 import { isUndefined } from 'es-toolkit/predicate'
 
+import { appendAll } from '../arrays'
 import type { SceneGraph } from '../graph'
 import type { SceneNode } from '../types'
 import { DEFAULT_HISTORY_LIMIT } from '../undo'
@@ -193,7 +194,10 @@ export function keptCopiesWithin(graph: SceneGraph, nodeIds: Iterable<string>): 
   for (const parentId of store ? parents : []) {
     for (const kept of store?.byParent.get(parentId)?.values() ?? []) {
       found.push(kept)
-      parents.push(...kept.nodes.map((node) => node.id))
+      appendAll(
+        parents,
+        kept.nodes.map((node) => node.id)
+      )
     }
   }
   return found
