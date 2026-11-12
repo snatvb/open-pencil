@@ -1,11 +1,11 @@
 import { afterAll, describe, expect, test } from 'bun:test'
 
-import { expectDefined } from '@open-pencil/test-support/assert'
 import { TARGET, addOutlineSource, addTarget } from '#core-tests/helpers/patterns'
 
 import { SkiaRenderer } from '@open-pencil/core/canvas'
 import { getCanvasKit } from '@open-pencil/core/canvaskit'
 import { SceneGraph } from '@open-pencil/scene-graph'
+import { expectDefined } from '@open-pencil/test-support/assert'
 
 import { patternTilesOf } from '#core/canvas/patterns/tiles'
 

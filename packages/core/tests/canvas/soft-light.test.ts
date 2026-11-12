@@ -356,37 +356,37 @@ describe('a pass-through group fading a blended layer', () => {
   test.each(['SOFT_LIGHT', 'MULTIPLY'] as const)(
     'fades a %s child by the group opacity up to its anti-aliased edge, turned and off the grid',
     (childBlendMode) => {
-    const scene = (opacity: number | null) => (graph: SceneGraph, pageId: string) => {
-      graph.createNode('RECTANGLE', pageId, {
-        width: SURFACE_WIDTH,
-        height: SURFACE_HEIGHT,
-        fills: [solid([128, 128, 128])]
-      })
-      if (opacity === null) {
-        return
+      const scene = (opacity: number | null) => (graph: SceneGraph, pageId: string) => {
+        graph.createNode('RECTANGLE', pageId, {
+          width: SURFACE_WIDTH,
+          height: SURFACE_HEIGHT,
+          fills: [solid([128, 128, 128])]
+        })
+        if (opacity === null) {
+          return
+        }
+        const placement = { x: 20.5, y: 4.3, width: 20.6, height: 14.4, rotation: 17 }
+        const group = graph.createNode('FRAME', pageId, {
+          ...placement,
+          fills: [],
+          blendMode: 'PASS_THROUGH',
+          opacity
+        })
+        graph.createNode('RECTANGLE', group.id, {
+          width: placement.width,
+          height: placement.height,
+          fills: [solid([0, 0, 0])],
+          blendMode: childBlendMode
+        })
       }
-      const placement = { x: 20.5, y: 4.3, width: 20.6, height: 14.4, rotation: 17 }
-      const group = graph.createNode('FRAME', pageId, {
-        ...placement,
-        fills: [],
-        blendMode: 'PASS_THROUGH',
-        opacity
-      })
-      graph.createNode('RECTANGLE', group.id, {
-        width: placement.width,
-        height: placement.height,
-        fills: [solid([0, 0, 0])],
-        blendMode: childBlendMode
-      })
-    }
-    const backdrop = renderScene(scene(null))
-    const opaque = renderScene(scene(1))
-    const half = renderScene(scene(0.5))
-    const worst = Math.max(
-      ...half.map((channel, i) => Math.abs(channel - (backdrop[i] + opaque[i]) / 2))
-    )
-    expect(worst).toBeLessThanOrEqual(1.5)
-    expect(Math.min(...opaque.filter((_, i) => i % 4 === 0))).toBeLessThan(80)
+      const backdrop = renderScene(scene(null))
+      const opaque = renderScene(scene(1))
+      const half = renderScene(scene(0.5))
+      const worst = Math.max(
+        ...half.map((channel, i) => Math.abs(channel - (backdrop[i] + opaque[i]) / 2))
+      )
+      expect(worst).toBeLessThanOrEqual(1.5)
+      expect(Math.min(...opaque.filter((_, i) => i % 4 === 0))).toBeLessThan(80)
     }
   )
 })

@@ -2,8 +2,6 @@ import { describe, expect, test } from 'bun:test'
 
 import { SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
 import { captureGraphCheckpoint } from '@open-pencil/scene-graph/checkpoint'
-import { setInstanceOverride } from '@open-pencil/scene-graph/instances/overrides'
-import { DEFAULT_HISTORY_LIMIT } from '@open-pencil/scene-graph/undo'
 import {
   dropKeptTargets,
   forgetKeptCopiesIn,
@@ -13,6 +11,8 @@ import {
   keptNodeCount,
   takeKeptCopy
 } from '@open-pencil/scene-graph/instances'
+import { setInstanceOverride } from '@open-pencil/scene-graph/instances/overrides'
+import { DEFAULT_HISTORY_LIMIT } from '@open-pencil/scene-graph/undo'
 
 function present<T>(value: T | null | undefined): T {
   if (value === null || value === undefined) {

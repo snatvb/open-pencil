@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 
-import { expectDefined } from '@open-pencil/test-support/assert'
 import { boundChip, layerNamed, showMode, withOwnLayers } from '#core-tests/helpers/bound-variants'
+
+import { expectDefined } from '@open-pencil/test-support/assert'
 
 describe('variant bindings in the editor', () => {
   test('choosing a variant removes the binding of its property, and undo brings it back', () => {

@@ -1,8 +1,5 @@
 import { expect, test } from 'bun:test'
 
-import { expectDefined } from '@open-pencil/test-support/assert'
-
-import { createEditor } from '#core/editor'
 import { exportFigFile } from '@open-pencil/core/io/formats/fig'
 import { parseFigBuffer } from '@open-pencil/fig'
 import { symbolOverridesOf } from '@open-pencil/fig/instance-overrides'
@@ -13,7 +10,9 @@ import {
   setInstanceOverride,
   variableModeOverrideField
 } from '@open-pencil/scene-graph/instances/overrides'
+import { expectDefined } from '@open-pencil/test-support/assert'
 
+import { createEditor } from '#core/editor'
 import { pastedOverrides } from '#core/editor/clipboard/paste/overrides'
 
 test('a pasted override follows the layer the paste made and the collection it copied', () => {

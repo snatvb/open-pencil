@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 
-import { expectDefined } from '@open-pencil/test-support/assert'
 import { badgedCard, layerNamed, showMode, withOwnLayers } from '#core-tests/helpers/bound-variants'
 
 import { FigmaAPI } from '@open-pencil/core/figma-api'
-import { createEditor } from '#core/editor'
 import { instanceMainComponent, keptNodeCount } from '@open-pencil/scene-graph/instances'
 import { DEFAULT_HISTORY_LIMIT } from '@open-pencil/scene-graph/undo'
 import { reconcileVariableBindings } from '@open-pencil/scene-graph/variables'
+import { expectDefined } from '@open-pencil/test-support/assert'
 
+import { createEditor } from '#core/editor'
 import { restoreSubtree, snapshotSubtree } from '#core/editor/history/subtree'
 
 describe('layers a mode switch sets aside', () => {

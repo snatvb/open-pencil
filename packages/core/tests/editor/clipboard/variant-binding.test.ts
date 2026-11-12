@@ -1,18 +1,18 @@
 import { beforeAll, expect, test } from 'bun:test'
 
-import { expectDefined } from '@open-pencil/test-support/assert'
-
-import { parseFigmaClipboard } from '@open-pencil/fig/clipboard'
-import { createEditor } from '#core/editor'
 import { exportFigFile, parseFigFile } from '@open-pencil/core/io/formats/fig'
-import { initCodec } from '@open-pencil/kiwi/fig/codec'
 import { parseFigBuffer } from '@open-pencil/fig'
+import { parseFigmaClipboard } from '@open-pencil/fig/clipboard'
 import { symbolDataOf, symbolOverridesOf } from '@open-pencil/fig/instance-overrides'
 import type { GUID } from '@open-pencil/kiwi/fig'
+import { initCodec } from '@open-pencil/kiwi/fig/codec'
 import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
 import { guidToString } from '@open-pencil/kiwi/fig/guid'
 import { SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
 import { savedVariantIds } from '@open-pencil/scene-graph/variables'
+import { expectDefined } from '@open-pencil/test-support/assert'
+
+import { createEditor } from '#core/editor'
 
 beforeAll(initCodec)
 

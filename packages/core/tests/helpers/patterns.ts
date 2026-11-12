@@ -1,5 +1,4 @@
 import type { CanvasKit } from '@open-pencil/canvaskit'
-
 import type { SkiaRenderer } from '@open-pencil/core/canvas'
 import { renderNodesToImage } from '@open-pencil/core/io/formats/raster'
 import type { Effect, Fill, SceneGraph, SceneNode } from '@open-pencil/scene-graph'

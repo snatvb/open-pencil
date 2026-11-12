@@ -159,7 +159,12 @@ describe('a drop shadow of a vector with region fills', () => {
 
 describe('a drop shadow of a vector whose regions overlap', () => {
   const zero = { x: 0, y: 0 }
-  const line = (start: number, end: number) => ({ start, end, tangentStart: zero, tangentEnd: zero })
+  const line = (start: number, end: number) => ({
+    start,
+    end,
+    tangentStart: zero,
+    tangentEnd: zero
+  })
   const square = { windingRule: 'NONZERO' as const, loops: [[0, 1, 2, 3]] }
   const overlapping =
     (regionCount: number): FigmaRowScene =>
@@ -219,7 +224,16 @@ describe('a drop shadow of a vector whose regions overlap', () => {
             { x: 60, y: 40 },
             { x: 20, y: 40 }
           ],
-          segments: [line(0, 1), line(1, 2), line(2, 3), line(3, 0), line(4, 5), line(5, 6), line(6, 7), line(7, 4)],
+          segments: [
+            line(0, 1),
+            line(1, 2),
+            line(2, 3),
+            line(3, 0),
+            line(4, 5),
+            line(5, 6),
+            line(6, 7),
+            line(7, 4)
+          ],
           regions: [
             { windingRule: 'NONZERO', loops: [[0, 1, 2, 3]] },
             { windingRule: 'NONZERO', loops: [[4, 5, 6, 7]] }
@@ -238,7 +252,9 @@ describe('a drop shadow of a vector whose regions overlap', () => {
           }
         ]
       })
-    expect(renderRow(ck, renderer, shifted, 165, 104, 156)).toEqual(Array.from({ length: 27 }, () => 128))
+    expect(renderRow(ck, renderer, shifted, 165, 104, 156)).toEqual(
+      Array.from({ length: 27 }, () => 128)
+    )
   })
 })
 

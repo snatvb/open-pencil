@@ -2,7 +2,13 @@ import { describe, expect, test } from 'bun:test'
 
 import { SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
 import { recordInstanceOverride } from '@open-pencil/scene-graph/instances'
-import { collectionsBoundIn, layersUsingVariables, reconcileVariableBindings, showBoundVariants, unbindVariantProperty } from '@open-pencil/scene-graph/variables'
+import {
+  collectionsBoundIn,
+  layersUsingVariables,
+  reconcileVariableBindings,
+  showBoundVariants,
+  unbindVariantProperty
+} from '@open-pencil/scene-graph/variables'
 
 const SIZES = { tight: { width: 40, height: 20 }, loose: { width: 80, height: 30 } }
 

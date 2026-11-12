@@ -1,8 +1,7 @@
 import { beforeAll, expect, test } from 'bun:test'
 
-import { expectDefined } from '@open-pencil/test-support/assert'
-
 import { SceneGraph } from '@open-pencil/scene-graph'
+import { expectDefined } from '@open-pencil/test-support/assert'
 
 import { reconcileVariableLayouts } from '#core/layout/variables'
 import { fontManager } from '#core/text/font/manager'

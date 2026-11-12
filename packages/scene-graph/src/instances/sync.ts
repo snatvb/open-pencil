@@ -27,11 +27,7 @@ import {
   type InstanceSyncContext
 } from './copies'
 import { INSTANCE_SYNC_FIELD_OWNERS, INSTANCE_SYNC_FIELDS } from './fields'
-import {
-  instanceMainComponent,
-  showsBoundVariant,
-  sourceWithEffectiveFill
-} from './main-component'
+import { instanceMainComponent, showsBoundVariant, sourceWithEffectiveFill } from './main-component'
 import { matchFallbackChildren, matchLinkedChildren } from './matching'
 import {
   copiedComponentLayerId,

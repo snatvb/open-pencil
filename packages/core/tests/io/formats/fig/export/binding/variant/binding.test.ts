@@ -1,6 +1,5 @@
 import { beforeAll, expect, test } from 'bun:test'
 
-import { expectDefined } from '@open-pencil/test-support/assert'
 import { deflateSync } from 'fflate'
 
 import { exportFigFile, parseFigFile } from '@open-pencil/core/io/formats/fig'
@@ -15,7 +14,11 @@ import {
 } from '@open-pencil/kiwi/fig/codec'
 import { guidToString } from '@open-pencil/kiwi/fig/guid'
 import { SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
-import { reconcileVariableBindings, unbindVariantProperty } from '@open-pencil/scene-graph/variables'
+import {
+  reconcileVariableBindings,
+  unbindVariantProperty
+} from '@open-pencil/scene-graph/variables'
+import { expectDefined } from '@open-pencil/test-support/assert'
 
 import { releaseFigArchive } from '#core/kiwi/fig/session/archive/access'
 
