@@ -2,10 +2,12 @@ import { expect } from 'bun:test'
 
 import type { CanvasKit } from '@open-pencil/canvaskit'
 import type { SkiaRenderer } from '@open-pencil/core/canvas'
+import { renderNodesToImage } from '@open-pencil/core/io/formats/raster'
 import { SceneGraph } from '@open-pencil/scene-graph'
 import { maxOf } from '@open-pencil/scene-graph/arrays'
+import { expectDefined } from '@open-pencil/test-support/assert'
 
-import { exportedFramePixels } from './pixels'
+import { unpremultipliedPixels } from './pixels'
 
 /** Builds a scene into the frame `hostId`. */
 export type FigmaRowScene = (graph: SceneGraph, hostId: string) => void
@@ -32,12 +34,25 @@ export function renderRow(
     clipsContent: true
   })
   build(graph, host.id)
-  const { pixels, width, offset } = exportedFramePixels(ck, renderer, graph, page, host.id)
-  const values: number[] = []
-  for (let x = x0; x <= x1; x += 2) {
-    values.push(pixels[((y + offset) * width + x + offset) * 4 + channel])
+  const png = expectDefined(
+    renderNodesToImage(ck, renderer, graph, page, [host.id], {
+      scale: 1,
+      format: 'PNG',
+      trimTransparent: false
+    })
+  )
+  const image = expectDefined(ck.MakeImageFromEncoded(png))
+  try {
+    const offset = (image.width() - 400) / 2
+    const pixels = unpremultipliedPixels(ck, image)
+    const values: number[] = []
+    for (let x = x0; x <= x1; x += 2) {
+      values.push(pixels[((y + offset) * image.width() + x + offset) * 4 + channel])
+    }
+    return values
+  } finally {
+    image.delete()
   }
-  return values
 }
 
 /** Our blur kernel is fitted to Figma's within a few levels; outlines must match exactly. */

@@ -1,19 +1,17 @@
 import { afterAll, describe, expect, test } from 'bun:test'
 
-import { edgeRow, effect, expectFigmaEdge, FIGMA, solid } from '#core-tests/helpers/blur'
+import { effect, expectFigmaEdge, FIGMA, pixelProbes, solid } from '#core-tests/canvas/blur/helpers'
 
 import { SkiaRenderer } from '@open-pencil/core/canvas'
 import { getCanvasKit } from '@open-pencil/core/canvaskit'
-import { renderNodesToImage } from '@open-pencil/core/io/formats/raster'
-import { SceneGraph, type Effect, type SceneNode } from '@open-pencil/scene-graph'
-import { drawnBlurRadius } from '@open-pencil/scene-graph/geometry'
+import type { SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 import { maxOf } from '@open-pencil/scene-graph/arrays'
 import { expectDefined } from '@open-pencil/test-support/assert'
 
 const ck = await getCanvasKit()
 const renderer = new SkiaRenderer(ck, expectDefined(ck.MakeSurface(1, 1)))
 afterAll(() => renderer.destroy())
-const scene = { ck, renderer }
+const { edgeRow } = pixelProbes(renderer)
 
 function square(graph: SceneGraph, frameId: string, props: Partial<SceneNode>) {
   graph.createNode('RECTANGLE', frameId, { x: 100, y: 100, width: 200, height: 200, ...props })
@@ -21,32 +19,27 @@ function square(graph: SceneGraph, frameId: string, props: Partial<SceneNode>) {
 
 /** Red across a black-to-white edge at x = 100 under a layer of background blur. */
 function backgroundBlurRow(radius: number): number[] {
-  return edgeRow(
-    scene,
-    (graph, frameId) => {
-      graph.createNode('RECTANGLE', frameId, { width: 100, height: 400, fills: [solid(0, 0, 0)] })
-      graph.createNode('RECTANGLE', frameId, {
-        x: 100,
-        width: 300,
-        height: 400,
-        fills: [solid(1, 1, 1)]
-      })
-      graph.createNode('RECTANGLE', frameId, {
-        width: 400,
-        height: 400,
-        fills: [solid(1, 1, 1, 0.01)],
-        effects: [effect('BACKGROUND_BLUR', radius)]
-      })
-    },
-    0
-  )
+  return edgeRow((graph, frameId) => {
+    graph.createNode('RECTANGLE', frameId, { width: 100, height: 400, fills: [solid(0, 0, 0)] })
+    graph.createNode('RECTANGLE', frameId, {
+      x: 100,
+      width: 300,
+      height: 400,
+      fills: [solid(1, 1, 1)]
+    })
+    graph.createNode('RECTANGLE', frameId, {
+      width: 400,
+      height: 400,
+      fills: [solid(1, 1, 1, 0.01)],
+      effects: [effect('BACKGROUND_BLUR', radius)]
+    })
+  }, 0)
 }
 
 describe('blur effects fall off as in Figma', () => {
   for (const radius of [4, 16]) {
     test(`layer blur, radius ${radius}`, () => {
       const row = edgeRow(
-        scene,
         (graph, frameId) =>
           square(graph, frameId, {
             fills: [solid(1, 0, 0)],
@@ -60,7 +53,6 @@ describe('blur effects fall off as in Figma', () => {
 
   test('drop shadow', () => {
     const row = edgeRow(
-      scene,
       (graph, frameId) =>
         square(graph, frameId, { fills: [solid(1, 1, 1)], effects: [effect('DROP_SHADOW', 16)] }),
       3
@@ -70,7 +62,6 @@ describe('blur effects fall off as in Figma', () => {
 
   test('inner shadow', () => {
     const row = edgeRow(
-      scene,
       (graph, frameId) =>
         square(graph, frameId, { fills: [solid(1, 1, 1)], effects: [effect('INNER_SHADOW', 16)] }),
       0
@@ -85,30 +76,26 @@ describe('blur effects fall off as in Figma', () => {
 
   test('background blur on a boolean, inside its result alone', () => {
     // The row crosses the lower circle from x 103; before it the backdrop stays sharp.
-    const row = edgeRow(
-      scene,
-      (graph, frameId) => {
-        graph.createNode('RECTANGLE', frameId, { width: 100, height: 400, fills: [solid(0, 0, 0)] })
-        graph.createNode('RECTANGLE', frameId, {
-          x: 100,
-          width: 300,
-          height: 400,
-          fills: [solid(1, 1, 1)]
-        })
-        const union = graph.createNode('BOOLEAN_OPERATION', frameId, {
-          x: 40,
-          y: 40,
-          width: 180,
-          height: 240,
-          booleanOperation: 'UNION',
-          fills: [solid(1, 1, 1, 0.01)],
-          effects: [effect('BACKGROUND_BLUR', 16)]
-        })
-        graph.createNode('ELLIPSE', union.id, { width: 120, height: 120 })
-        graph.createNode('ELLIPSE', union.id, { x: 60, y: 120, width: 120, height: 120 })
-      },
-      0
-    )
+    const row = edgeRow((graph, frameId) => {
+      graph.createNode('RECTANGLE', frameId, { width: 100, height: 400, fills: [solid(0, 0, 0)] })
+      graph.createNode('RECTANGLE', frameId, {
+        x: 100,
+        width: 300,
+        height: 400,
+        fills: [solid(1, 1, 1)]
+      })
+      const union = graph.createNode('BOOLEAN_OPERATION', frameId, {
+        x: 40,
+        y: 40,
+        width: 180,
+        height: 240,
+        booleanOperation: 'UNION',
+        fills: [solid(1, 1, 1, 0.01)],
+        effects: [effect('BACKGROUND_BLUR', 16)]
+      })
+      graph.createNode('ELLIPSE', union.id, { width: 120, height: 120 })
+      graph.createNode('ELLIPSE', union.id, { x: 60, y: 120, width: 120, height: 120 })
+    }, 0)
     expectFigmaEdge(row, FIGMA['BACKGROUND_BLUR 16 union'])
   })
 })
@@ -121,7 +108,6 @@ describe('a negative blur, which only a bound variable gives', () => {
       const inner = type === 'INNER_SHADOW'
       const row = (radius: number) =>
         edgeRow(
-          scene,
           (graph, frameId) =>
             square(graph, frameId, {
               fills: [solid(1, 1, 1)],
@@ -138,7 +124,6 @@ describe('a negative blur, which only a bound variable gives', () => {
       const inner = type === 'INNER_SHADOW'
       const row = (radius: number) =>
         edgeRow(
-          scene,
           (graph, frameId) => {
             const union = graph.createNode('BOOLEAN_OPERATION', frameId, {
               x: 100,
@@ -166,7 +151,6 @@ describe('a negative blur, which only a bound variable gives', () => {
 describe('shadows of a transparent fill', () => {
   const shadowRow = (opacity: number, showShadowBehindNode = false) =>
     edgeRow(
-      scene,
       (graph, frameId) =>
         square(graph, frameId, {
           fills: [solid(1, 1, 1, opacity)],
@@ -189,7 +173,6 @@ describe('shadows of a transparent fill', () => {
 
   test('a fill at 0% opacity takes no inner shadow', () => {
     const row = edgeRow(
-      scene,
       (graph, frameId) =>
         square(graph, frameId, {
           fills: [solid(1, 1, 1, 0)],
@@ -201,108 +184,25 @@ describe('shadows of a transparent fill', () => {
   })
 
   test('a frame with a fill at 0% opacity casts only its child shadow', () => {
-    const row = edgeRow(
-      scene,
-      (graph, frameId) => {
-        const frame = graph.createNode('FRAME', frameId, {
-          x: 100,
-          y: 100,
-          width: 200,
-          height: 200,
-          fills: [solid(1, 1, 1, 0)],
-          clipsContent: false,
-          effects: [effect('DROP_SHADOW', 16)]
-        })
-        graph.createNode('RECTANGLE', frame.id, {
-          x: 40,
-          y: 40,
-          width: 120,
-          height: 120,
-          fills: [solid(0, 0, 1)]
-        })
-      },
-      3
-    )
+    const row = edgeRow((graph, frameId) => {
+      const frame = graph.createNode('FRAME', frameId, {
+        x: 100,
+        y: 100,
+        width: 200,
+        height: 200,
+        fills: [solid(1, 1, 1, 0)],
+        clipsContent: false,
+        effects: [effect('DROP_SHADOW', 16)]
+      })
+      graph.createNode('RECTANGLE', frame.id, {
+        x: 40,
+        y: 40,
+        width: 120,
+        height: 120,
+        fills: [solid(0, 0, 1)]
+      })
+    }, 3)
     expect(maxOf(row.slice(0, 41))).toBe(0)
     expect(row[79]).toBeGreaterThan(0)
-  })
-})
-
-describe('a layer blur on a glowing dot', () => {
-  const glow: Effect = {
-    ...effect('DROP_SHADOW', 8),
-    spread: 8,
-    color: { r: 1, g: 0.1, b: 0, a: 1 },
-    showShadowBehindNode: true
-  }
-  const dotRight = 53
-  const oldLayerRight = dotRight + 2 * drawnBlurRadius(1)
-  const margin = 3
-  const rowStart = 50
-
-  /** Alpha from `rowStart` rightward, on the row through the centre of a 6px dot in an instance. */
-  function glowRow(effects: Effect[]): number[] {
-    const graph = new SceneGraph()
-    const page = graph.getPages()[0].id
-    const component = graph.createNode('COMPONENT', page, {
-      x: 300,
-      width: 16,
-      height: 16,
-      fills: [],
-      clipsContent: false
-    })
-    graph.createNode('ELLIPSE', component.id, {
-      x: 5,
-      y: 5,
-      width: 6,
-      height: 6,
-      fills: [solid(1, 0.8, 0.6)],
-      effects
-    })
-    const frame = graph.createNode('FRAME', page, {
-      width: 100,
-      height: 100,
-      fills: [],
-      clipsContent: false
-    })
-    expectDefined(graph.createInstance(component.id, frame.id, { x: 42, y: 42 }))
-    const png = expectDefined(
-      renderNodesToImage(ck, renderer, graph, page, [frame.id], {
-        scale: 1,
-        format: 'PNG',
-        trimTransparent: false
-      })
-    )
-    const image = expectDefined(ck.MakeImageFromEncoded(png))
-    try {
-      const offset = (image.width() - 100) / 2
-      const pixels = expectDefined(
-        image.readPixels(0, 0, {
-          width: image.width(),
-          height: image.height(),
-          alphaType: ck.AlphaType.Unpremul,
-          colorType: ck.ColorType.RGBA_8888,
-          colorSpace: ck.ColorSpace.SRGB
-        })
-      )
-      const row: number[] = []
-      for (let x = rowStart; x <= 76; x++) {
-        row.push(pixels[((50 + offset) * image.width() + x + offset) * 4 + 3])
-      }
-      return row
-    } finally {
-      image.delete()
-    }
-  }
-
-  test('blurs its halo beyond the dot instead of cutting it at the dot box', () => {
-    const halo = glowRow([glow])
-    const blurred = glowRow([glow, effect('FOREGROUND_BLUR', 1)])
-    const firstPastOldLayer = oldLayerRight + margin - rowStart
-    const pastOldLayer = blurred.slice(firstPastOldLayer, firstPastOldLayer + 4)
-    expect(Math.min(...pastOldLayer)).toBeGreaterThan(90)
-    for (const [i, alpha] of blurred.entries()) {
-      expect(Math.abs(alpha - halo[i])).toBeLessThanOrEqual(4)
-    }
   })
 })

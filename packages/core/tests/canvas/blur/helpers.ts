@@ -1,15 +1,16 @@
 import { expect } from 'bun:test'
 
-import type { CanvasKit } from '@open-pencil/canvaskit'
+import { unpremultipliedPixels } from '#core-tests/helpers/pixels'
+
+import type { Image } from '@open-pencil/canvaskit'
 import type { SkiaRenderer } from '@open-pencil/core/canvas'
+import { getCanvasKit } from '@open-pencil/core/canvaskit'
+import { renderNodesToImage } from '@open-pencil/core/io/formats/raster'
 import { SceneGraph, type Effect } from '@open-pencil/scene-graph'
+import { maxOf } from '@open-pencil/scene-graph/arrays'
+import { expectDefined } from '@open-pencil/test-support/assert'
 
-import { exportedFramePixels } from './pixels'
-
-export interface BlurScene {
-  ck: CanvasKit
-  renderer: SkiaRenderer
-}
+const ck = await getCanvasKit()
 
 /**
  * A row of pixels across the left edge of a 200px square at x = 100, from x = 60 to 140, in a
@@ -75,33 +76,68 @@ export function effect(type: Effect['type'], radius: number): Effect {
   }
 }
 
-export function edgeRow(
-  { ck, renderer }: BlurScene,
-  build: (graph: SceneGraph, frameId: string) => void,
-  channel: 0 | 3
-): number[] {
-  const graph = new SceneGraph()
-  const page = graph.getPages()[0].id
-  const frame = graph.createNode('FRAME', page, {
-    width: 400,
-    height: 400,
-    fills: [],
-    clipsContent: false
-  })
-  build(graph, frame.id)
-  const { pixels, width, offset } = exportedFramePixels(ck, renderer, graph, page, frame.id)
-  const row: number[] = []
-  for (let x = 60; x <= 140; x++) {
-    row.push(pixels[((200 + offset) * width + x + offset) * 4 + channel])
-  }
-  return row
-}
-
 export function expectFigmaEdge(row: number[], figma: number[], from = 60) {
   const differences = row.flatMap((value, index) =>
     60 + index < from ? [] : [Math.abs(value - figma[index])]
   )
   const rms = Math.sqrt(differences.reduce((sum, d) => sum + d * d, 0) / differences.length)
-  expect(Math.max(...differences)).toBeLessThanOrEqual(6)
+  expect(maxOf(differences)).toBeLessThanOrEqual(6)
   expect(rms).toBeLessThanOrEqual(2)
+}
+
+type SceneBuild = (graph: SceneGraph, frameId: string) => void
+
+export function pixelProbes(renderer: SkiaRenderer) {
+  function renderFrame<T>(build: SceneBuild, read: (image: Image) => T): T {
+    const graph = new SceneGraph()
+    const page = graph.getPages()[0].id
+    const frame = graph.createNode('FRAME', page, {
+      width: 400,
+      height: 400,
+      fills: [],
+      clipsContent: false
+    })
+    build(graph, frame.id)
+    const png = expectDefined(
+      renderNodesToImage(ck, renderer, graph, page, [frame.id], {
+        scale: 1,
+        format: 'PNG',
+        trimTransparent: false
+      })
+    )
+    const image = expectDefined(ck.MakeImageFromEncoded(png))
+    try {
+      return read(image)
+    } finally {
+      image.delete()
+    }
+  }
+
+  function edgeRow(build: SceneBuild, channel: 0 | 3): number[] {
+    return renderFrame(build, (image) => {
+      const offset = (image.width() - 400) / 2
+      const pixels = unpremultipliedPixels(ck, image)
+      const row: number[] = []
+      for (let x = 60; x <= 140; x++) {
+        row.push(pixels[((200 + offset) * image.width() + x + offset) * 4 + channel])
+      }
+      return row
+    })
+  }
+
+  /** How many pixels of a 400px frame `build` fills draw anything into. */
+  function inkArea(build: SceneBuild): number {
+    return renderFrame(build, (image) => {
+      const pixels = unpremultipliedPixels(ck, image)
+      let area = 0
+      for (let index = 3; index < pixels.length; index += 4) {
+        if (pixels[index] > 127) {
+          area++
+        }
+      }
+      return area
+    })
+  }
+
+  return { edgeRow, inkArea }
 }
