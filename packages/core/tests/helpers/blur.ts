@@ -2,9 +2,9 @@ import { expect } from 'bun:test'
 
 import type { CanvasKit } from '@open-pencil/canvaskit'
 import type { SkiaRenderer } from '@open-pencil/core/canvas'
-import { renderNodesToImage } from '@open-pencil/core/io/formats/raster'
 import { SceneGraph, type Effect } from '@open-pencil/scene-graph'
-import { expectDefined } from '@open-pencil/test-support/assert'
+
+import { exportedFramePixels } from './pixels'
 
 export interface BlurScene {
   ck: CanvasKit
@@ -89,33 +89,12 @@ export function edgeRow(
     clipsContent: false
   })
   build(graph, frame.id)
-  const png = expectDefined(
-    renderNodesToImage(ck, renderer, graph, page, [frame.id], {
-      scale: 1,
-      format: 'PNG',
-      trimTransparent: false
-    })
-  )
-  const image = expectDefined(ck.MakeImageFromEncoded(png))
-  try {
-    const offset = (image.width() - 400) / 2
-    const pixels = expectDefined(
-      image.readPixels(0, 0, {
-        width: image.width(),
-        height: image.height(),
-        alphaType: ck.AlphaType.Unpremul,
-        colorType: ck.ColorType.RGBA_8888,
-        colorSpace: ck.ColorSpace.SRGB
-      })
-    )
-    const row: number[] = []
-    for (let x = 60; x <= 140; x++) {
-      row.push(pixels[((200 + offset) * image.width() + x + offset) * 4 + channel])
-    }
-    return row
-  } finally {
-    image.delete()
+  const { pixels, width, offset } = exportedFramePixels(ck, renderer, graph, page, frame.id)
+  const row: number[] = []
+  for (let x = 60; x <= 140; x++) {
+    row.push(pixels[((200 + offset) * width + x + offset) * 4 + channel])
   }
+  return row
 }
 
 export function expectFigmaEdge(row: number[], figma: number[], from = 60) {
