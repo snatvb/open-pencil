@@ -10,6 +10,7 @@ import {
   bySavedPosition,
   createSourceIndex,
   idOf,
+  isActiveRecord,
   parentIdOf,
   type InterpreterIndex,
   type SourceIndex
@@ -136,9 +137,8 @@ function isResource(record: NodeChange): boolean {
 /** Records decoded whole up front, as clipboard fragments and in-memory documents are. */
 function wholeRecords(source: readonly NodeChange[]): ReaderRecords {
   const bindingDiagnostics: BindingReferenceDiagnostic[] = []
-  const records = resolveDocumentBindingReferences(
-    source.filter((node) => node.phase !== 'REMOVED'),
-    (diagnostic) => bindingDiagnostics.push(diagnostic)
+  const records = resolveDocumentBindingReferences(source.filter(isActiveRecord), (diagnostic) =>
+    bindingDiagnostics.push(diagnostic)
   )
   const index = createSourceIndex(records)
   inheritComponentPropertyDefinitions(records, index.sources)
@@ -182,7 +182,7 @@ function decodeRecord(header: NodeChange): NodeChange {
  * inherited from its ancestors, and style references applied.
  */
 function archiveRecords(headers: readonly NodeChange[]): ReaderRecords {
-  const records = headers.filter((node) => node.phase !== 'REMOVED')
+  const records = headers.filter(isActiveRecord)
   const index = createSourceIndex(records)
   const normalize = createBindingNormalizer(records)
   const assets = assetIdsByKey(records)
