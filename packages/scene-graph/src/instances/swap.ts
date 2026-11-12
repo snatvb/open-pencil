@@ -1,5 +1,6 @@
 import { isEqual } from 'es-toolkit/predicate'
 
+import { appendAll } from '../arrays'
 import {
   overriddenAssignmentId,
   reapplyComponentPropertyAssignments
@@ -140,7 +141,7 @@ function untakenCopies(byLayer: CopiesByLayer): SceneNode[] {
     }
   }
   for (const namesakes of byLayer.unlinked.values()) {
-    untaken.push(...namesakes)
+    appendAll(untaken, namesakes)
   }
   return untaken
 }
@@ -450,7 +451,7 @@ function matchCopies(swap: Swap, compParent: SceneNode, instParent: SceneNode) {
     retyped.set(index, copy)
     return undefined
   })
-  stale.push(...untakenCopies(byLayer))
+  appendAll(stale, untakenCopies(byLayer))
   return { matched, stale, retyped }
 }
 

@@ -139,15 +139,20 @@ export function collectSceneDependencies(
     const patternSources = [...patternSourceDependencies(record)].filter((source) =>
       availableIds.has(source)
     )
-    pending.push(
-      ...(children.get(id) ?? []).flatMap((child) => idOf(child) ?? []),
-      ...setVariants(node),
-      ...styleDependencies(record, resolveReference, availableIds),
-      ...components,
-      ...variantDependencies(record),
-      ...slotContent,
-      ...patternSources
-    )
+    // A page can hold more children than an engine takes arguments, so none are spread.
+    for (const child of children.get(id) ?? []) {
+      const childId = idOf(child)
+      if (childId !== undefined) pending.push(childId)
+    }
+    for (const dependency of [
+      setVariants(node),
+      styleDependencies(record, resolveReference, availableIds),
+      components,
+      variantDependencies(record),
+      slotContent,
+      patternSources
+    ])
+      for (const dependencyId of dependency) pending.push(dependencyId)
   }
   collectAncestors(sources, contentIds, ancestorIds, missingIds)
   return {

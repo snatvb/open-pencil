@@ -7,6 +7,7 @@ import { getCanvasKit } from '@open-pencil/core/canvaskit'
 import { renderNodesToImage } from '@open-pencil/core/io/formats/raster'
 import { SceneGraph, type Effect, type SceneNode } from '@open-pencil/scene-graph'
 import { drawnBlurRadius } from '@open-pencil/scene-graph/geometry'
+import { maxOf } from '@open-pencil/scene-graph/arrays'
 import { expectDefined } from '@open-pencil/test-support/assert'
 
 const ck = await getCanvasKit()
@@ -175,7 +176,7 @@ describe('shadows of a transparent fill', () => {
     )
 
   test('a fill at 0% opacity casts no shadow', () => {
-    expect(Math.max(...shadowRow(0))).toBe(0)
+    expect(maxOf(shadowRow(0))).toBe(0)
   })
 
   test('a fill at 1% opacity casts a full one', () => {
@@ -183,7 +184,7 @@ describe('shadows of a transparent fill', () => {
   })
 
   test('a fill at 0% opacity casts none when the shadow shows behind the node', () => {
-    expect(Math.max(...shadowRow(0, true))).toBe(0)
+    expect(maxOf(shadowRow(0, true))).toBe(0)
   })
 
   test('a fill at 0% opacity takes no inner shadow', () => {
@@ -196,7 +197,7 @@ describe('shadows of a transparent fill', () => {
         }),
       3
     )
-    expect(Math.max(...row)).toBe(0)
+    expect(maxOf(row)).toBe(0)
   })
 
   test('a frame with a fill at 0% opacity casts only its child shadow', () => {
@@ -222,7 +223,7 @@ describe('shadows of a transparent fill', () => {
       },
       3
     )
-    expect(Math.max(...row.slice(0, 41))).toBe(0)
+    expect(maxOf(row.slice(0, 41))).toBe(0)
     expect(row[79]).toBeGreaterThan(0)
   })
 })
