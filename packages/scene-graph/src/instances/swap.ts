@@ -15,9 +15,10 @@ import { applyBoundPaintColorsIn, refreshBoundPaintsIn } from '../variables/pain
 import { applyEnclosingAssignments } from './assignments'
 import { keepCopy, takeKeptCopy } from './kept-copies'
 import { keepOverrides, restoreOverrides, type OverrideScope } from './kept-overrides'
-import { findInstanceAncestor, ownsSelfFillField, showsBoundVariant } from './main-component'
+import { ownsSelfFillField, showsBoundVariant } from './main-component'
 import { hasInstanceOverride, overriddenBindingField, setInstanceOverride } from './overrides'
 import { bindingProtection, NOTHING_PROTECTED } from './protection'
+import { shownLayerId } from './shown-layer'
 import {
   cloneChildInCoordinates,
   cloneChildrenWithMapping,
@@ -167,27 +168,6 @@ function forgetOverrides(swap: Swap, node: SceneNode): void {
 
 function subtreeOf(graph: SceneGraph, node: SceneNode): SceneNode[] {
   return [node, ...graph.getChildren(node.id).flatMap((child) => subtreeOf(graph, child))]
-}
-
-function copiedLayer(graph: SceneGraph, node: SceneNode): SceneNode | undefined {
-  const owner = node.parentId ? findInstanceAncestor(graph, node.parentId) : undefined
-  if (!owner) {
-    return undefined
-  }
-  const linked = owner.instanceOverrides.descendants.get(node.id)?.get('sourceComponentId')
-  const layerId = typeof linked === 'string' ? linked : node.componentId
-  return layerId ? graph.getNode(layerId) : undefined
-}
-
-function shownLayerId(graph: SceneGraph, layer: SceneNode): string {
-  const seen = new Set<string>()
-  let current = layer
-  for (let next = copiedLayer(graph, current); next && !seen.has(next.id);) {
-    seen.add(current.id)
-    current = next
-    next = copiedLayer(graph, current)
-  }
-  return current.id
 }
 
 function keepRemovedCopy(swap: Swap, copy: SceneNode): void {
