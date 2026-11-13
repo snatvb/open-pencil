@@ -9,14 +9,14 @@ export const render = defineTool({
   name: 'render',
 
   description:
-    'Render JSX to design nodes. Draw a shape of your own as one layer with <Vector d="M2 12 L22 12" stroke="#000" />, styled like any layer; inline <svg> is for artwork copied from elsewhere and draws its shapes, without its text. Use replace_id to replace a placeholder while preserving its position.',
+    'Render JSX to design nodes. Draw a shape of your own as one layer with <Vector d="M2 12 L22 12" stroke="#000" />, styled like any layer; inline <svg> is for artwork copied from elsewhere and draws its shapes, without its text. Use replace_id to replace a placeholder while preserving its position: x and y on the JSX root are ignored then, so pass the x and y arguments of this call to place it elsewhere.',
   execution: { kind: 'async', mutation: 'document' },
   input: v.strictObject({
     replace_id: v.optional(
       v.pipe(
         v.string(),
         v.description(
-          'Node ID to replace — new node takes its position in parent, old node is deleted'
+          'Node ID to replace — new node takes its position in parent (the x and y arguments move it, x and y on the JSX root do not), old node is deleted'
         )
       )
     ),
