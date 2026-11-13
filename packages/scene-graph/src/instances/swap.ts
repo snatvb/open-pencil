@@ -1,10 +1,7 @@
 import { isEqual } from 'es-toolkit/predicate'
 
 import { appendAll } from '../arrays'
-import {
-  overriddenAssignmentId,
-  reapplyComponentPropertyAssignments
-} from '../components/properties'
+import { reapplyComponentPropertyAssignments } from '../components/properties'
 import { copyDerivedGlyphs, markCopySource } from '../copy'
 import { TEXT_SHAPING_FIELDS } from '../fields/text'
 import type { SceneGraph } from '../graph'
@@ -16,7 +13,12 @@ import { applyEnclosingAssignments } from './assignments'
 import { keepCopy, takeKeptCopy } from './kept-copies'
 import { keepOverrides, restoreOverrides, type OverrideScope } from './kept-overrides'
 import { ownsSelfFillField, showsBoundVariant } from './main-component'
-import { hasInstanceOverride, overriddenBindingField, setInstanceOverride } from './overrides'
+import {
+  hasInstanceOverride,
+  overriddenAssignmentId,
+  overriddenBindingField,
+  setInstanceOverride
+} from './overrides'
 import { bindingProtection, NOTHING_PROTECTED } from './protection'
 import { shownLayerId } from './shown-layer'
 import {
