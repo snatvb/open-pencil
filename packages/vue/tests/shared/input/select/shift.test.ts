@@ -195,7 +195,7 @@ describe('Shift on a selected layer, as in Figma', () => {
       layoutMode: 'HORIZONTAL',
       layoutWrap: 'WRAP',
       primaryAxisSizing: 'FIXED',
-      counterAxisSizing: 'AUTO',
+      counterAxisSizing: 'HUG',
       itemSpacing: 10
     })
     const first = node('RECTANGLE', row.id, { width: 60, height: 40, fills: [SOLID_FILL] })
