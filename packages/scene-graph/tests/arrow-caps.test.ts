@@ -117,6 +117,20 @@ describe('collectArrowEndpoints', () => {
     expect(end.cap).toBe('ARROW_EQUILATERAL')
   })
 
+  test('points the head along the far handle of a curve without a handle at its end', () => {
+    const zero = { x: 0, y: 0 }
+    const curve = {
+      vertices: [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 }
+      ],
+      segments: [{ start: 0, end: 1, tangentStart: { x: 0, y: 50 }, tangentEnd: zero }],
+      regions: []
+    }
+    const end = endpointAt(collectArrowEndpoints(curve, 'ARROW_EQUILATERAL'), 100)
+    expect(end.angle).toBeCloseTo(Math.atan2(-50, 100), 5)
+  })
+
   test('returns nothing when the effective cap is not an arrow', () => {
     expect(collectArrowEndpoints(straightOpenLine(), 'ROUND')).toHaveLength(0)
     expect(collectArrowEndpoints(straightOpenLine(), 'NONE')).toHaveLength(0)

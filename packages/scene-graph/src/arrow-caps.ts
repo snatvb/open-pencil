@@ -1,4 +1,5 @@
 import { cubicPoint } from './cubic'
+import { leavingDirection } from './paths/network'
 import type { Vector } from './primitives'
 import type { Stroke, StrokeCap, VectorNetwork } from './types'
 
@@ -117,23 +118,13 @@ export function collectArrowEndpoints(
 ): ArrowEndpoint[] {
   const endpoints: ArrowEndpoint[] = []
   for (const { segment: index, side, cap } of openArrowEnds(network, fallbackCap)) {
-    const segment = network.segments[index]
-    const vertex = network.vertices[segment[side]]
-    const tangent = side === 'start' ? segment.tangentStart : segment.tangentEnd
-    let controlX: number
-    let controlY: number
-    if (Math.abs(tangent.x) > 0.001 || Math.abs(tangent.y) > 0.001) {
-      controlX = vertex.x + tangent.x
-      controlY = vertex.y + tangent.y
-    } else {
-      const other = network.vertices[side === 'start' ? segment.end : segment.start]
-      controlX = other.x
-      controlY = other.y
+    const vertexIndex = network.segments[index][side]
+    const vertex = network.vertices[vertexIndex]
+    const intoPath = leavingDirection(network, index, vertexIndex)
+    if (intoPath.x === 0 && intoPath.y === 0) {
+      continue
     }
-    const dx = vertex.x - controlX
-    const dy = vertex.y - controlY
-    if (dx === 0 && dy === 0) continue
-    endpoints.push({ x: vertex.x, y: vertex.y, angle: Math.atan2(dy, dx), cap })
+    endpoints.push({ x: vertex.x, y: vertex.y, angle: Math.atan2(-intoPath.y, -intoPath.x), cap })
   }
   return endpoints
 }
