@@ -15,7 +15,6 @@ const WEIGHT_STYLES: [(f32, &str); 9] = [
     (900.0, "Black"),
 ];
 
-/// Words a style name gives a width other than normal by, alone or with Semi, Extra, or Ultra.
 const WIDTH_WORDS: [&str; 6] = [
     "condensed",
     "compressed",
@@ -70,7 +69,6 @@ pub fn names_weight(style: &str) -> bool {
         || (italic && weight == 400.0 && spelled == "italic")
 }
 
-/// Whether `style` names a width other than normal, as "Compressed Medium" or "SemiBold Wide" do.
 pub fn names_width(style: &str) -> bool {
     let spelled = spelling(style);
     WIDTH_WORDS.iter().any(|word| spelled.contains(word))
