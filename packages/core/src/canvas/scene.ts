@@ -40,7 +40,12 @@ import {
 } from './strokes/dispatch'
 import { drawReflowedPathTextSilhouettes, isReflowedPathText } from './text/derived'
 import { stickyPlaceholderNode } from './text/placeholder'
-import { drawTextEmoji, hasOverflowPathTextPaint, renderText } from './text/render'
+import {
+  drawTextEmoji,
+  hasOverflowPathTextPaint,
+  renderText,
+  withSavedBaselineOnDevicePixels
+} from './text/render'
 
 function drawVisibleFills(
   r: SkiaRenderer,
@@ -485,15 +490,15 @@ export function renderShape(
   node: SceneNode,
   graph: SceneGraph
 ): void {
-  const effects = shapeEffects(node)
-  if (r.viewportImageRendering || effects.length === 0) {
-    r.renderShapeUncached(canvas, node, graph)
-    return
-  }
-
-  drawShapeThroughNodePicture(r, canvas, node, (target) =>
-    r.renderShapeUncached(target, node, graph)
-  )
+  withSavedBaselineOnDevicePixels(r, canvas, node, () => {
+    if (r.viewportImageRendering || shapeEffects(node).length === 0) {
+      r.renderShapeUncached(canvas, node, graph)
+      return
+    }
+    drawShapeThroughNodePicture(r, canvas, node, (target) =>
+      r.renderShapeUncached(target, node, graph)
+    )
+  })
 }
 
 /** Draws a shape with its own effects: Figma puts inner shadows over fills and under strokes. */

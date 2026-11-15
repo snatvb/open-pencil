@@ -9,7 +9,13 @@ import { shownText } from '#core/text/case'
 import { mayHoldEmoji } from '#core/text/emoji'
 
 import { drawTextLayout } from './decorations'
-import { canDrawSavedText, drawDerivedText, drawsSavedText } from './derived'
+import {
+  canDrawSavedText,
+  devicePixelBaselineOffset,
+  drawDerivedText,
+  drawsSavedText,
+  hasRotatedDerivedGlyphs
+} from './derived'
 import { drawLaidOutEmoji, drawSavedEmoji } from './emoji'
 
 export function hasOverflowPathTextPaint(node: SceneNode): boolean {
@@ -105,6 +111,35 @@ function drawsSaved(r: SkiaRenderer, node: SceneNode): boolean {
 /** Whether every fill of the text draws its saved glyphs, on its path or for want of its fonts. */
 export function drawsOnlySavedGlyphs(r: SkiaRenderer, node: SceneNode): boolean {
   return (node.derivedTextGlyphs?.length ?? 0) > 0 && drawsSaved(r, node) && drawsSavedText(node)
+}
+
+function savedBaselineOffset(r: SkiaRenderer, canvas: Canvas, node: SceneNode): number {
+  const first = node.derivedTextGlyphs?.[0]
+  if (!first || hasRotatedDerivedGlyphs(node) || !drawsOnlySavedGlyphs(r, node)) {
+    return 0
+  }
+  return devicePixelBaselineOffset(canvas, first.y)
+}
+
+/** Moves the whole layer, so its saved strokes, emoji, and effects stay on its snapped glyphs. */
+export function withSavedBaselineOnDevicePixels(
+  r: SkiaRenderer,
+  canvas: Canvas,
+  node: SceneNode,
+  draw: () => void
+): void {
+  const offset = node.type === 'TEXT' ? savedBaselineOffset(r, canvas, node) : 0
+  if (offset === 0) {
+    draw()
+    return
+  }
+  canvas.save()
+  try {
+    canvas.translate(0, offset)
+    draw()
+  } finally {
+    canvas.restore()
+  }
 }
 
 function drawSavedText(r: SkiaRenderer, canvas: Canvas, node: SceneNode, fill?: Fill): boolean {

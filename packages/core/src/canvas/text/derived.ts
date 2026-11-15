@@ -45,6 +45,19 @@ export function snapDerivedGlyphBaseline(y: number): number {
   return Math.round(y)
 }
 
+export function devicePixelBaselineOffset(canvas: Canvas, baseline: number): number {
+  const [, , , skewY, scaleY, translateY, perspectiveX, perspectiveY, homogeneous] =
+    canvas.getTotalMatrix()
+  const rowsStayHorizontal =
+    skewY === 0 && perspectiveX === 0 && perspectiveY === 0 && homogeneous === 1 && scaleY !== 0
+  if (!rowsStayHorizontal) {
+    return 0
+  }
+  const layerBaseline = snapDerivedGlyphBaseline(baseline)
+  const deviceBaseline = Math.round(translateY + scaleY * baseline)
+  return (deviceBaseline - translateY) / scaleY - layerBaseline
+}
+
 /**
  * Path-text glyphs carry non-zero Figma `Glyph.rotation` (radians). Used to
  * disable axis-aligned assumptions (baseline snap, underline decorations).
