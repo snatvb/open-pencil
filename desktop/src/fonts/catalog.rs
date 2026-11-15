@@ -10,7 +10,6 @@ use super::style::{named_weight, names_weight, names_width, requested_face, styl
 struct Catalog {
     collection: Collection,
     cache: SourceCache,
-    listed_elsewhere: Option<Vec<ListedElsewhere>>,
 }
 
 /// A face Windows lists under a family other than the one its font names, as it lists a variable
@@ -23,6 +22,7 @@ pub struct ListedElsewhere {
 }
 
 static CATALOG: OnceLock<Mutex<Catalog>> = OnceLock::new();
+static LISTED_ELSEWHERE: OnceLock<Vec<ListedElsewhere>> = OnceLock::new();
 
 fn with_catalog<T>(f: impl FnOnce(&mut Catalog) -> T) -> T {
     let catalog = CATALOG.get_or_init(|| {
@@ -32,7 +32,6 @@ fn with_catalog<T>(f: impl FnOnce(&mut Catalog) -> T) -> T {
                 system_fonts: true,
             }),
             cache: SourceCache::default(),
-            listed_elsewhere: None,
         })
     });
     let mut catalog = catalog
@@ -213,8 +212,12 @@ pub fn load_face(family: &str, style: &str) -> Option<Face> {
             .family_by_name(family)
             .map(|info| info.fonts().to_vec())
             .unwrap_or_default();
-        named_face(catalog, &listed, style).or_else(|| {
-            let elsewhere = fonts_listed_elsewhere(catalog, family);
+        named_face(catalog, &listed, style)
+    })
+    .or_else(|| {
+        let index = listed_elsewhere_index();
+        with_catalog(|catalog| {
+            let elsewhere = fonts_listed_elsewhere(catalog, index, family);
             named_face(catalog, &elsewhere, style)
         })
     })
@@ -232,12 +235,12 @@ fn named_face(catalog: &mut Catalog, fonts: &[FontInfo], style: &str) -> Option<
     })
 }
 
-fn fonts_listed_elsewhere(catalog: &mut Catalog, family: &str) -> Vec<FontInfo> {
-    let index = catalog
-        .listed_elsewhere
-        .get_or_insert_with(|| index_listed_elsewhere(&mut catalog.collection))
-        .clone();
-    listed_elsewhere_of(&index, family)
+fn fonts_listed_elsewhere(
+    catalog: &mut Catalog,
+    index: &[ListedElsewhere],
+    family: &str,
+) -> Vec<FontInfo> {
+    listed_elsewhere_of(index, family)
         .filter_map(|face| {
             let listed = catalog.collection.family_by_name(&face.listed)?;
             listed.fonts().get(face.position).cloned()
@@ -255,23 +258,46 @@ pub fn listed_elsewhere_of<'a>(
         .filter(move |face| spelling(&face.family) == wanted)
 }
 
-fn index_listed_elsewhere(collection: &mut Collection) -> Vec<ListedElsewhere> {
-    let mut names: Vec<String> = collection
+/// Read from every font file once, after the catalog lock is let go, so faces listed under their
+/// own family keep loading while the files are read.
+fn listed_elsewhere_index() -> &'static [ListedElsewhere] {
+    LISTED_ELSEWHERE.get_or_init(|| {
+        let families = with_catalog(|catalog| listed_families(&mut catalog.collection));
+        index_listed_elsewhere(families, |font| {
+            font.load(None)
+                .and_then(|data| typographic_family(data.as_ref(), font.index()))
+        })
+    })
+}
+
+fn listed_families(collection: &mut Collection) -> Vec<(String, Vec<FontInfo>)> {
+    let names: Vec<String> = collection
         .family_names()
         .filter(|name| !name.starts_with('.'))
         .map(String::from)
         .collect();
-    names.sort();
+    names
+        .into_iter()
+        .filter_map(|listed| {
+            let fonts = collection.family_by_name(&listed)?.fonts().to_vec();
+            Some((listed, fonts))
+        })
+        .collect()
+}
+
+/// The faces whose font names a family other than the one they are listed under, in family
+/// name order, so the faces found for a family come in the same order on every launch.
+pub fn index_listed_elsewhere<Font>(
+    mut families: Vec<(String, Vec<Font>)>,
+    named_family: impl Fn(&Font) -> Option<String>,
+) -> Vec<ListedElsewhere> {
+    families.sort_by(|a, b| a.0.cmp(&b.0));
     let mut index = Vec::new();
-    for listed in names {
-        let Some(info) = collection.family_by_name(&listed) else {
-            continue;
-        };
-        for (position, font) in info.fonts().iter().enumerate() {
-            let named = font
-                .load(None)
-                .and_then(|data| typographic_family(data.as_ref(), font.index()));
-            if let Some(family) = named.filter(|family| spelling(family) != spelling(&listed)) {
+    for (listed, fonts) in families {
+        for (position, font) in fonts.iter().enumerate() {
+            if let Some(family) =
+                named_family(font).filter(|family| spelling(family) != spelling(&listed))
+            {
                 index.push(ListedElsewhere {
                     family,
                     listed: listed.clone(),
@@ -359,6 +385,36 @@ mod tests {
         let found: Vec<_> = listed_elsewhere_of(&index, "acme sans").collect();
         assert_eq!(found, vec![&index[0], &index[1]]);
         assert_eq!(listed_elsewhere_of(&index, "Acme Mono").count(), 0);
+    }
+
+    #[test]
+    fn indexes_faces_named_for_another_family_in_family_name_order() {
+        let family_of = |named: &&str| Some(named.to_string());
+        let families = |order: [usize; 2]| {
+            let all = [
+                ("Acme Sans Demi", vec!["Acme Sans"]),
+                (
+                    "Acme Sans Compressed",
+                    vec!["Acme Sans", "Acme Sans Compressed"],
+                ),
+            ];
+            order
+                .iter()
+                .map(|&i| (all[i].0.to_string(), all[i].1.clone()))
+                .collect::<Vec<_>>()
+        };
+        let expected = vec![
+            listed("Acme Sans", "Acme Sans Compressed", 0),
+            listed("Acme Sans", "Acme Sans Demi", 0),
+        ];
+        assert_eq!(
+            index_listed_elsewhere(families([0, 1]), family_of),
+            expected
+        );
+        assert_eq!(
+            index_listed_elsewhere(families([1, 0]), family_of),
+            expected
+        );
     }
 
     fn named(style: &str) -> FaceNames {
