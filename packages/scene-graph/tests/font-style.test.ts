@@ -34,6 +34,14 @@ describe('styleToWeight', () => {
     expect(styleToWeight('THIN')).toBe(100)
     expect(styleToWeight('semibold')).toBe(600)
   })
+
+  test('takes the weight from what a width word leaves', () => {
+    expect(styleToWeight('Compressed Medium')).toBe(500)
+    expect(styleToWeight('Condensed Bold Italic')).toBe(700)
+    expect(styleToWeight('Extra Condensed Light')).toBe(300)
+    expect(styleToWeight('SemiBold SemiCondensed')).toBe(600)
+    expect(styleToWeight('Expanded')).toBe(400)
+  })
 })
 
 describe('faceLoadKey', () => {
