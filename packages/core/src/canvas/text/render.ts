@@ -101,11 +101,15 @@ export function drawTextEmoji(r: SkiaRenderer, canvas: Canvas, node: SceneNode):
  * text is edited either: the caret, selection, and hit testing follow the live layout.
  */
 function drawsSaved(r: SkiaRenderer, node: SceneNode): boolean {
-  const readiness = r.nodeFontReadiness(node)
   // Fonts still loading leave nothing else to draw, edited or not.
-  if (readiness === 'pending') return true
-  if (r.editingTextId === node.id) return false
-  return node.textPathData !== null || readiness !== 'ready'
+  if (r.nodeFontReadiness(node) === 'pending') {
+    return true
+  }
+  return r.editingTextId !== node.id && drawsSavedUnedited(r, node)
+}
+
+function drawsSavedUnedited(r: SkiaRenderer, node: SceneNode): boolean {
+  return node.textPathData !== null || r.nodeFontReadiness(node) !== 'ready'
 }
 
 /** Whether every fill of the text draws its saved glyphs, on its path or for want of its fonts. */
@@ -140,6 +144,14 @@ export function withSavedBaselineOnCanvasPixels(
   } finally {
     canvas.restore()
   }
+}
+
+export function drawsSomeSavedGlyphsUnedited(r: SkiaRenderer, node: SceneNode): boolean {
+  return (
+    (node.derivedTextGlyphs?.length ?? 0) > 0 &&
+    drawsSavedUnedited(r, node) &&
+    node.fills.some((fill) => fill.visible && canDrawSavedText(node, fill))
+  )
 }
 
 function drawSavedText(r: SkiaRenderer, canvas: Canvas, node: SceneNode, fill?: Fill): boolean {
