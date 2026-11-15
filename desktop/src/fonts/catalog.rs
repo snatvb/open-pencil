@@ -1,11 +1,11 @@
 //! System font discovery through fontique, which reads each face's attributes from the font
 //! files the platform reports.
 
-use fontique::{Blob, Collection, CollectionOptions, FontInfo, FontStyle, SourceCache};
+use fontique::{Blob, Collection, CollectionOptions, FontInfo, FontStyle, FontWidth, SourceCache};
 use std::sync::{Mutex, OnceLock};
 
 use super::names::{face_names, spelling, typographic_family, FaceNames};
-use super::style::{named_weight, names_weight, requested_face, style_name};
+use super::style::{named_weight, names_weight, names_width, requested_face, style_name};
 
 struct Catalog {
     collection: Collection,
@@ -47,6 +47,7 @@ pub struct FaceTraits {
     pub italic: bool,
     /// The range of a variable font's `wght` axis.
     pub weight_axis: Option<(f32, f32)>,
+    pub normal_width: bool,
 }
 
 impl FaceTraits {
@@ -59,6 +60,7 @@ impl FaceTraits {
                 .iter()
                 .find(|axis| axis.tag == *b"wght")
                 .map(|axis| (axis.min, axis.max)),
+            normal_width: font.width() == FontWidth::NORMAL,
         }
     }
 }
@@ -144,9 +146,24 @@ pub fn choose_named_face(faces: &[(FaceTraits, FaceNames)], style: &str) -> Opti
             return None;
         }
         let (weight, italic) = requested_face(style);
-        let traits: Vec<FaceTraits> = faces.iter().map(|(traits, _)| *traits).collect();
-        choose_face(&traits, weight, italic)
+        choose_face_among(faces, has_normal_width, weight, italic)
+            .or_else(|| choose_face_among(faces, |_| true, weight, italic))
     })
+}
+
+fn has_normal_width((traits, names): &(FaceTraits, FaceNames)) -> bool {
+    traits.normal_width && !names.style.as_deref().is_some_and(names_width)
+}
+
+fn choose_face_among(
+    faces: &[(FaceTraits, FaceNames)],
+    keep: impl Fn(&(FaceTraits, FaceNames)) -> bool,
+    weight: f32,
+    italic: bool,
+) -> Option<usize> {
+    let kept: Vec<usize> = (0..faces.len()).filter(|&i| keep(&faces[i])).collect();
+    let traits: Vec<FaceTraits> = kept.iter().map(|&i| faces[i].0).collect();
+    choose_face(&traits, weight, italic).map(|found| kept[found])
 }
 
 /// The names a face's font gives it, read from the font file without caching its data.
@@ -239,11 +256,12 @@ pub fn listed_elsewhere_of<'a>(
 }
 
 fn index_listed_elsewhere(collection: &mut Collection) -> Vec<ListedElsewhere> {
-    let names: Vec<String> = collection
+    let mut names: Vec<String> = collection
         .family_names()
         .filter(|name| !name.starts_with('.'))
         .map(String::from)
         .collect();
+    names.sort();
     let mut index = Vec::new();
     for listed in names {
         let Some(info) = collection.family_by_name(&listed) else {
@@ -275,6 +293,7 @@ mod tests {
             weight,
             italic,
             weight_axis: None,
+            normal_width: true,
         }
     }
 
@@ -362,6 +381,31 @@ mod tests {
         // A weight name falls back to that weight's face; another name is that face or none.
         assert_eq!(choose_named_face(&faces, "Regular"), Some(0));
         assert_eq!(choose_named_face(&faces, "Heavy"), None);
+    }
+
+    #[test]
+    fn chooses_the_normal_width_face_for_a_weight_only_style() {
+        let faces = [
+            (face(600.0, false), named("Compressed Demi")),
+            (face(600.0, false), named("Condensed Demi")),
+            (face(600.0, false), named("Demi")),
+            (face(600.0, false), named("Wide Demi")),
+        ];
+        assert_eq!(choose_named_face(&faces, "SemiBold"), Some(2));
+        let only_width = [
+            (face(400.0, false), named("Book")),
+            (face(600.0, false), named("Condensed Demi")),
+        ];
+        assert_eq!(choose_named_face(&only_width, "SemiBold"), Some(1));
+        let narrow = FaceTraits {
+            normal_width: false,
+            ..face(600.0, false)
+        };
+        let by_width_class = [
+            (narrow, named("Demi")),
+            (face(600.0, false), named("Text Demi")),
+        ];
+        assert_eq!(choose_named_face(&by_width_class, "SemiBold"), Some(1));
     }
 
     #[test]

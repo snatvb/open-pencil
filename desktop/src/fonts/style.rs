@@ -15,6 +15,16 @@ const WEIGHT_STYLES: [(f32, &str); 9] = [
     (900.0, "Black"),
 ];
 
+/// Words a style name gives a width other than normal by, alone or with Semi, Extra, or Ultra.
+const WIDTH_WORDS: [&str; 6] = [
+    "condensed",
+    "compressed",
+    "narrow",
+    "expanded",
+    "extended",
+    "wide",
+];
+
 /// The named weight nearest to `weight`; a tie goes to the lighter name.
 pub fn named_weight(weight: f32) -> f32 {
     WEIGHT_STYLES
@@ -60,6 +70,12 @@ pub fn names_weight(style: &str) -> bool {
         || (italic && weight == 400.0 && spelled == "italic")
 }
 
+/// Whether `style` names a width other than normal, as "Compressed Medium" or "SemiBold Wide" do.
+pub fn names_width(style: &str) -> bool {
+    let spelled = spelling(style);
+    WIDTH_WORDS.iter().any(|word| spelled.contains(word))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -101,6 +117,21 @@ mod tests {
             "Heavy",
         ] {
             assert!(!names_weight(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn tells_width_names_from_names_of_normal_width() {
+        for name in [
+            "Compressed Medium",
+            "SemiBold Semi Condensed",
+            "Narrow",
+            "Wide Bold",
+        ] {
+            assert!(names_width(name), "{name}");
+        }
+        for name in ["Medium", "Demi", "Text Bold", "Display"] {
+            assert!(!names_width(name), "{name}");
         }
     }
 }
