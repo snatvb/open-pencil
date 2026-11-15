@@ -11,7 +11,7 @@ import { mayHoldEmoji } from '#core/text/emoji'
 import { drawTextLayout } from './decorations'
 import {
   canDrawSavedText,
-  devicePixelBaselineOffset,
+  canvasPixelBaselineOffset,
   drawDerivedText,
   drawsSavedText,
   hasRotatedDerivedGlyphs
@@ -118,11 +118,11 @@ function savedBaselineOffset(r: SkiaRenderer, canvas: Canvas, node: SceneNode): 
   if (!first || !drawsOnlySavedGlyphs(r, node) || hasRotatedDerivedGlyphs(node)) {
     return 0
   }
-  return devicePixelBaselineOffset(canvas, first.y)
+  return canvasPixelBaselineOffset(canvas, first.y)
 }
 
 /** Moves the whole layer, so its saved strokes, emoji, and effects stay on its snapped glyphs. */
-export function withSavedBaselineOnDevicePixels(
+export function withSavedBaselineOnCanvasPixels(
   r: SkiaRenderer,
   canvas: Canvas,
   node: SceneNode,

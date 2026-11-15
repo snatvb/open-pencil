@@ -10,7 +10,7 @@ import {
 import { expectDefined } from '@open-pencil/test-support/assert'
 
 import { SkiaRenderer } from '#core/canvas/renderer'
-import { withSavedBaselineOnDevicePixels } from '#core/canvas/text/render'
+import { withSavedBaselineOnCanvasPixels } from '#core/canvas/text/render'
 import { getCanvasKit } from '#core/canvaskit'
 
 let ck: Awaited<ReturnType<typeof getCanvasKit>>
@@ -63,7 +63,7 @@ function savedText(glyphs: DerivedTextGlyph[], fields: Partial<SceneNode> = {}) 
     text: 'AB'.slice(0, glyphs.length),
     width: 12,
     height: 36,
-    fontFamily: 'Device Pixel Test Missing',
+    fontFamily: 'Canvas Pixel Test Missing',
     fontSize: FONT_SIZE,
     fontWeight: 500,
     derivedTextGlyphs: glyphs,
@@ -169,7 +169,7 @@ function rowsStandingOn(bottom: number, scale: number): number[] {
 
 const solid = { type: 'SOLID', color: { r: 0, g: 0, b: 0, a: 1 }, opacity: 1, visible: true }
 
-describe('saved glyph baselines on whole device pixels', () => {
+describe('saved glyph baselines on whole canvas pixels', () => {
   test.each([
     [1, 0.5],
     [1, 3.5],
@@ -261,7 +261,7 @@ describe('saved glyph baselines on whole device pixels', () => {
       canvas.translate(0, 0.5)
       canvas.rotate(degrees, 0, 0)
       const before = canvas.getTotalMatrix()
-      withSavedBaselineOnDevicePixels(renderer, canvas, node, () => {
+      withSavedBaselineOnCanvasPixels(renderer, canvas, node, () => {
         expect(canvas.getTotalMatrix()).toEqual(before)
       })
     } finally {
@@ -286,7 +286,7 @@ describe('saved glyph baselines on whole device pixels', () => {
       const canvas = surface.getCanvas()
       canvas.translate(0, 0.5)
       const before = canvas.getTotalMatrix()
-      withSavedBaselineOnDevicePixels(renderer, canvas, node, () => {
+      withSavedBaselineOnCanvasPixels(renderer, canvas, node, () => {
         expect(canvas.getTotalMatrix()).toEqual(before)
       })
       expect(rotationReads).toBe(0)

@@ -44,7 +44,7 @@ import {
   drawTextEmoji,
   hasOverflowPathTextPaint,
   renderText,
-  withSavedBaselineOnDevicePixels
+  withSavedBaselineOnCanvasPixels
 } from './text/render'
 
 function drawVisibleFills(
@@ -490,7 +490,7 @@ export function renderShape(
   node: SceneNode,
   graph: SceneGraph
 ): void {
-  withSavedBaselineOnDevicePixels(r, canvas, node, () => {
+  withSavedBaselineOnCanvasPixels(r, canvas, node, () => {
     if (r.viewportImageRendering || shapeEffects(node).length === 0) {
       r.renderShapeUncached(canvas, node, graph)
       return

@@ -45,7 +45,8 @@ export function snapDerivedGlyphBaseline(y: number): number {
   return Math.round(y)
 }
 
-export function devicePixelBaselineOffset(canvas: Canvas, baseline: number): number {
+/** Device pixels on a surface; world pixels inside a picture recorded at world scale. */
+export function canvasPixelBaselineOffset(canvas: Canvas, baseline: number): number {
   const [, , , skewY, scaleY, translateY, perspectiveX, perspectiveY, homogeneous] =
     canvas.getTotalMatrix()
   const rowsStayHorizontal =
@@ -54,8 +55,8 @@ export function devicePixelBaselineOffset(canvas: Canvas, baseline: number): num
     return 0
   }
   const layerBaseline = snapDerivedGlyphBaseline(baseline)
-  const deviceBaseline = Math.round(translateY + scaleY * baseline)
-  return (deviceBaseline - translateY) / scaleY - layerBaseline
+  const canvasBaseline = Math.round(translateY + scaleY * baseline)
+  return (canvasBaseline - translateY) / scaleY - layerBaseline
 }
 
 /**
