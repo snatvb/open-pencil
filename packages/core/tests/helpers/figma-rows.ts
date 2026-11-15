@@ -1,13 +1,22 @@
 import { expect } from 'bun:test'
 
-import type { CanvasKit } from '@open-pencil/canvaskit'
+import type { CanvasKit, Image } from '@open-pencil/canvaskit'
 import type { SkiaRenderer } from '@open-pencil/core/canvas'
 import { renderNodesToImage } from '@open-pencil/core/io/formats/raster'
 import { SceneGraph } from '@open-pencil/scene-graph'
 import { maxOf } from '@open-pencil/scene-graph/arrays'
 import { expectDefined } from '@open-pencil/test-support/assert'
-
-import { unpremultipliedPixels } from './pixels'
+export function unpremultipliedPixels(ck: CanvasKit, image: Image) {
+  return expectDefined(
+    image.readPixels(0, 0, {
+      width: image.width(),
+      height: image.height(),
+      alphaType: ck.AlphaType.Unpremul,
+      colorType: ck.ColorType.RGBA_8888,
+      colorSpace: ck.ColorSpace.SRGB
+    })
+  )
+}
 
 /** Builds a scene into the frame `hostId`. */
 export type FigmaRowScene = (graph: SceneGraph, hostId: string) => void

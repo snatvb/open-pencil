@@ -6,7 +6,10 @@ import {
   keptCopiesWithin,
   subtreeIds
 } from '@open-pencil/scene-graph/instances'
-import { cloneInstanceOverrideState } from '@open-pencil/scene-graph/instances/overrides'
+import {
+  cloneInstanceOverrideState,
+  type InstanceOverrideState
+} from '@open-pencil/scene-graph/instances/overrides'
 import Matrix from '@open-pencil/scene-graph/matrix'
 import type { Vector } from '@open-pencil/scene-graph/primitives'
 
@@ -18,6 +21,26 @@ type InstanceCreateSnapshot = Partial<SceneNode> & { id: string }
 function createInstanceSnapshot(instance: SceneNode): InstanceCreateSnapshot {
   const { childIds: _childIds, parentId: _parentId, type: _type, ...snapshot } = instance
   return snapshot
+}
+
+/**
+ * The overrides of the instances an instance holds, down to the first instance on each branch:
+ * the ones detaching it hands their layers' overrides to.
+ */
+function nestedInstanceOverrides(
+  ctx: EditorContext,
+  instanceId: string
+): Map<string, InstanceOverrideState> {
+  const states = new Map<string, InstanceOverrideState>()
+  const visit = (parentId: string): void => {
+    for (const child of ctx.graph.getChildren(parentId)) {
+      if (child.type === 'INSTANCE')
+        states.set(child.id, cloneInstanceOverrideState(child.instanceOverrides))
+      else visit(child.id)
+    }
+  }
+  visit(instanceId)
+  return states
 }
 
 type DefaultInstancePlacement = {
@@ -121,6 +144,7 @@ export function createComponentInstanceActions(ctx: EditorContext) {
     const previousOverrides = cloneInstanceOverrideState(selectedNode.instanceOverrides)
     const previousBindings = { ...selectedNode.variantBindings }
     const keptCopies = keptCopiesWithin(ctx.graph, subtreeIds(ctx.graph, selectedNode))
+    const previousNestedOverrides = nestedInstanceOverrides(ctx, selectedNode.id)
 
     ctx.graph.detachInstance(selectedNode.id)
     ctx.setSelectedIds(new Set([selectedNode.id]))
@@ -139,6 +163,9 @@ export function createComponentInstanceActions(ctx: EditorContext) {
           variantBindings: { ...previousBindings }
         })
         keepCopiesAgain(ctx.graph, keptCopies)
+        // Detaching gave the instances it holds their layers' overrides; undoing takes them back.
+        for (const [id, overrides] of previousNestedOverrides)
+          ctx.graph.updateNode(id, { instanceOverrides: cloneInstanceOverrideState(overrides) })
       }
     })
   }

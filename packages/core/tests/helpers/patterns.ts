@@ -5,7 +5,7 @@ import type { Effect, Fill, SceneGraph, SceneNode } from '@open-pencil/scene-gra
 import type { Color } from '@open-pencil/scene-graph/primitives'
 import { expectDefined } from '@open-pencil/test-support/assert'
 
-import { unpremultipliedPixels } from './pixels'
+import { unpremultipliedPixels } from './figma-rows'
 
 export const TILE = 10
 export const TARGET = 40

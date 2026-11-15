@@ -1,6 +1,6 @@
 import { expect } from 'bun:test'
 
-import { unpremultipliedPixels } from '#core-tests/helpers/pixels'
+import { unpremultipliedPixels } from '#core-tests/helpers/figma-rows'
 
 import type { Image } from '@open-pencil/canvaskit'
 import type { SkiaRenderer } from '@open-pencil/core/canvas'

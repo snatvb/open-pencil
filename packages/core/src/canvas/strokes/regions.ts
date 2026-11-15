@@ -2,11 +2,11 @@ import { clamp } from 'es-toolkit'
 
 import type { Path } from '@open-pencil/canvaskit'
 import type { SceneNode, VectorNetwork } from '@open-pencil/scene-graph'
+import { addStrokeRunToPath, strokeRuns } from '@open-pencil/scene-graph/paths'
 import type { Vector } from '@open-pencil/scene-graph/primitives'
 
 import type { SkiaRenderer } from '#core/canvas/renderer'
 import { getStrokeCapEntity, getStrokeJoinEntity } from '#core/canvas/strokes'
-import { addStrokeRunToPath, strokeRuns } from '#core/vector'
 
 type Stroke = SceneNode['strokes'][0]
 type Partners = Map<number, Map<number, number>>

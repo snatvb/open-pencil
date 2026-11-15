@@ -1,14 +1,57 @@
 import { describe, expect, test } from 'bun:test'
 
 import type { Fill, SceneNode } from '@open-pencil/scene-graph'
+import { imageFillMatrix } from '@open-pencil/scene-graph/images'
 import Matrix from '@open-pencil/scene-graph/matrix'
-
-import { makeImageFillLocalMatrix } from '#core/canvas/fills'
+import { patternTileLayout } from '@open-pencil/scene-graph/paints'
 
 const node = {
   width: 120,
   height: 80
 } as SceneNode
+
+describe('canvas pattern fills', () => {
+  test('uses scale, spacing, and alignment for rectangular pattern tiles', () => {
+    const layout = patternTileLayout(
+      { width: 20, height: 10 } as SceneNode,
+      {
+        type: 'PATTERN',
+        scale: 2,
+        patternSpacing: { x: 0.25, y: 0.5 },
+        horizontalAlignment: 'CENTER',
+        verticalAlignment: 'END',
+        color: { r: 0, g: 0, b: 0, a: 1 },
+        opacity: 1,
+        visible: true
+      } as Fill
+    )
+
+    expect(layout).toEqual({
+      rect: { x: 0, y: 0, width: 50, height: 30 },
+      scale: 2,
+      positions: [{ x: -5, y: -10 }]
+    })
+  })
+
+  test('adds an offset source copy for hexagonal pattern tiles', () => {
+    const layout = patternTileLayout(
+      { width: 20, height: 10 } as SceneNode,
+      {
+        type: 'PATTERN',
+        patternTileType: 'HORIZONTAL_HEXAGONAL',
+        patternSpacing: { x: 0, y: 0 },
+        color: { r: 0, g: 0, b: 0, a: 1 },
+        opacity: 1,
+        visible: true
+      } as Fill
+    )
+
+    expect(layout.positions).toEqual([
+      { x: 0, y: 0 },
+      { x: 10, y: 5 }
+    ])
+  })
+})
 
 /** Where image pixels land on the 120 × 80 layer. */
 function place(fill: Partial<Fill>, imageWidth: number, imageHeight: number, points: number[]) {
@@ -19,7 +62,7 @@ function place(fill: Partial<Fill>, imageWidth: number, imageHeight: number, poi
     visible: true,
     ...fill
   }
-  const matrix = makeImageFillLocalMatrix(image, node, imageWidth, imageHeight)
+  const matrix = imageFillMatrix(image, node, imageWidth, imageHeight)
   // Adding zero turns -0 into 0, which reads the same on the layer.
   return Matrix.mapPoints(matrix, points).map((value) => Math.round(value * 1000) / 1000 + 0)
 }

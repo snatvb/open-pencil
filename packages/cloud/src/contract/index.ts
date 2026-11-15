@@ -1,4 +1,5 @@
 export * from './account'
+export * from './locale'
 export {
   SERVICE_ERROR_STATUS,
   serviceCatalogSchema,
@@ -99,8 +100,10 @@ export {
 } from './entitlements'
 export {
   CLOUD_DISCOVERY_PATH,
+  CLOUD_EDITOR_VERSION_HEADER,
   CLOUD_PROTOCOL_VERSION,
   cloudAuthenticationSchema,
+  cloudBrandingSchema,
   cloudCapabilitiesSchema,
   cloudDeploymentSchema,
   cloudCommunityDiscoverySchema,
@@ -109,8 +112,10 @@ export {
   cloudLegalDiscoverySchema,
   cloudListingSchema,
   cloudServerOrigin,
+  isEditorVersionAtLeast,
   parseCloudDiscovery,
   type CloudAuthentication,
+  type CloudBranding,
   type CloudCapabilities,
   type CloudDeployment,
   type CloudCommunityDiscovery,
@@ -246,6 +251,9 @@ export {
   type WorkspaceSummary
 } from './workspaces'
 export {
+  CLOUD_COMMUNITY_PATH,
+  cloudCommunityDesktopLinkURL,
+  cloudCommunityPagePath,
   cloudDesktopLinkURL,
   cloudDocumentPath,
   cloudDocumentURL,
@@ -257,7 +265,7 @@ export {
   type CloudLinkKind,
   type CloudLinkPathKind
 } from './links'
-export { CLOUD_PORTAL_PAGE_ROOTS, isCloudPortalPage } from './portal'
+export { CLOUD_PORTAL_COMMUNITY_PAGES, CLOUD_PORTAL_PAGE_ROOTS, isCloudPortalPage } from './portal'
 export * from './versions'
 export * from './community'
 export {

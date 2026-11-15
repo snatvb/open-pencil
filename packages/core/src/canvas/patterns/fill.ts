@@ -1,13 +1,17 @@
 import type { Canvas, Shader } from '@open-pencil/canvaskit'
 import type { Fill, SceneGraph, SceneNode } from '@open-pencil/scene-graph'
-import { createPatternSourceLookup } from '@open-pencil/scene-graph/paints'
+import {
+  createPatternSourceLookup,
+  patternTileLayout,
+  type PatternTileLayout
+} from '@open-pencil/scene-graph/paints'
 import { regionFills } from '@open-pencil/scene-graph/vector-network'
 
 import { drawOffOutputGrid } from '#core/canvas/images/sampling'
 import type { SkiaRenderer } from '#core/canvas/renderer'
 import { withWorldViewport } from '#core/canvas/renderer/picture'
 
-import { patternTileKey, patternTileLayout, type PatternTileLayout } from './layout'
+import { patternTileKey } from './layout'
 import { patternTilesOf, type PatternTiles } from './tiles'
 
 const UNBOUNDED_VIEWPORT = { minX: -1e9, minY: -1e9, maxX: 1e9, maxY: 1e9 }
