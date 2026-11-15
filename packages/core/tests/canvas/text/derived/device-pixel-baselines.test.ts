@@ -268,4 +268,30 @@ describe('saved glyph baselines on whole device pixels', () => {
       renderer.destroy()
     }
   })
+
+  test('reads no glyph of a text drawn from its loaded fonts', () => {
+    let rotationReads = 0
+    const glyph = Object.defineProperty({ ...squareGlyph(BASELINE, 0) }, 'rotation', {
+      get() {
+        rotationReads++
+        return 0
+      }
+    })
+    const { node } = savedText([squareGlyph(BASELINE, 0)])
+    node.derivedTextGlyphs = [glyph]
+    const surface = expectDefined(ck.MakeSurface(CANVAS_SIDE, CANVAS_SIDE), 'surface')
+    const renderer = new SkiaRenderer(ck, surface)
+    try {
+      renderer.nodeFontReadiness = () => 'ready'
+      const canvas = surface.getCanvas()
+      canvas.translate(0, 0.5)
+      const before = canvas.getTotalMatrix()
+      withSavedBaselineOnDevicePixels(renderer, canvas, node, () => {
+        expect(canvas.getTotalMatrix()).toEqual(before)
+      })
+      expect(rotationReads).toBe(0)
+    } finally {
+      renderer.destroy()
+    }
+  })
 })

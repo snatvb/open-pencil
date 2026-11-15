@@ -115,7 +115,7 @@ export function drawsOnlySavedGlyphs(r: SkiaRenderer, node: SceneNode): boolean 
 
 function savedBaselineOffset(r: SkiaRenderer, canvas: Canvas, node: SceneNode): number {
   const first = node.derivedTextGlyphs?.[0]
-  if (!first || hasRotatedDerivedGlyphs(node) || !drawsOnlySavedGlyphs(r, node)) {
+  if (!first || !drawsOnlySavedGlyphs(r, node) || hasRotatedDerivedGlyphs(node)) {
     return 0
   }
   return devicePixelBaselineOffset(canvas, first.y)
