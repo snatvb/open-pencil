@@ -4,12 +4,22 @@
 use fontique::{Blob, Collection, CollectionOptions, FontInfo, FontStyle, SourceCache};
 use std::sync::{Mutex, OnceLock};
 
-use super::names::{face_names, spelling, FaceNames};
+use super::names::{face_names, spelling, typographic_family, FaceNames};
 use super::style::{named_weight, names_weight, requested_face, style_name};
 
 struct Catalog {
     collection: Collection,
     cache: SourceCache,
+    listed_elsewhere: Option<Vec<ListedElsewhere>>,
+}
+
+/// A face Windows lists under a family other than the one its font names, as it lists a variable
+/// font's optical sizes or a face beyond regular, bold, and italic as families of their own.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ListedElsewhere {
+    pub family: String,
+    pub listed: String,
+    pub position: usize,
 }
 
 static CATALOG: OnceLock<Mutex<Catalog>> = OnceLock::new();
@@ -22,6 +32,7 @@ fn with_catalog<T>(f: impl FnOnce(&mut Catalog) -> T) -> T {
                 system_fonts: true,
             }),
             cache: SourceCache::default(),
+            listed_elsewhere: None,
         })
     });
     let mut catalog = catalog
@@ -176,21 +187,82 @@ pub fn families() -> Vec<(String, Vec<ListedFace>)> {
     })
 }
 
-/// The face of `family` that `style` names, as `choose_named_face` picks it.
+/// The face of `family` that `style` names, as `choose_named_face` picks it: among the faces
+/// listed under `family`, else among those whose font names `family` but are listed elsewhere.
 pub fn load_face(family: &str, style: &str) -> Option<Face> {
     with_catalog(|catalog| {
-        let family = catalog.collection.family_by_name(family)?;
-        let faces: Vec<(FaceTraits, FaceNames)> = family
-            .fonts()
-            .iter()
-            .map(|font| (FaceTraits::of(font), names_of(font)))
-            .collect();
-        let font = &family.fonts()[choose_named_face(&faces, style)?];
-        Some(Face {
-            data: font.load(Some(&mut catalog.cache))?,
-            index: font.index(),
+        let listed = catalog
+            .collection
+            .family_by_name(family)
+            .map(|info| info.fonts().to_vec())
+            .unwrap_or_default();
+        named_face(catalog, &listed, style).or_else(|| {
+            let elsewhere = fonts_listed_elsewhere(catalog, family);
+            named_face(catalog, &elsewhere, style)
         })
     })
+}
+
+fn named_face(catalog: &mut Catalog, fonts: &[FontInfo], style: &str) -> Option<Face> {
+    let faces: Vec<(FaceTraits, FaceNames)> = fonts
+        .iter()
+        .map(|font| (FaceTraits::of(font), names_of(font)))
+        .collect();
+    let font = &fonts[choose_named_face(&faces, style)?];
+    Some(Face {
+        data: font.load(Some(&mut catalog.cache))?,
+        index: font.index(),
+    })
+}
+
+fn fonts_listed_elsewhere(catalog: &mut Catalog, family: &str) -> Vec<FontInfo> {
+    let index = catalog
+        .listed_elsewhere
+        .get_or_insert_with(|| index_listed_elsewhere(&mut catalog.collection))
+        .clone();
+    listed_elsewhere_of(&index, family)
+        .filter_map(|face| {
+            let listed = catalog.collection.family_by_name(&face.listed)?;
+            listed.fonts().get(face.position).cloned()
+        })
+        .collect()
+}
+
+pub fn listed_elsewhere_of<'a>(
+    index: &'a [ListedElsewhere],
+    family: &str,
+) -> impl Iterator<Item = &'a ListedElsewhere> {
+    let wanted = spelling(family);
+    index
+        .iter()
+        .filter(move |face| spelling(&face.family) == wanted)
+}
+
+fn index_listed_elsewhere(collection: &mut Collection) -> Vec<ListedElsewhere> {
+    let names: Vec<String> = collection
+        .family_names()
+        .filter(|name| !name.starts_with('.'))
+        .map(String::from)
+        .collect();
+    let mut index = Vec::new();
+    for listed in names {
+        let Some(info) = collection.family_by_name(&listed) else {
+            continue;
+        };
+        for (position, font) in info.fonts().iter().enumerate() {
+            let named = font
+                .load(None)
+                .and_then(|data| typographic_family(data.as_ref(), font.index()));
+            if let Some(family) = named.filter(|family| spelling(family) != spelling(&listed)) {
+                index.push(ListedElsewhere {
+                    family,
+                    listed: listed.clone(),
+                    position,
+                });
+            }
+        }
+    }
+    index
 }
 
 #[cfg(test)]
@@ -248,6 +320,26 @@ mod tests {
             ..variable
         };
         assert_eq!(choose_face(&[narrow], 700.0, false), None);
+    }
+
+    fn listed(family: &str, listed: &str, position: usize) -> ListedElsewhere {
+        ListedElsewhere {
+            family: family.to_string(),
+            listed: listed.to_string(),
+            position,
+        }
+    }
+
+    #[test]
+    fn finds_the_faces_listed_under_another_family_by_the_family_their_font_names() {
+        let index = [
+            listed("Acme Sans", "Acme Sans Compressed", 0),
+            listed("Acme Sans", "Acme Sans Compressed", 1),
+            listed("Acme Serif", "Acme Serif Display", 0),
+        ];
+        let found: Vec<_> = listed_elsewhere_of(&index, "acme sans").collect();
+        assert_eq!(found, vec![&index[0], &index[1]]);
+        assert_eq!(listed_elsewhere_of(&index, "Acme Mono").count(), 0);
     }
 
     fn named(style: &str) -> FaceNames {
