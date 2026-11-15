@@ -4,6 +4,7 @@ import {
   faceLoadKey,
   faceStyleKey,
   namesWeight,
+  namesWidth,
   normalizeFontFamily,
   standardStyleName,
   styleToWeight
@@ -41,6 +42,17 @@ describe('styleToWeight', () => {
     expect(styleToWeight('Extra Condensed Light')).toBe(300)
     expect(styleToWeight('SemiBold SemiCondensed')).toBe(600)
     expect(styleToWeight('Expanded')).toBe(400)
+  })
+})
+
+describe('namesWidth', () => {
+  test('tells width names from names of normal width', () => {
+    for (const style of ['Compressed Medium', 'SemiBold Semi Condensed', 'Narrow', 'Wide Italic']) {
+      expect(namesWidth(style)).toBe(true)
+    }
+    for (const style of ['Medium', 'Book', 'Display Bold', 'Italic']) {
+      expect(namesWidth(style)).toBe(false)
+    }
   })
 })
 

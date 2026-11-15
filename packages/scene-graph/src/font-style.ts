@@ -88,6 +88,11 @@ export function parseFontStyle(style: string | undefined): ParsedFontStyle {
   }
 }
 
+/** Whether `style` names a width other than normal, as "Compressed Medium" or "Wide" do. */
+export function namesWidth(style: string): boolean {
+  return FONT_WIDTH_NAME.test(normalizeFontStyleName(style))
+}
+
 export function styleToWeight(style: string | undefined): number {
   return parseFontStyle(style).weight
 }
