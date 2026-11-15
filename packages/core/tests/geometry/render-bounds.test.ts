@@ -2,7 +2,8 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 
 import { FigmaAPI } from '@open-pencil/core/figma-api'
 import { exportBounds } from '@open-pencil/core/io/formats/raster'
-import { SceneGraph } from '@open-pencil/scene-graph'
+import { SceneGraph, type VectorNetwork } from '@open-pencil/scene-graph'
+import { maxOf, minOf } from '@open-pencil/scene-graph/arrays'
 import { registerTestFont } from '@open-pencil/test-support/fonts/bundled'
 
 type Rectangle = ReturnType<FigmaAPI['createRectangle']>
@@ -482,4 +483,102 @@ test('a layer whose paints are all transparent has no render bounds', () => {
   clear.fills = [{ type: 'SOLID', color: { r: 1, g: 0, b: 0 }, opacity: 0 }]
   clear.effects = [shadow(4, 0, { x: 10, y: 10 })]
   expect(exportBounds(graph, [clear.id])).toBeNull()
+})
+
+describe('render bounds of a vector that turns at a junction', () => {
+  const zero = { x: 0, y: 0 }
+  const line = (start: number, end: number) => ({
+    start,
+    end,
+    tangentStart: zero,
+    tangentEnd: zero
+  })
+  const degrees = (angle: number) => (angle * Math.PI) / 180
+  const graph = new SceneGraph()
+  const page = graph.getPages()[0].id
+  const leftEdge = (vectorNetwork: VectorNetwork, weight: number, align: 'OUTSIDE' | 'CENTER') => {
+    const xs = vectorNetwork.vertices.map((vertex) => vertex.x)
+    const ys = vectorNetwork.vertices.map((vertex) => vertex.y)
+    const vector = graph.createNode('VECTOR', page, {
+      width: maxOf(xs) - minOf(xs),
+      height: maxOf(ys) - minOf(ys),
+      fills: [{ type: 'SOLID', color: { r: 1, g: 0, b: 0, a: 1 }, opacity: 1, visible: true }],
+      strokes: [
+        {
+          type: 'SOLID',
+          color: { r: 0, g: 0, b: 0, a: 1 },
+          weight,
+          opacity: 1,
+          visible: true,
+          align,
+          join: 'MITER'
+        }
+      ],
+      strokeMiterLimit: 4,
+      vectorNetwork
+    })
+    return exportBounds(graph, [vector.id])?.minX ?? Infinity
+  }
+  const outsideMiterTip = (tipX: number, halfAngle: number) => tipX - 20 / Math.sin(halfAngle)
+
+  test('reach the miter where a region stroke joins the outline across the junction', () => {
+    const splitTriangle: VectorNetwork = {
+      vertices: [
+        { x: 0, y: 30 },
+        { x: 100, y: 0 },
+        { x: 100, y: 60 },
+        { x: 100, y: 30 }
+      ],
+      segments: [line(0, 1), line(1, 3), line(3, 2), line(2, 0), line(0, 3)],
+      regions: [
+        { windingRule: 'NONZERO', loops: [[0, 1, 4]] },
+        { windingRule: 'NONZERO', loops: [[4, 2, 3]] }
+      ]
+    }
+    const tip = outsideMiterTip(0, Math.atan(30 / 100))
+    expect(leftEdge(splitTriangle, 20, 'OUTSIDE')).toBeLessThanOrEqual(tip)
+  })
+
+  test('reach the miter of a region loop that turns past open segments between its ends', () => {
+    const tipWithSpokeAndTail: VectorNetwork = {
+      vertices: [
+        { x: 5, y: 30 },
+        { x: 105, y: 0 },
+        { x: 105, y: 60 },
+        { x: 105, y: 30 },
+        { x: 0, y: 30 }
+      ],
+      segments: [line(0, 1), line(1, 2), line(2, 0), line(0, 3), line(0, 4)],
+      regions: [{ windingRule: 'NONZERO', loops: [[0, 1, 2]] }]
+    }
+    const tip = outsideMiterTip(5, Math.atan(30 / 100))
+    expect(leftEdge(tipWithSpokeAndTail, 20, 'OUTSIDE')).toBeLessThanOrEqual(tip)
+  })
+
+  test('reach the miter of an open chain that walks through a junction past a segment', () => {
+    const centre = { x: 2.5, y: 50 }
+    const ray = (angle: number, length: number) => ({
+      x: centre.x + length * Math.cos(degrees(angle)),
+      y: centre.y + length * Math.sin(degrees(angle))
+    })
+    const star: VectorNetwork = {
+      vertices: [centre, ray(0, 100), ray(40, 100), ray(20, 100), ray(120, 5)],
+      segments: [line(0, 1), line(0, 2), line(0, 3), line(0, 4)],
+      regions: []
+    }
+    const tip = centre.x + (5 / Math.sin(degrees(20))) * Math.cos(degrees(200))
+    expect(leftEdge(star, 10, 'CENTER')).toBeLessThanOrEqual(tip)
+  })
+
+  test('reach the corner where a teardrop loop closes on its own vertex', () => {
+    const teardrop: VectorNetwork = {
+      vertices: [{ x: 0, y: 50 }],
+      segments: [
+        { start: 0, end: 0, tangentStart: { x: 100, y: -40 }, tangentEnd: { x: 100, y: 40 } }
+      ],
+      regions: [{ windingRule: 'NONZERO', loops: [[0]] }]
+    }
+    const tip = outsideMiterTip(0, Math.atan(40 / 100))
+    expect(leftEdge(teardrop, 20, 'OUTSIDE')).toBeLessThanOrEqual(tip)
+  })
 })

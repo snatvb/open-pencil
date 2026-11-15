@@ -1,5 +1,5 @@
 import { arrowCapOverflow } from './arrow-caps'
-import { joinedSegmentPairs, leavingDirection } from './paths/network'
+import { miterRatio } from './paths/miters'
 import type { Rect, Vector } from './primitives'
 import type {
   ArcData,
@@ -334,25 +334,6 @@ export function strokeOverflow(
   // A line's heads sit on its stroke's middle, half a weight off the line.
   const heads = arrowCapOverflow(strokes, fallbackCap, network)
   return Math.max(overflow, heads > 0 && line ? heads + overflow / 2 : heads)
-}
-
-/**
- * How far past half the stroke the sharpest mitered corner reaches, as a multiple: a corner of
- * angle θ mitres out to 1/sin(θ/2), unless that passes the miter limit and it bevels instead.
- */
-function miterRatio(network: VectorNetwork, join: StrokeJoin | undefined, limit = 4): number {
-  let ratio = 1
-  for (const [vertex, first, second] of joinedSegmentPairs(network)) {
-    if ((network.vertices[vertex].strokeJoin ?? join ?? 'MITER') !== 'MITER') continue
-    const a = leavingDirection(network, first, vertex)
-    const b = leavingDirection(network, second, vertex)
-    const lengths = Math.hypot(a.x, a.y) * Math.hypot(b.x, b.y)
-    if (lengths === 0) continue
-    const angle = Math.acos(Math.max(-1, Math.min(1, (a.x * b.x + a.y * b.y) / lengths)))
-    const miter = 1 / Math.sin(angle / 2)
-    if (miter <= limit) ratio = Math.max(ratio, miter)
-  }
-  return ratio
 }
 
 /**

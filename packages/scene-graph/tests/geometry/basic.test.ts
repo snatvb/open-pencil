@@ -71,3 +71,40 @@ describe('strokeOverflow at mitered corners', () => {
     )
   })
 })
+
+describe('strokeOverflow at a junction of regions', () => {
+  const zero = { x: 0, y: 0 }
+  const line = (start: number, end: number) => ({
+    start,
+    end,
+    tangentStart: zero,
+    tangentEnd: zero
+  })
+  const vertices = [
+    { x: 0, y: 30 },
+    { x: 100, y: 0 },
+    { x: 100, y: 60 },
+    { x: 100, y: 30 }
+  ]
+  const segments = [line(0, 1), line(1, 3), line(3, 2), line(2, 0), line(0, 3)]
+  const outside = {
+    type: 'SOLID' as const,
+    color: { r: 0, g: 0, b: 0, a: 1 },
+    weight: 20,
+    opacity: 1,
+    visible: true,
+    align: 'OUTSIDE' as const
+  }
+  const miterAtTheTip = 20 / Math.sin(Math.atan(30 / 100))
+
+  test('reaches the miter of a single region whose loop turns at the junction', () => {
+    const oneRegion = {
+      vertices,
+      segments,
+      regions: [{ windingRule: 'NONZERO' as const, loops: [[0, 1, 2, 3]] }]
+    }
+    expect(
+      strokeOverflow([outside], 'NONE', oneRegion, { strokeJoin: 'MITER', strokeMiterLimit: 4 })
+    ).toBeCloseTo(miterAtTheTip, 6)
+  })
+})
