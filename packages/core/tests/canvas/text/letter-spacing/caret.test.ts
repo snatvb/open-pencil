@@ -103,6 +103,23 @@ const rows = TEXTS.flatMap((textValue) =>
   )
 )
 
+/** A text editor on `node`, laid out by the real renderer. */
+function editorOn(node: SceneNode): TextEditor {
+  const editor = new TextEditor(canvasKit())
+  editor.setRenderer(
+    asDouble<Parameters<TextEditor['setRenderer']>[0]>({
+      buildParagraph: (shown: SceneNode) => {
+        const layout = buildParagraph(renderer(), shown)
+        layout.layout(shown.width)
+        return layout
+      },
+      fontGeneration: 1
+    })
+  )
+  editor.start(node)
+  return editor
+}
+
 describe('the caret and selection keep their place against the glyphs in spaced text', () => {
   test.each(rows)('%s, %s %s: every caret moves with its line', (_, align, __, value, spacing) => {
     const layout = laidOut(boxed(value, align, spacing))
@@ -205,17 +222,19 @@ describe('an empty last line after a line break', () => {
   )
 
   test.each(breaks)(
-    '%s, %s %s: the saved line widths take no spacing off it',
+    '%s, %s %s: the saved lines end at the closing break, and a blank one takes no spacing off',
     (_, align, __, value, spacing) => {
       const fontProvider = expectDefined(renderer().fontProvider, 'font provider')
       const shaped = expectDefined(
         shapeText(canvasKit(), fontProvider, text(boxed(value, align, spacing))),
         'shaped'
       )
-      const last = expectDefined(shaped.baselines.at(-1), 'last baseline')
-      expect(last.width).toBe(0)
+      // Figma saves no baseline for the empty line after a closing break.
+      expect(shaped.baselines.at(-1)?.endCharacter).toBe(value.length)
       for (const baseline of shaped.baselines) {
-        expect(baseline.width).toBeGreaterThanOrEqual(0)
+        const blank = value.slice(baseline.firstCharacter, baseline.endCharacter) === '\n'
+        if (blank) expect(baseline.width).toBe(0)
+        else expect(baseline.width).toBeGreaterThan(0)
       }
     }
   )
@@ -224,22 +243,6 @@ describe('an empty last line after a line break', () => {
 describe('up and down arrows keep the caret’s column in spaced text', () => {
   const lines = 'Hello  \nHello  '
   const lineLength = 8
-
-  function editorOn(node: SceneNode): TextEditor {
-    const editor = new TextEditor(canvasKit())
-    editor.setRenderer(
-      asDouble<Parameters<TextEditor['setRenderer']>[0]>({
-        buildParagraph: (shown: SceneNode) => {
-          const layout = buildParagraph(renderer(), shown)
-          layout.layout(shown.width)
-          return layout
-        },
-        fontGeneration: 1
-      })
-    )
-    editor.start(node)
-    return editor
-  }
 
   test.each(
     ALIGNS.flatMap((align) =>
@@ -303,4 +306,39 @@ describe('the line a text index is on', () => {
     }
     layout.delete()
   })
+})
+
+describe('the caret after the last character', () => {
+  test.each(['e\nz', 'é\nz', 'шрифт\nтекст', 'Hello\n', 'Hello\n\n'])(
+    '%j: Home and End move along the last line',
+    (value) => {
+      const editor = editorOn(text(boxed(value, 'LEFT', pixels(4))))
+      const state = expectDefined(editor.state, 'editor state')
+      const lastLine = value.lastIndexOf('\n') + 1
+
+      state.cursor = value.length
+      editor.moveToLineStart()
+      expect(state.cursor).toBe(lastLine)
+
+      editor.moveToLineEnd()
+      expect(state.cursor).toBe(value.length)
+      editor.stop()
+    }
+  )
+})
+
+describe('the lines of a text', () => {
+  test.each(['Hello\n', 'Hello\n\n', 'a\nb\n', 'Hi there\nfoo  \nbar'])(
+    '%j: each starts where the one before ends, and an empty last line at the end',
+    (value) => {
+      const layout = laidOut(boxed(value, 'LEFT', pixels(4)))
+      const lines = layout.getLineMetrics()
+      for (const [index, line] of lines.entries()) {
+        expect(line.startIndex).toBe(index === 0 ? 0 : lines[index - 1].endIncludingNewline)
+        expect(line.endExcludingWhitespaces).toBeGreaterThanOrEqual(line.startIndex)
+      }
+      if (value.endsWith('\n')) expect(lines.at(-1)?.startIndex).toBe(value.length)
+      layout.delete()
+    }
+  )
 })

@@ -16,7 +16,7 @@ import { textStyleBoundVariables } from '@open-pencil/scene-graph/variables'
 
 import { parseFigma } from '#core/figma-api/validation'
 import { variableAlias, type FigmaVariableAlias } from '#core/figma-api/variables/values'
-import { styleRunsWithPatch } from '#core/text/character-style'
+import { styleRunsWithPatch } from '#core/text/character/style'
 import { faceForStyle } from '#core/text/font/names'
 
 import { getStyledTextSegments } from './style'

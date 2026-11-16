@@ -16,8 +16,8 @@ import { shapeWithTextGeometry } from '@open-pencil/scene-graph/shape-with-text'
 
 import { vectorNetworkToPath, geometryBlobToPath } from '#core/vector'
 
-import { sharedPath } from './paths/shared'
-import type { SkiaRenderer } from './renderer'
+import { unitedOutline } from './paths/union'
+import type { SkiaRenderer } from './renderer/skia'
 
 export function makeSmoothRRectPath(r: SkiaRenderer, node: SceneNode, spread = 0): Path {
   const path = new r.ck.PathBuilder()
@@ -143,31 +143,21 @@ export function drawOutline(canvas: Canvas, outline: NodeOutline, paint: Paint):
   }
 }
 
-export function unitePaths(r: SkiaRenderer, paths: readonly Path[]): Path | null {
-  let united: Path | null = paths[0]?.copy() ?? null
-  for (const path of paths.slice(1)) {
-    if (!united) {
-      break
-    }
-    const next = r.ck.Path.MakeFromOp(united, path, r.ck.PathOp.Union)
-    united.delete()
-    united = next
-  }
-  return united
-}
-
-/** `outline` as one path the caller owns. */
-function outlineToPath(
+export function unitedOutlinePath(
   r: SkiaRenderer,
   node: SceneNode,
   outline: NodeOutline,
   spread: number
-): Path {
-  if (outline.kind === 'paths' && outline.paths.length === 1) return outline.paths[0].copy()
-  const united = outline.kind === 'paths' ? unitedOutline(r, node, outline.paths, spread) : null
-  if (united) {
-    return united
+): Path | null {
+  if (outline.kind !== 'paths' || outline.paths.length < 2) {
+    return null
   }
+  return unitedOutline(r, `${node.id}|outline|${spread}`, outline.paths)
+}
+
+/** `outline` as one path the caller owns. */
+function joinedOutlinePath(r: SkiaRenderer, outline: NodeOutline): Path {
+  if (outline.kind === 'paths' && outline.paths.length === 1) return outline.paths[0].copy()
   const path = new r.ck.PathBuilder()
   if (outline.kind === 'rect') path.addRect(outline.rect)
   else if (outline.kind === 'rrect') path.addRRect(outline.rrect)
@@ -176,23 +166,22 @@ function outlineToPath(
   return path.detachAndDelete()
 }
 
-export function unitedOutline(
+function outlineToPath(
   r: SkiaRenderer,
   node: SceneNode,
-  paths: readonly Path[],
+  outline: NodeOutline,
   spread: number
-): Path | null {
-  if (paths.length === 0) {
-    return null
-  }
-  return sharedPath(r.nodePaths, `${node.id}|outline|${spread}`, 'outline', [...paths], () =>
-    unitePaths(r, paths)
-  )
+): Path {
+  return unitedOutlinePath(r, node, outline, spread)?.copy() ?? joinedOutlinePath(r, outline)
 }
 
 /** The layer's outline grown by `spread`, as one path the caller owns. */
 export function makeNodeShapePath(r: SkiaRenderer, node: SceneNode, spread = 0): Path {
   return withNodeOutline(r, node, (outline) => outlineToPath(r, node, outline, spread), spread)
+}
+
+export function makeNodeEdgesPath(r: SkiaRenderer, node: SceneNode): Path {
+  return withNodeOutline(r, node, (outline) => joinedOutlinePath(r, outline))
 }
 
 function outlinePath(r: SkiaRenderer, commands: PolygonOutlineCommand[]): Path {

@@ -8,8 +8,8 @@ import {
 import { regionFills } from '@open-pencil/scene-graph/vector-network'
 
 import { drawOffOutputGrid } from '#core/canvas/images/sampling'
-import type { SkiaRenderer } from '#core/canvas/renderer'
 import { withWorldViewport } from '#core/canvas/renderer/picture'
+import type { SkiaRenderer } from '#core/canvas/renderer/skia'
 
 import { patternTileKey } from './layout'
 import { patternTilesOf, type PatternTiles } from './tiles'

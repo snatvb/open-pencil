@@ -9,8 +9,8 @@ import {
 } from '@open-pencil/scene-graph'
 import { expectDefined } from '@open-pencil/test-support/assert'
 
-import { SkiaRenderer } from '#core/canvas/renderer'
-import { withSavedBaselineOnCanvasPixels } from '#core/canvas/text/render'
+import { SkiaRenderer } from '#core/canvas/renderer/skia'
+import { withSavedBaselineOnCanvasPixels } from '#core/canvas/text/draw/text'
 import { getCanvasKit } from '#core/canvaskit'
 
 let ck: Awaited<ReturnType<typeof getCanvasKit>>

@@ -10,18 +10,17 @@ import {
 } from '@open-pencil/scene-graph/geometry'
 import { paintShows } from '@open-pencil/scene-graph/paints'
 
-import { setPaintBlendMode } from '#core/canvas/blend'
-import type { SkiaRenderer } from '#core/canvas/renderer'
+import { setPaintBlendMode } from '#core/canvas/blend/modes'
+import type { SkiaRenderer } from '#core/canvas/renderer/skia'
 import {
   drawOutline,
   makeNodeShapePath,
-  unitedOutline,
+  unitedOutlinePath,
   withNodeOutline,
   type NodeOutline
 } from '#core/canvas/shapes'
 import { sideStrokeRRects } from '#core/canvas/strokes/sides'
-
-import { fillsCastShadow } from './silhouette'
+import { fillsCastShadow } from '#core/geometry/shadows'
 
 /** Whether every region of a vector casts a shadow, from its own paints or the layer's. */
 function regionsCastShadow(node: SceneNode): boolean {
@@ -187,16 +186,12 @@ function drawUnitedOutline(
   outline: NodeOutline,
   spread: number
 ): void {
-  const united =
-    outline.kind === 'paths' && outline.paths.length > 1
-      ? unitedOutline(r, node, outline.paths, spread)
-      : null
+  const united = unitedOutlinePath(r, node, outline, spread)
   if (!united) {
     drawOutline(canvas, outline, r.auxFill)
     return
   }
   canvas.drawPath(united, r.auxFill)
-  united.delete()
 }
 
 /** Whether the stroke reaches past the shape on any side, so it grows the shadow. */

@@ -3,7 +3,7 @@ import type { SceneGraph } from '@open-pencil/scene-graph'
 
 import { needsImagePreviews } from '#core/canvas/images/previews'
 import { paintPageBackground } from '#core/canvas/page/background'
-import type { RenderOverlays, SkiaRenderer } from '#core/canvas/renderer'
+import type { RenderOverlays, SkiaRenderer } from '#core/canvas/renderer/skia'
 import { warmUpEffectPrograms } from '#core/canvas/warm-up'
 import { playIslandRoots } from '#core/editor/play/islands'
 import type { EditorState } from '#core/editor/types'
@@ -12,6 +12,7 @@ import type { EditorProfile } from '#core/editor/views/types'
 import { emitNavigationTrace } from '#core/profiler'
 
 import { drawChromePass, drawLabelPass, drawOverlayPass } from './overlay-pass'
+import { recordPicture } from './picture'
 import { hasTransientPreviews, renderPageWithPreviews } from './transient-previews'
 import { computeContentBounds } from './visual-bounds'
 
@@ -433,7 +434,6 @@ function recordScenePicture(
   r.wholeScene.picture = null
   const prevViewport = r.worldViewport
   r.worldViewport = { x: -1e6, y: -1e6, w: 2e6, h: 2e6 }
-  const recorder = new r.ck.PictureRecorder()
   try {
     const pageNode = graph.getNode(r.pageId ?? graph.rootId)
     const sceneContentBounds = pageNode ? computeContentBounds(graph, pageNode.childIds) : null
@@ -452,20 +452,17 @@ function recordScenePicture(
       sceneBounds.x + sceneBounds.width + padding,
       sceneBounds.y + sceneBounds.height + padding
     )
-    const recCanvas = recorder.beginRecording(bounds)
-    if (pageNode) {
-      for (const childId of pageNode.childIds) {
+    r.wholeScene.picture = recordPicture(r, bounds, (recCanvas) => {
+      for (const childId of pageNode?.childIds ?? []) {
         r.renderNode(recCanvas, graph, childId, {})
       }
-    }
-    r.wholeScene.picture = recorder.finishRecordingAsPicture()
+    })
     r.wholeScene.version = sceneVersion
     r.wholeScene.fontGeneration = r.fontGeneration
     r.wholeScene.positionPreviewVersion = graph.positionPreviewVersion
     r.wholeScene.pageId = r.pageId
     canvas.drawPicture(r.wholeScene.picture)
   } finally {
-    recorder.delete()
     r.worldViewport = prevViewport
   }
 }

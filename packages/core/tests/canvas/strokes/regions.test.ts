@@ -16,7 +16,6 @@ const LEFT = 40
 const TOP = 40
 const zero = { x: 0, y: 0 }
 
-/** Squares of side 40 at the given x offsets, each with its own four segments and loop. */
 function squares(offsets: number[], regionLoops: number[][]): VectorNetwork {
   const vertices = offsets.flatMap((x) => [
     { x, y: 0 },

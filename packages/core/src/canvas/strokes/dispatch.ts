@@ -9,9 +9,9 @@ import { strokeSideWeights } from '@open-pencil/scene-graph/geometry'
 import { addStrokeRunToPath, strokeRuns } from '@open-pencil/scene-graph/paths'
 import type { Color } from '@open-pencil/scene-graph/primitives'
 
-import { fillGeometryPath, unitedPath } from '#core/canvas/boolean'
-import type { SkiaRenderer } from '#core/canvas/renderer'
-import { unitedOutline } from '#core/canvas/shapes'
+import { fillGeometryPath } from '#core/canvas/boolean'
+import { unitedOutline, unitedPath } from '#core/canvas/paths/union'
+import type { SkiaRenderer } from '#core/canvas/renderer/skia'
 import {
   configureStrokePaint,
   drawArrowHeads,
@@ -20,7 +20,7 @@ import {
   getStrokeJoinEntity,
   normalizeDashPattern,
   withStrokeDash
-} from '#core/canvas/strokes'
+} from '#core/canvas/strokes/draw'
 import { drawIndividualSideStrokes } from '#core/canvas/strokes/sides'
 import { vectorNetworkToCenterlinePath, vectorNetworkToPath } from '#core/vector'
 import { isOpenVectorNetwork } from '#core/vector/connectivity'
@@ -355,9 +355,9 @@ function drawUnitedRegionStrokes(
 ): void {
   const regions = network.regions.length
   const closed = vectorPaths.slice(0, regions)
-  const inside = stroke.align === 'INSIDE' ? unitedOutline(r, node, closed, 0) : null
+  const inside =
+    stroke.align === 'INSIDE' ? unitedOutline(r, `${node.id}|inside-stroke`, closed) : null
   const sided = clipToStrokeSide(r, canvas, closed, stroke.align, inside)
-  inside?.delete()
   const key = strokeOutlineKey(node, stroke, sided ? 'united-sided' : 'united')
   let outlines = r.nodePaths.strokeOutline.get(key)
   if (!outlines) {

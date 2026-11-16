@@ -1,5 +1,5 @@
 import type { Vector } from '../primitives'
-import type { VectorRegion, VectorSegment, VectorVertex } from '../types'
+import type { VectorNetwork, VectorRegion, VectorSegment, VectorVertex } from '../types'
 import type { PathSink } from './sink'
 
 export function addSegmentDirected(
@@ -264,8 +264,83 @@ export interface StrokeRun {
   closed: boolean
 }
 
-/** The segment a run reaching `vertex` along segment `from` goes on with, if any. */
 export type RunContinuation = (vertex: number, from: number) => number | undefined
+
+/**
+ * The indices of the segments meeting at each vertex, in segment order; a segment from a vertex to
+ * itself is listed there once. `include` leaves out the segments it returns false for.
+ */
+export function segmentsByVertex(
+  segments: readonly VectorSegment[],
+  include?: (index: number) => boolean
+): Map<number, number[]> {
+  const byVertex = new Map<number, number[]>()
+  const meet = (vertex: number, index: number) => {
+    const list = byVertex.get(vertex)
+    if (list) list.push(index)
+    else byVertex.set(vertex, [index])
+  }
+  for (const [index, segment] of segments.entries()) {
+    if (include && !include(index)) continue
+    meet(segment.start, index)
+    if (segment.end !== segment.start) meet(segment.end, index)
+  }
+  return byVertex
+}
+
+/**
+ * The direction segment `index` leaves `vertex` in: along its handle there, or with that handle
+ * collapsed, toward the far end's control point, as a cubic leaves toward its next distinct
+ * control point; a straight segment leaves along its chord.
+ */
+export function leavingDirection(
+  network: Pick<VectorNetwork, 'vertices' | 'segments'>,
+  index: number,
+  vertex: number
+): Vector {
+  const segment = network.segments[index]
+  const atStart = segment.start === vertex
+  const handle = atStart ? segment.tangentStart : segment.tangentEnd
+  if (handle.x !== 0 || handle.y !== 0) return handle
+  const from = network.vertices[vertex]
+  const to = network.vertices[atStart ? segment.end : segment.start]
+  const farHandle = atStart ? segment.tangentEnd : segment.tangentStart
+  const control = { x: to.x + farHandle.x - from.x, y: to.y + farHandle.y - from.y }
+  if (control.x !== 0 || control.y !== 0) return control
+  return { x: to.x - from.x, y: to.y - from.y }
+}
+
+/**
+ * The pairs of segments a stroke may join at each vertex: the two at a vertex exactly two meet at,
+ * and with several regions, also each two region edges next to each other around a vertex,
+ * which region strokes join where the gap between them is unfilled, open segments aside.
+ */
+export function joinedSegmentPairs(
+  network: VectorNetwork
+): [vertex: number, a: number, b: number][] {
+  const pairs: [number, number, number][] = []
+  for (const [vertex, indices] of segmentsByVertex(network.segments)) {
+    if (indices.length === 2) pairs.push([vertex, indices[0], indices[1]])
+  }
+  if (network.regions.length < 2) return pairs
+  const bounding = new Set(network.regions.flatMap((region) => region.loops.flat()))
+  const edges = segmentsByVertex(
+    network.segments,
+    (index) => bounding.has(index) && network.segments[index].start !== network.segments[index].end
+  )
+  for (const [vertex, indices] of edges) {
+    if (indices.length < 2) continue
+    const angle = (index: number) => {
+      const direction = leavingDirection(network, index, vertex)
+      return Math.atan2(direction.y, direction.x)
+    }
+    const around = indices.toSorted((a, b) => angle(a) - angle(b))
+    for (const [position, index] of around.entries()) {
+      pairs.push([vertex, index, around[(position + 1) % around.length]])
+    }
+  }
+  return pairs
+}
 
 /**
  * Segments chained into runs as Figma strokes a network: by default a run passes through every
@@ -274,16 +349,7 @@ export type RunContinuation = (vertex: number, from: number) => number | undefin
  * `continuation` names a segment to go on with there.
  */
 export function strokeRuns(segments: VectorSegment[], continuation?: RunContinuation): StrokeRun[] {
-  const incident = new Map<number, number[]>()
-  const meet = (vertex: number, index: number) => {
-    const list = incident.get(vertex)
-    if (list) list.push(index)
-    else incident.set(vertex, [index])
-  }
-  for (const [index, segment] of segments.entries()) {
-    meet(segment.start, index)
-    if (segment.end !== segment.start) meet(segment.end, index)
-  }
+  const incident = segmentsByVertex(segments)
   const used = new Set<number>()
   const across = (index: number, vertex: number) =>
     segments[index].start === vertex ? segments[index].end : segments[index].start

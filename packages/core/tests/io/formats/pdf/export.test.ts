@@ -203,7 +203,6 @@ async function exportBlendedSquare(layer: BlendMode, fill: BlendMode): Promise<s
   return pdfObjects(expectDefined(await exportPDFDocument(graph, specs), 'PDF').data)
 }
 
-// Skia's PDF backend writes only built-in blend modes; a runtime blender comes out as Normal.
 test('writes a soft light layer and a soft light fill as PDF soft light', async () => {
   expect(await exportBlendedSquare('SOFT_LIGHT', 'NORMAL')).toMatch(/\/BM\s*\/SoftLight/)
   expect(await exportBlendedSquare('PASS_THROUGH', 'SOFT_LIGHT')).toMatch(/\/BM\s*\/SoftLight/)
@@ -219,6 +218,7 @@ test('writes soft light into the PDF even after the canvas recorded the layer in
     expect(renderer.nodePictures.size).toBeGreaterThan(0)
     const result = await exportPDFDocument(graph, specs, { renderer })
     expect(pdfObjects(expectDefined(result, 'PDF').data)).toMatch(/\/BM\s*\/SoftLight/)
+    expect(renderer.builtInBlendModesOnly).toBe(false)
   } finally {
     renderer.destroy()
   }

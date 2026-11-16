@@ -8,17 +8,17 @@ import { addOpenSegmentsToPath } from '@open-pencil/scene-graph/paths'
 import { getTextOutlineSupport } from '#core/text/outlines'
 import { isOpenVectorNetwork } from '#core/vector/connectivity'
 
-import { clearFillShader } from './fills'
+import { clearFillShader } from './fills/paint'
 import { sharedPath } from './paths/shared'
 import { curvePathData } from './paths/svg-data'
-import type { SkiaRenderer } from './renderer'
-import { unitePaths } from './shapes'
+import { unitedPath } from './paths/union'
+import type { SkiaRenderer } from './renderer/skia'
 import {
   configureStrokePaint,
   forVisibleStrokes,
   normalizeDashPattern,
   withStrokeDash
-} from './strokes'
+} from './strokes/draw'
 import { makeLineSegmentPath, makeLineStrokeOutline } from './strokes/line'
 import { textNodeToOutlinePath } from './text/outlines/glyphs'
 
@@ -54,20 +54,6 @@ export function canMakeBooleanSourceNode(node: SceneNode, graph: SceneGraph): bo
   })
 }
 
-/** One path covering every path given, or null when Skia cannot unite them. */
-export function unitedPath(r: SkiaRenderer, regions: Path[]): Path | null {
-  let merged = regions[0].copy()
-  for (let index = 1; index < regions.length; index++) {
-    const union = r.ck.Path.MakeFromOp(merged, regions[index], r.ck.PathOp.Union)
-    merged.delete()
-    if (!union) {
-      return null
-    }
-    merged = union
-  }
-  return merged
-}
-
 /** The union of the layer's saved fill geometry, a copy the caller owns; null without any. */
 export function fillGeometryPath(r: SkiaRenderer, node: SceneNode): Path | null {
   const regions = r.getFillGeometry(node)
@@ -75,7 +61,7 @@ export function fillGeometryPath(r: SkiaRenderer, node: SceneNode): Path | null 
     return null
   }
   return sharedPath(r.nodePaths, `${node.id}|saved-fill`, 'united', regions, () =>
-    unitePaths(r, regions)
+    unitedPath(r, regions)
   )
 }
 
@@ -88,7 +74,7 @@ function networkRegionsPath(r: SkiaRenderer, node: SceneNode): Path | null {
     return null
   }
   return sharedPath(r.nodePaths, `${node.id}|network-fill`, 'united', regions, () =>
-    unitePaths(r, regions)
+    unitedPath(r, regions)
   )
 }
 
@@ -273,7 +259,7 @@ function unitedPieces(r: SkiaRenderer, pieces: Path[]): Path | null {
   if (pieces.length <= 1) {
     return pieces[0] ?? null
   }
-  const united = unitePaths(r, pieces)
+  const united = unitedPath(r, pieces)
   deletePaths(pieces)
   return united
 }
@@ -283,7 +269,7 @@ function operandPath(r: SkiaRenderer, node: SceneNode, pieces: Path[]): Path | n
     return pieces[0] ?? null
   }
   const united = sharedPath(r.nodePaths, `${node.id}|operand`, 'operand', pieces, () =>
-    unitePaths(r, pieces)
+    unitedPath(r, pieces)
   )
   deletePaths(pieces)
   return united

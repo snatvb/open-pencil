@@ -2,17 +2,24 @@ import { clamp } from 'es-toolkit'
 
 import type { Path } from '@open-pencil/canvaskit'
 import type { SceneNode, VectorNetwork } from '@open-pencil/scene-graph'
-import { addStrokeRunToPath, strokeRuns } from '@open-pencil/scene-graph/paths'
-import type { Vector } from '@open-pencil/scene-graph/primitives'
+import {
+  addStrokeRunToPath,
+  leavingDirection,
+  segmentsByVertex,
+  strokeRuns
+} from '@open-pencil/scene-graph/paths'
 
-import type { SkiaRenderer } from '#core/canvas/renderer'
-import { getStrokeCapEntity, getStrokeJoinEntity } from '#core/canvas/strokes'
+import { unitedPath } from '#core/canvas/paths/union'
+import type { SkiaRenderer } from '#core/canvas/renderer/skia'
+
+import { getStrokeCapEntity, getStrokeJoinEntity } from './draw'
 
 type Stroke = SceneNode['strokes'][0]
 type Partners = Map<number, Map<number, number>>
 type FillTest = (x: number, y: number) => boolean
 
 const GAP_PROBE_DISTANCE = 0.25
+const MAX_CELLS_PER_FILL = 16
 
 function regionsPerSegment(network: VectorNetwork): number[] {
   const counts = network.segments.map(() => 0)
@@ -22,18 +29,6 @@ function regionsPerSegment(network: VectorNetwork): number[] {
     }
   }
   return counts
-}
-
-function leavingDirection(network: VectorNetwork, segmentIndex: number, vertex: number): Vector {
-  const segment = network.segments[segmentIndex]
-  const forward = segment.start === vertex
-  const handle = forward ? segment.tangentStart : segment.tangentEnd
-  if (handle.x !== 0 || handle.y !== 0) {
-    return handle
-  }
-  const from = network.vertices[vertex]
-  const to = network.vertices[forward ? segment.end : segment.start]
-  return { x: to.x - from.x, y: to.y - from.y }
 }
 
 function holdsPoint(bounds: Float32Array, x: number, y: number): boolean {
@@ -60,38 +55,41 @@ function indexedFillTest(fills: Path[]): FillTest {
   const column = (x: number) => clamp(Math.floor((x - enclosing[0]) / cellWidth), 0, side - 1)
   const row = (y: number) => clamp(Math.floor((y - enclosing[1]) / cellHeight), 0, side - 1)
   const buckets: number[][] = Array.from({ length: side * side }, () => [])
+  const rows: number[][] = Array.from({ length: side }, () => [])
+  const columns: number[][] = Array.from({ length: side }, () => [])
+  const spanning: number[] = []
   for (const [index, box] of bounds.entries()) {
-    for (let y = row(box[1]); y <= row(box[3]); y++) {
-      for (let x = column(box[0]); x <= column(box[2]); x++) {
-        buckets[y * side + x].push(index)
+    const [left, top, right, bottom] = [column(box[0]), row(box[1]), column(box[2]), row(box[3])]
+    const [across, down] = [right - left + 1, bottom - top + 1]
+    if (across * down <= MAX_CELLS_PER_FILL) {
+      for (let y = top; y <= bottom; y++) {
+        for (let x = left; x <= right; x++) {
+          buckets[y * side + x].push(index)
+        }
       }
-    }
-  }
-  return (x, y) =>
-    holdsPoint(enclosing, x, y) &&
-    buckets[row(y) * side + column(x)].some(
-      (index) => holdsPoint(bounds[index], x, y) && fills[index].contains(x, y)
-    )
-}
-
-function regionSegmentsByVertex(network: VectorNetwork, counts: number[]): Map<number, number[]> {
-  const byVertex = new Map<number, number[]>()
-  const meet = (vertex: number, index: number) => {
-    const list = byVertex.get(vertex)
-    if (list) {
-      list.push(index)
+    } else if (down <= MAX_CELLS_PER_FILL && down <= across) {
+      for (let y = top; y <= bottom; y++) {
+        rows[y].push(index)
+      }
+    } else if (across <= MAX_CELLS_PER_FILL) {
+      for (let x = left; x <= right; x++) {
+        columns[x].push(index)
+      }
     } else {
-      byVertex.set(vertex, [index])
+      spanning.push(index)
     }
   }
-  for (const [index, segment] of network.segments.entries()) {
-    if (counts[index] === 0 || segment.start === segment.end) {
-      continue
+  const fillHolds = (index: number, x: number, y: number) =>
+    holdsPoint(bounds[index], x, y) && fills[index].contains(x, y)
+  return (x, y) => {
+    if (!holdsPoint(enclosing, x, y)) {
+      return false
     }
-    meet(segment.start, index)
-    meet(segment.end, index)
+    const [atRow, atColumn] = [row(y), column(x)]
+    return [buckets[atRow * side + atColumn], rows[atRow], columns[atColumn], spanning].some(
+      (candidates) => candidates.some((index) => fillHolds(index, x, y))
+    )
   }
-  return byVertex
 }
 
 function pairAcrossUnfilledGaps(
@@ -134,7 +132,9 @@ function pairAcrossUnfilledGaps(
 
 function outlinePartners(network: VectorNetwork, counts: number[], isFilled: FillTest): Partners {
   const partners: Partners = new Map()
-  for (const [vertex, meeting] of regionSegmentsByVertex(network, counts)) {
+  const bounding = (index: number) =>
+    counts[index] > 0 && network.segments[index].start !== network.segments[index].end
+  for (const [vertex, meeting] of segmentsByVertex(network.segments, bounding)) {
     if (meeting.length === 2) {
       partners.set(
         vertex,
@@ -197,7 +197,12 @@ export function regionStrokeOutline(
   sided: boolean
 ): Path | null {
   const counts = regionsPerSegment(network)
-  const partners = outlinePartners(network, counts, indexedFillTest(fills))
+  let fillTest: FillTest | null = null
+  const isFilled: FillTest = (x, y) => {
+    fillTest ??= indexedFillTest(fills)
+    return fillTest(x, y)
+  }
+  const partners = outlinePartners(network, counts, isFilled)
   const options = (width: number) => ({
     width,
     miter_limit: node.strokeMiterLimit,
@@ -217,4 +222,67 @@ export function regionStrokeOutline(
   // Skia's stroke outlines all wind the same way, so one nonzero path fills their overlaps once;
   // a PathOps union of them costs several times the whole render on large networks.
   return outlines.length > 1 ? mergedNonzero(r, outlines) : (outlines[0] ?? null)
+}
+
+function paintsStroke(stroke: Stroke): boolean {
+  return stroke.visible && stroke.opacity > 0 && stroke.weight > 0
+}
+
+function regionBandArea(
+  r: SkiaRenderer,
+  node: SceneNode,
+  network: VectorNetwork,
+  closed: Path[],
+  fill: Path | null,
+  stroke: Stroke
+): Path | null {
+  const keptSide = stroke.align === 'INSIDE' ? r.ck.PathOp.Intersect : r.ck.PathOp.Difference
+  const sided = stroke.align !== 'CENTER' && fill !== null
+  const band = regionStrokeOutline(r, node, network, closed, stroke, sided)
+  if (!band || !sided) {
+    return band
+  }
+  const area = r.ck.Path.MakeFromOp(band, fill, keptSide)
+  band.delete()
+  return area
+}
+
+function openSegmentsArea(r: SkiaRenderer, node: SceneNode, open: Path[], stroke: Stroke): Path[] {
+  const options = {
+    width: stroke.weight,
+    miter_limit: node.strokeMiterLimit,
+    cap: getStrokeCapEntity(r, stroke.cap ?? 'NONE'),
+    join: getStrokeJoinEntity(r, stroke.join ?? 'MITER')
+  }
+  return open.flatMap((path) => path.makeStroked(options) ?? [])
+}
+
+export function regionStrokeArea(
+  r: SkiaRenderer,
+  node: SceneNode,
+  network: VectorNetwork,
+  vectorPaths: Path[]
+): Path | null {
+  const closed = vectorPaths.slice(0, network.regions.length)
+  const open = vectorPaths.slice(network.regions.length)
+  const fill = unitedPath(r, closed)
+  const pieces: Path[] = []
+  for (const stroke of node.strokes.filter(paintsStroke)) {
+    const band = regionBandArea(r, node, network, closed, fill, stroke)
+    if (band) {
+      pieces.push(band)
+    }
+    for (const segmentsArea of openSegmentsArea(r, node, open, stroke)) {
+      pieces.push(segmentsArea)
+    }
+  }
+  fill?.delete()
+  if (pieces.length <= 1) {
+    return pieces[0] ?? null
+  }
+  const united = unitedPath(r, pieces)
+  for (const piece of pieces) {
+    piece.delete()
+  }
+  return united
 }

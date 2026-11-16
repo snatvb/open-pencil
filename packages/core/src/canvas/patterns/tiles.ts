@@ -3,7 +3,7 @@ import type { SceneGraph } from '@open-pencil/scene-graph'
 import { appendAll } from '@open-pencil/scene-graph/arrays'
 
 import { ResourceCache } from '#core/cache/resource'
-import type { SkiaRenderer } from '#core/canvas/renderer'
+import type { SkiaRenderer } from '#core/canvas/renderer/skia'
 
 const MAX_PATTERN_TILES = 64
 

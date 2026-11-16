@@ -2,11 +2,17 @@ import type { AIProviderID } from '@open-pencil/core/constants'
 
 export const AI_MODEL_ROLES = ['design', 'review', 'fast', 'vision'] as const
 /**
- * The roles something reads. Review and Fast tasks have no reader yet: Settings and guided setup
- * show them as not used and keep their saved assignments, and they are listed here once one
- * exists.
+ * The roles something reads: Design runs the chat, Review writes the design reviews the person
+ * asks for, Fast tasks names conversations and writes their compaction summaries, and Vision
+ * reads images. A role not listed here shows as not used in Settings and guided setup and keeps
+ * its saved assignment.
  */
-export const AI_MODEL_ROLES_IN_USE = ['design', 'vision'] as const satisfies readonly AIModelRole[]
+export const AI_MODEL_ROLES_IN_USE = [
+  'design',
+  'review',
+  'fast',
+  'vision'
+] as const satisfies readonly AIModelRole[]
 
 /** Whether assigning a model to the role changes anything. */
 export function isModelRoleInUse(role: AIModelRole): boolean {

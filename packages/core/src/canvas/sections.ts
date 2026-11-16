@@ -3,16 +3,16 @@ import type { SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 
 import { drawIndividualSideStrokes } from '#core/canvas/strokes/sides'
 
-import { paintFills } from './fills'
-import type { SkiaRenderer } from './renderer'
+import { paintFills } from './fills/paint'
+import type { SkiaRenderer } from './renderer/skia'
+import { drawFigmaDashes } from './strokes/dispatch'
 import {
   configureStrokePaint,
   drawDashedRRectWithSolidCorners,
   drawRRectStrokeWithAlign,
   drawStyledRRectStroke,
   forVisibleStrokes
-} from './strokes'
-import { drawFigmaDashes } from './strokes/dispatch'
+} from './strokes/draw'
 
 function makeNodeRRect(r: SkiaRenderer, node: SceneNode, radius: number): Float32Array {
   const rect = r.ck.LTRBRect(0, 0, node.width, node.height)

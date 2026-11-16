@@ -13,17 +13,18 @@ import {
   strokeAlignShare,
   strokeWeightOf
 } from '@open-pencil/scene-graph/geometry'
+import { isVisibleMask } from '@open-pencil/scene-graph/masks'
 import Matrix from '@open-pencil/scene-graph/matrix'
 import { clipsChildren, isLayerContainer } from '@open-pencil/scene-graph/node-defaults'
 import { paintShows } from '@open-pencil/scene-graph/paints'
 import type { Rect } from '@open-pencil/scene-graph/primitives'
 import { textLinesReach } from '@open-pencil/scene-graph/text'
-import { regionFills } from '@open-pencil/scene-graph/vector-network'
 
 import { paintBooleanOperation } from '#core/canvas/boolean'
 import { renderMaskedChildIds } from '#core/canvas/masks'
-import type { SkiaRenderer } from '#core/canvas/renderer'
+import type { SkiaRenderer } from '#core/canvas/renderer/skia'
 import { nodeOrientationMatrix } from '#core/geometry'
+import { fillsCastShadow } from '#core/geometry/shadows'
 
 /**
  * What a shadow is cast from (`cast`) or hidden under when it does not show behind the node
@@ -39,11 +40,6 @@ const SILHOUETTE_PAINT: Fill = {
   color: { r: 1, g: 1, b: 1, a: 1 },
   opacity: 1,
   visible: true
-}
-
-/** Frames, groups, and the like, whose shadows Figma casts from their children as well. */
-export function fillsCastShadow(node: SceneNode): boolean {
-  return node.fills.some(paintShows) || regionFills(node.vectorNetwork).some(paintShows)
 }
 
 export function paintsCastShadow(node: SceneNode): boolean {
@@ -138,7 +134,7 @@ function drawChildSilhouettes(
       node.childIds,
       (childId) => {
         const child = graph.getNode(childId)
-        return child && drawsSilhouette(child) && child.isMask ? child.maskType : null
+        return child && !child.internalOnly && isVisibleMask(child) ? child.maskType : null
       },
       drawChild,
       drawChild,
