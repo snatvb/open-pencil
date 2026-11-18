@@ -2,6 +2,7 @@ import {
   resolvedNumericBindingUpdate,
   numericVariableBindingScales
 } from '#fig/node-change/variable/bindings'
+import { effectBindingScales } from '#fig/node-change/variable/effects'
 
 import type { SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 import { forEachInstanceOverride } from '@open-pencil/scene-graph/instances/overrides'
@@ -27,11 +28,14 @@ export function applyDocumentLayoutBindings(
     })
   }
   for (const node of materialized) {
-    const scales = numericVariableBindingScales(
-      node.boundVariables,
-      layoutScales.get(node.id) ?? 1,
-      node.variableBindingScales
-    )
+    const scales = {
+      ...numericVariableBindingScales(
+        node.boundVariables,
+        layoutScales.get(node.id) ?? 1,
+        node.variableBindingScales
+      ),
+      ...effectBindingScales(node.variableBindingScales)
+    }
     graph.updateNode(node.id, { variableBindingScales: scales })
     for (const field in node.boundVariables) {
       if ((field === 'width' || field === 'height') && savedSizeNodes.has(node.id)) continue

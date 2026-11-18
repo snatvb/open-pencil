@@ -7,6 +7,8 @@ import {
   applyComponentPropertyValue,
   componentPropertyDefinitions
 } from '@open-pencil/scene-graph/components'
+import { rescaleNodeTree } from '@open-pencil/scene-graph/scaling'
+import { reconcileVariableBindings } from '@open-pencil/scene-graph/variables'
 import { expectDefined } from '@open-pencil/test-support/assert'
 
 interface Assignment {
@@ -60,6 +62,70 @@ function assign(graph: SceneGraph, instance: SceneNode, name: string, value: str
   applyComponentPropertyValue(graph, instance.id, definition, value)
 }
 
+/**
+ * A Panel with a Content slot, held by a Card as Action with content of its own: a shadow bound to
+ * twice a Size variable. The copy of the Card is rescaled 2×.
+ */
+function rescaledCardWithFilledSlot() {
+  const graph = new SceneGraph()
+  const [page] = graph.getPages()
+  graph.addCollection({
+    id: 'theme',
+    name: 'Theme',
+    modes: [{ modeId: 'base', name: 'Base' }],
+    defaultModeId: 'base',
+    variableIds: []
+  })
+  graph.addVariable({
+    id: 'size',
+    name: 'Size',
+    type: 'FLOAT',
+    collectionId: 'theme',
+    valuesByMode: { base: 4 },
+    description: '',
+    hiddenFromPublishing: false
+  })
+  const panel = graph.createNode('COMPONENT', page.id, {
+    name: 'Panel',
+    componentPropertyDefinitions: [
+      { id: 'prop:content', name: 'Content', type: 'SLOT', defaultValue: '' }
+    ]
+  })
+  graph.createNode('FRAME', panel.id, {
+    name: 'Content',
+    componentPropertyReferences: [{ propertyId: 'prop:content', field: 'SLOT_CONTENT' }]
+  })
+  const card = graph.createNode('COMPONENT', page.id, { name: 'Card' })
+  const action = expectDefined(graph.createInstance(panel.id, card.id))
+  graph.updateNode(action.id, {
+    name: 'Action',
+    isExposedInstance: true,
+    componentPropertyAssignments: { 'prop:content': '' }
+  })
+  graph.createNode('RECTANGLE', graph.getChildren(action.id)[0].id, {
+    name: 'Raised',
+    effects: [
+      {
+        type: 'DROP_SHADOW',
+        color: { r: 0, g: 0, b: 0, a: 1 },
+        offset: { x: 0, y: 0 },
+        radius: 8,
+        spread: 0,
+        visible: true,
+        blendMode: 'NORMAL',
+        showShadowBehindNode: false
+      }
+    ],
+    boundVariables: { 'effects/0/radius': 'size' },
+    variableBindingScales: { 'effects/0/radius': 2 }
+  })
+  const copy = expectDefined(graph.createInstance(card.id, page.id))
+  graph.updateNode(copy.id, { name: 'Copy' })
+  rescaleNodeTree(graph, copy.id, 2)
+  reconcileVariableBindings(graph)
+  return { graph, copy }
+}
+
 /** The property values the copy's record gives the instances it holds, by override path. */
 function nestedAssignments(graph: SceneGraph, copy: SceneNode): Assignment[][] {
   const records = sceneNodeToKiwi(
@@ -68,7 +134,8 @@ function nestedAssignments(graph: SceneGraph, copy: SceneNode): Assignment[][] {
     0,
     { value: 2 },
     graph,
-    []
+    [],
+    { slotContentRecords: [] }
   ) as InstanceRecord[]
   const record = expectDefined(records.find((item) => item.name === 'Copy'))
   return (record.symbolData?.symbolOverrides ?? []).flatMap((override) =>
@@ -94,6 +161,11 @@ describe('the values a copy gives an instance it holds', () => {
     expect(nestedAssignments(graph, copy)).toEqual([])
     // Setting the default again is no change either.
     assign(graph, copied, 'Label', 'Continue')
+    expect(nestedAssignments(graph, copy)).toEqual([])
+  })
+
+  test('are left out for slot content a rescale only scaled, binding constants included', () => {
+    const { graph, copy } = rescaledCardWithFilledSlot()
     expect(nestedAssignments(graph, copy)).toEqual([])
   })
 })

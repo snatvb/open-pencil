@@ -38,6 +38,16 @@ export function linearVariableExpression(
   return multiplyLinearValues(expression.expressionArguments, depth)
 }
 
+export function representableLinearExpression(
+  data: VariableDataEntry | undefined
+): LinearValue | undefined {
+  try {
+    return linearVariableExpression(data)
+  } catch {
+    return undefined
+  }
+}
+
 function wrappedVariable(
   expression: NonNullable<NonNullable<VariableDataEntry['value']>['expressionValue']>
 ): LinearValue {
@@ -74,5 +84,24 @@ export function visitVariableReferences(
   }
   for (const item of data?.value?.mapValue?.values ?? []) {
     visitVariableReferences(item.value, visit, depth + 1)
+  }
+}
+
+export function multipliedVariableData(
+  alias: VariableDataEntry,
+  multiplier: number
+): VariableDataEntry {
+  return {
+    dataType: 'EXPRESSION',
+    resolvedDataType: 'FLOAT',
+    value: {
+      expressionValue: {
+        expressionFunction: 'MULTIPLY',
+        expressionArguments: [
+          { dataType: 'FLOAT', resolvedDataType: 'FLOAT', value: { floatValue: multiplier } },
+          alias
+        ]
+      }
+    }
   }
 }

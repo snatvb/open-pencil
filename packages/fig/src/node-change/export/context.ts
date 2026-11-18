@@ -18,6 +18,7 @@ import type {
   TextureEffectParams
 } from '@open-pencil/scene-graph'
 import { UNSET_GLASS, UNSET_NOISE, UNSET_TEXTURE } from '@open-pencil/scene-graph/constants'
+import { findInstanceAncestor } from '@open-pencil/scene-graph/instances'
 import type { Color, GUID, Matrix } from '@open-pencil/scene-graph/primitives'
 import { sharedStyleLayers } from '@open-pencil/scene-graph/shared-styles'
 import {
@@ -28,7 +29,11 @@ import {
 
 import { modeledEffectIndexes } from '../paint'
 import { variableAlias } from '../variable/bindings'
-import { EFFECT_VARIABLE_FIELDS, kiwiEffectWithBindings } from '../variable/effects'
+import {
+  EFFECT_VARIABLE_FIELDS,
+  effectVariableBinding,
+  kiwiEffectWithBindings
+} from '../variable/effects'
 
 export type KiwiNodeChange = NodeChange & Record<string, unknown>
 
@@ -311,6 +316,11 @@ export function createStrokePaints(context: SceneNodeToKiwiContext, node: SceneN
   )
 }
 
+function ownUniformScale(graph: SceneGraph, node: SceneNode): number {
+  const enclosing = node.parentId ? findInstanceAncestor(graph, node.parentId) : undefined
+  return node.componentScale / (enclosing?.componentScale ?? 1)
+}
+
 /**
  * `effects` as a record writes them for `node`. Each bound property names its variable as a
  * paint's colour does and carries the value it resolves to; a property the node no longer binds
@@ -331,11 +341,18 @@ export function bindKiwiEffects(
   return effects.map((effect, rawIndex) => {
     const index = indexes[rawIndex]
     if (index === null) return effect
-    const bound = kiwiEffectWithBindings(effect, index, node.boundVariables, alias)
+    const bound = kiwiEffectWithBindings(
+      effect,
+      index,
+      node.boundVariables,
+      node.variableBindingScales,
+      ownUniformScale(context.graph, node),
+      alias
+    )
     const current = node.effects.at(index)
     for (const property of EFFECT_BINDING_PROPERTIES) {
       const key = EFFECT_VARIABLE_FIELDS[property]
-      const kept = effect[key]?.value?.alias
+      const kept = effectVariableBinding(effect, property)?.reference
       if (keepUnresolved && !bound[key] && kept?.assetRef && !kept.guid) bound[key] = effect[key]
       if (!current || !node.boundVariables[effectBindingField(index, property)]) continue
       if (property === 'color') bound.color = context.safeColor(current.color)

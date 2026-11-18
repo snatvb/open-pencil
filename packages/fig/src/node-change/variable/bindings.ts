@@ -2,7 +2,7 @@ import { effectiveFigmaRawNodeFields } from '#fig/source-metadata'
 import { invert } from 'es-toolkit/object'
 
 import type { GUID } from '@open-pencil/kiwi/fig'
-import type { VariableConsumptionEntry } from '@open-pencil/kiwi/fig/codec'
+import type { Effect as KiwiEffect, VariableConsumptionEntry } from '@open-pencil/kiwi/fig/codec'
 import { guidToString, stringToGuid } from '@open-pencil/kiwi/fig/guid'
 import type {
   SceneNode,
@@ -13,7 +13,8 @@ import type {
 import { boundNumberValue, isNumericVariableBindingField } from '@open-pencil/scene-graph/variables'
 
 import { cloneRecord } from '../clone'
-import { linearVariableExpression } from './expression'
+import { effectBindingScalesFromKiwi } from './effects'
+import { linearVariableExpression, multipliedVariableData } from './expression'
 import { mergeVariableModeMaps } from './maps'
 
 export const VARIABLE_BINDING_FIELDS: Record<string, string> = {
@@ -222,22 +223,7 @@ function consumptionEntry(
   }
   if (variable.type !== 'FLOAT' || (!expression && multiplier === 1))
     return { variableField, variableData: alias }
-  return {
-    variableField,
-    variableData: {
-      dataType: 'EXPRESSION',
-      resolvedDataType: 'FLOAT',
-      value: {
-        expressionValue: {
-          expressionFunction: 'MULTIPLY',
-          expressionArguments: [
-            { dataType: 'FLOAT', resolvedDataType: 'FLOAT', value: { floatValue: multiplier } },
-            alias
-          ]
-        }
-      }
-    }
-  }
+  return { variableField, variableData: multipliedVariableData(alias, multiplier) }
 }
 
 function numericBindingUnit(field: string, distanceScale: number): number {
@@ -311,7 +297,7 @@ export function resolveVariableConsumptionEntry(
 }
 
 export function sourceVariableBindingScales(
-  source: VariableConsumptionSource
+  source: VariableConsumptionSource & { effects?: readonly KiwiEffect[] }
 ): Record<string, number> {
   const scales: Record<string, number> = {}
   for (const entry of variableConsumptionEntries(source)) {
@@ -321,7 +307,7 @@ export function sourceVariableBindingScales(
         binding.multiplier * (binding.field === 'opacity' ? OPACITY_UNIT_PER_PERCENT : 1)
     }
   }
-  return scales
+  return { ...scales, ...effectBindingScalesFromKiwi(source.effects) }
 }
 
 /** Omit identity conversions: most unscaled scopes need only percentage opacity units. */

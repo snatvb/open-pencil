@@ -5,6 +5,7 @@ import { findInstanceAncestor } from '@open-pencil/scene-graph/instances'
 import { copiedComponentLayerId } from '@open-pencil/scene-graph/instances/overrides'
 import { scaleNodeChanges } from '@open-pencil/scene-graph/scaling'
 import { instanceSlotFrames, slotPropertyId } from '@open-pencil/scene-graph/slots'
+import { effectBindingTarget } from '@open-pencil/scene-graph/variables'
 
 import type { SceneNodeToKiwiContext } from '../context'
 import { componentPropAssignment } from './values'
@@ -53,7 +54,10 @@ function atSourceScale(node: SceneNode, ratio: number): SceneNode {
   if (ratio === 1) return node
   const unscale = (scales: Partial<Record<string, number>>) =>
     Object.fromEntries(
-      Object.entries(scales).map(([field, value]) => [field, value && value / ratio])
+      Object.entries(scales).map(([field, value]) => [
+        field,
+        effectBindingTarget(field) ? value : value && value / ratio
+      ])
     )
   return {
     ...node,

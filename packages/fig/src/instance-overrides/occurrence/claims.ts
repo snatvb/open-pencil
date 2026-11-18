@@ -12,6 +12,7 @@ import { completeClearedStyleClaim } from '../style/cleared'
 import { yieldToInheritedTextStyle } from '../style/inherited-text'
 import { invalidateInheritedTextData } from '../text-provenance'
 import type { DerivedSymbolOverride } from '../types'
+import { markEffectsWrittenByInstance } from './create'
 import { findSegment, isRootGuid, pathError, resolveOccurrencePath, SegmentError } from './path'
 import type { InstanceOccurrence, InterpretInstanceOptions } from './types'
 
@@ -60,6 +61,9 @@ function applyPropertyClaim(
   )
   if ('name' in retained) {
     target.hasOwnName = true
+  }
+  if ('effects' in retained) {
+    markEffectsWrittenByInstance(target)
   }
   owner.propertyClaims.push({
     declaredBy: owner.sourceId,

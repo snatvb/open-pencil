@@ -37,6 +37,7 @@ export interface InstanceOccurrence {
   layoutScale?: number
   /** Per-field declaration-space multipliers, composed as owners expand. */
   variableBindingScales?: Record<string, number>
+  scaleSavedInOwnEffectBindings?: number
   /** Whether this expansion supplies a name rather than only inheriting it. */
   hasOwnName: boolean
   /**

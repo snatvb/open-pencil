@@ -15,7 +15,7 @@ import { EFFECT_BINDING_PROPERTIES, effectBindingField } from '@open-pencil/scen
 import { nodeChangeToProps } from '../node-change'
 import { modeledEffectIndexes } from '../node-change/paint'
 import { numericVariableBindingScales } from '../node-change/variable/bindings'
-import { EFFECT_VARIABLE_FIELDS } from '../node-change/variable/effects'
+import { effectBindingScales, effectVariableBinding } from '../node-change/variable/effects'
 import { variableModeLayer } from '../node-change/variable/maps'
 import { setsVariantBindings } from '../node-change/variable/variants'
 import {
@@ -221,11 +221,14 @@ export function materializeInstance(
       ...props,
       variableAssignmentScales: occurrenceAssignmentScales(current),
       componentScale: occurrenceScale(current),
-      variableBindingScales: numericVariableBindingScales(
-        props.boundVariables ?? {},
-        current.layoutScale ?? 1,
-        current.variableBindingScales
-      ),
+      variableBindingScales: {
+        ...numericVariableBindingScales(
+          props.boundVariables ?? {},
+          current.layoutScale ?? 1,
+          current.variableBindingScales
+        ),
+        ...effectBindingScales(props.variableBindingScales, current.scaleSavedInOwnEffectBindings)
+      },
       componentId:
         current.mainComponentId === null
           ? (sourceChildren.get(current) ?? null)
@@ -353,7 +356,7 @@ function recordEffectBindingClaims(owner: SceneNode, target: SceneNode, effects:
     const index = indexes[rawIndex]
     if (index === null) continue
     for (const property of EFFECT_BINDING_PROPERTIES) {
-      if (!effect[EFFECT_VARIABLE_FIELDS[property]]?.value?.alias) continue
+      if (!effectVariableBinding(effect, property)) continue
       const path = effectBindingField(index, property)
       setInstanceOverride(
         owner.instanceOverrides,

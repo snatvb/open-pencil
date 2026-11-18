@@ -8,7 +8,7 @@ import type { BoundPropertyClaim } from '../bindings/properties'
 import { UNINHERITED_COMPONENT_FIELDS } from '../fields'
 import { ownerAssignedProperties } from '../layers'
 import { readOverrideKey, type InterpreterIndex } from '../source-index'
-import { assignedSlotContent, type ComponentPropAssignment } from '../types'
+import { assignedSlotContent, symbolDataOf, type ComponentPropAssignment } from '../types'
 import { componentKeys, type RootResolution } from './root'
 import type { InstanceOccurrence } from './types'
 
@@ -66,6 +66,10 @@ function inheritedFromBase(
   }
 }
 
+export function markEffectsWrittenByInstance(occurrence: InstanceOccurrence): void {
+  occurrence.scaleSavedInOwnEffectBindings = symbolDataOf(occurrence.properties)?.uniformScaleFactor
+}
+
 /** The occurrence a record places: its own fields over the subtree it expanded. */
 export function createOccurrence(
   sources: Sources,
@@ -96,6 +100,9 @@ export function createOccurrence(
       ...mergeVariableConsumptionMaps(base?.properties ?? {}, source)
     },
     children: expanded
+  }
+  if (source.effects) {
+    markEffectsWrittenByInstance(occurrence)
   }
   if (source.type === 'INSTANCE') {
     occurrence.properties.componentPropAssignments = groups
