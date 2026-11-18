@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useStore } from '@nanostores/vue'
 import { tv } from 'tailwind-variants'
-import { computed } from 'vue'
+import { computed, useTemplateRef } from 'vue'
 
 import { appliedVariableModes } from '@open-pencil/vue/controls/variable-modes'
 import { locale, useVariableMessages } from '@open-pencil/vue/i18n'
@@ -18,6 +18,7 @@ import LayerTreeActions from './LayerTreeActions.vue'
 import LayerTreeDisclosure from './LayerTreeDisclosure.vue'
 import LayerTreeDropIndicator from './LayerTreeDropIndicator.vue'
 import LayerTreeRowShell from './LayerTreeRowShell.vue'
+import { useFullModeBadgeFitsBesideName } from './mode-badge-fit'
 import type { LayerTreeChrome, LayerTreeItemActions } from './types'
 import { useLayerTreeUI } from './ui'
 
@@ -57,6 +58,16 @@ const modesLabel = computed(() => {
   const entries = appliedModes.value.map((applied) => variables.value.appliedMode(applied))
   return new Intl.ListFormat(language.value, { type: 'conjunction' }).format(entries)
 })
+const fullBadgeFits = useFullModeBadgeFitsBesideName(
+  {
+    label: useTemplateRef('label'),
+    name: useTemplateRef('name'),
+    badge: useTemplateRef('badge'),
+    fullForm: useTemplateRef('fullForm'),
+    actions: useTemplateRef('actions')
+  },
+  [() => node.name, () => firstMode.value?.mode, moreModes]
+)
 const layerTree = tv(layerTreeTheme)
 const styles = computed(() =>
   layerTree({
@@ -68,7 +79,7 @@ const styles = computed(() =>
     visible: node.visible,
     component: COMPONENT_TYPES.has(node.type),
     slot: node.slot,
-    severalModes: moreModes.value > 0,
+    compactModes: !fullBadgeFits.value,
     childDropTarget:
       chrome.instructionTargetId === node.id && chrome.instruction?.type === 'make-child'
   })
@@ -104,21 +115,29 @@ const styles = computed(() =>
     />
 
     <component :is="nodeIcon(node)" data-slot="icon" :class="styles.icon({ class: ui?.icon })" />
-    <span data-slot="label" :class="styles.label({ class: ui?.label })">
-      <span data-slot="name" :class="styles.name()">{{ node.name }}</span>
+    <span ref="label" data-slot="label" :class="styles.label({ class: ui?.label })">
+      <span ref="name" data-slot="name" :class="styles.name()">{{ node.name }}</span>
       <Tip v-if="firstMode" :label="modesLabel" as-child>
-        <span data-slot="variable-mode" :class="styles.modeBadge()">
-          <span aria-hidden="true" data-slot="variable-mode-name" :class="styles.modeName()">{{
-            firstMode.mode
-          }}</span>
-          <template v-if="moreModes > 0">
-            <span aria-hidden="true" data-slot="variable-mode-more" :class="styles.moreModes()">
+        <span ref="badge" data-slot="variable-mode" :class="styles.modeBadge()">
+          <span
+            ref="fullForm"
+            aria-hidden="true"
+            data-slot="variable-mode-full"
+            :class="styles.modeFull()"
+          >
+            <span data-slot="variable-mode-name">{{ firstMode.mode }}</span>
+            <span v-if="moreModes > 0" data-slot="variable-mode-more" :class="styles.moreModes()">
               +{{ moreModes }}
             </span>
-            <span aria-hidden="true" data-slot="variable-mode-count" :class="styles.modeCount()">
-              {{ appliedModes.length }}
-            </span>
-          </template>
+          </span>
+          <span
+            v-if="!fullBadgeFits"
+            aria-hidden="true"
+            data-slot="variable-mode-count"
+            :class="styles.modeCount()"
+          >
+            {{ appliedModes.length }}
+          </span>
           <span class="sr-only">{{ modesLabel }}</span>
         </span>
       </Tip>
@@ -126,6 +145,7 @@ const styles = computed(() =>
     <LayerIssueMark v-if="issue && (issue.own || !expanded)" :mark="issue" />
 
     <LayerTreeActions
+      ref="actions"
       :node="node"
       :ui="{
         actions: styles.actions({ class: ui?.actions }),

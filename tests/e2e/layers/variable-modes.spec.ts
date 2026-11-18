@@ -2,9 +2,9 @@ import { expect, test, useEditorSetup } from '#tests/e2e/fixtures'
 
 const editor = useEditorSetup()
 
-const LAYER_NAME = 'Summary card'
+const LAYER_NAME = '1920x1080, md · Card name'
 
-test('a layer with modes in several collections keeps its name readable behind one mode badge', async () => {
+test('a layer with modes in several collections keeps its whole name beside one mode badge', async () => {
   const { frameId, singleId, copyId } = await editor.page.evaluate((name) => {
     const store = window.openPencil?.getStore?.()
     if (!store) throw new Error('OpenPencil store not initialized')
@@ -46,57 +46,84 @@ test('a layer with modes in several collections keeps its name readable behind o
 
   const row = editor.page.locator(`[data-node-id="${frameId}"] [data-slot="row"]`)
   const badge = row.locator('[data-slot="variable-mode"]')
+  const count = row.locator('[data-slot="variable-mode-count"]')
+  const fullForm = row.locator('[data-slot="variable-mode-full"]')
   await expect(badge).toHaveCount(1)
-  await expect(row.locator('[data-slot="variable-mode-name"]')).toHaveText('Dark')
-  await expect(row.locator('[data-slot="variable-mode-more"]')).toHaveText('+3')
-  const fullList = 'Theme (1): Dark, Theme (2): Light alt, Density: Compact, Size: Large'
+  const fullList = 'Theme (1): Dark, Theme (2): Light alt, Density: Compact, and Size: Large'
   await expect(badge.locator('.sr-only')).toHaveText(fullList)
 
   const name = row.getByText(LAYER_NAME, { exact: true })
-  const clipped = await name.evaluate((element) => element.scrollWidth > element.clientWidth)
-  expect(clipped).toBe(false)
+  const nameClipped = () => name.evaluate((element) => element.scrollWidth > element.clientWidth)
+  const badgeClipped = () => badge.evaluate((element) => element.scrollWidth > element.clientWidth)
+  await expect(count).toHaveText('4')
+  await expect(fullForm).toBeHidden()
+  expect(await nameClipped()).toBe(false)
+  expect(await badgeClipped()).toBe(false)
+  const layers = editor.page.getByTestId('layers-scroll')
+  expect(await layers.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0)
 
+  await row.hover()
   await badge.hover()
   await expect(editor.page.getByRole('tooltip')).toHaveText(fullList)
+  await editor.page.mouse.move(0, 0)
 
-  const widthsAt = (width: string) =>
-    row.evaluate((element, rowWidth) => {
+  const setRowWidth = (target: typeof row, width: string) =>
+    target.evaluate((element, rowWidth) => {
       element.style.width = rowWidth
-      const widthOf = (slot: string) =>
-        element.querySelector(`[data-slot="${slot}"]`)?.getBoundingClientRect().width ?? 0
-      const badgeElement = element.querySelector('[data-slot="variable-mode"]')
-      return {
-        name: widthOf('name'),
-        badge: widthOf('variable-mode'),
-        modeName: widthOf('variable-mode-name'),
-        badgeOverflow: badgeElement ? badgeElement.scrollWidth - badgeElement.clientWidth : 0
-      }
     }, width)
-  await row.hover()
 
-  const narrow = await widthsAt('190px')
-  expect(narrow.modeName).toBeGreaterThanOrEqual(16)
-  expect(narrow.badgeOverflow).toBe(0)
+  await setRowWidth(row, '400px')
+  await expect(count).toHaveCount(0)
+  await expect(fullForm).toBeVisible()
+  await expect(row.locator('[data-slot="variable-mode-name"]')).toHaveText('Dark')
+  await expect(row.locator('[data-slot="variable-mode-more"]')).toHaveText('+3')
+  expect(await nameClipped()).toBe(false)
 
-  const narrowest = await widthsAt('140px')
-  expect(narrowest.modeName).toBe(0)
-  await expect(row.locator('[data-slot="variable-mode-count"]')).toHaveText('4')
-  await expect(row.locator('[data-slot="variable-mode-more"]')).toBeHidden()
-  expect(narrowest.name).toBeGreaterThan(narrowest.badge)
+  const settled = () =>
+    editor.page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        })
+    )
+  const badgeForm = () =>
+    badge.evaluate((element) =>
+      element.querySelector('[data-slot="variable-mode-count"]') ? 'count' : 'full'
+    )
+  const formsSeen = new Set<string>()
+  for (let width = 160; width <= 400; width += 8) {
+    await setRowWidth(row, `${width}px`)
+    await editor.page.mouse.move(0, 0)
+    await settled()
+    const idle = await badgeForm()
+    formsSeen.add(idle)
+    await row.hover({ position: { x: 4, y: 4 } })
+    await settled()
+    await expect(row.locator('[data-slot="actions"]')).toHaveCSS('position', 'static')
+    expect(await badgeForm(), `row ${width}px wide`).toBe(idle)
+  }
+  expect([...formsSeen].sort()).toEqual(['count', 'full'])
+  await editor.page.mouse.move(0, 0)
+
+  await setRowWidth(row, '120px')
+  await expect(count).toHaveText('4')
+  expect(await nameClipped()).toBe(true)
+  expect(await badgeClipped()).toBe(false)
 
   const singleRow = editor.page.locator(`[data-node-id="${singleId}"] [data-slot="row"]`)
-  await singleRow.evaluate((element) => {
-    element.style.width = '140px'
-  })
   await expect(singleRow.locator('[data-slot="variable-mode-name"]')).toHaveText('Compact')
-  await expect(singleRow.locator('[data-slot="variable-mode-name"]')).toBeVisible()
   await expect(singleRow.locator('[data-slot="variable-mode-count"]')).toHaveCount(0)
+  await setRowWidth(singleRow, '70px')
+  await expect(singleRow.locator('[data-slot="variable-mode-count"]')).toHaveText('1')
+
+  await setRowWidth(row, '400px')
+  await expect(count).toHaveCount(0)
 
   await editor.page.evaluate((id) => {
     window.openPencil?.getStore?.()?.renameCollection(id, 'Brand')
   }, copyId)
   await expect(badge.locator('.sr-only')).toHaveText(
-    'Theme: Dark, Brand: Light alt, Density: Compact, Size: Large'
+    'Theme: Dark, Brand: Light alt, Density: Compact, and Size: Large'
   )
   editor.canvas.assertNoErrors()
 })

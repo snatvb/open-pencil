@@ -42,18 +42,16 @@ export interface AppliedVariableMode {
   mode: string
 }
 
-/**
- * The modes `variableModes` sets, in collection order, each looked up in its own collection, since
- * library copies of one collection share mode ids.
- */
+/** Each mode is looked up in its own collection: library copies of one collection share mode ids. */
 export function appliedVariableModes(
   graph: SceneGraph,
   variableModes: Readonly<Record<string, string>>,
   numbered: NumberedCollectionFormat
 ): AppliedVariableMode[] {
   const applied = [...graph.variableCollections.values()].flatMap((collection) => {
-    const mode =
-      collection.id in variableModes ? modeOption(collection, variableModes[collection.id]) : null
+    const mode = Object.hasOwn(variableModes, collection.id)
+      ? modeOption(collection, variableModes[collection.id])
+      : null
     return mode ? [{ collection, mode }] : []
   })
   const labels = collectionLabels(
