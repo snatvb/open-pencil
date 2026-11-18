@@ -226,6 +226,10 @@ export class FontManager {
     return () => this.unblockListeners.delete(listener)
   }
 
+  hasBlockedNodes(graph: SceneGraph): boolean {
+    return (this.blockedNodes.get(graph)?.size ?? 0) > 0
+  }
+
   isNodeBlocked(graph: SceneGraph, nodeId: string): boolean {
     return this.blockedNodes.get(graph)?.has(nodeId) ?? false
   }

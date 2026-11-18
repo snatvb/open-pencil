@@ -28,3 +28,4 @@ export {
 } from './pixels'
 export { comparePNGs, type PixelComparison, type PixelComparisonOptions } from './compare'
 export { renderRegionToImage, type RegionRenderOptions } from './region'
+export { renderCachedThumbnail } from './cached'

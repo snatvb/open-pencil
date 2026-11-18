@@ -104,9 +104,11 @@ export function createDocumentSourceActions({
   function recacheRecentCover(version: number) {
     const path = getFilePath()
     const renderer = getRenderer()
-    if (!path || !renderer || !isFigArchiveName(path)) return
+    if (!isTauri() || !path || !renderer || !isFigArchiveName(path)) return
     if (changes.revision() !== version) return
-    void cacheRecentFileCover(path, editor.graph, renderer).catch((error: unknown) => {
+    const cover = drawHomeCardCover(editor, renderer)
+    if (!cover) return
+    void cacheRecentFileCover(path, cover).catch((error: unknown) => {
       console.warn('[Recent files] Could not cache the preview after saving', error)
     })
   }
@@ -125,7 +127,7 @@ export function createDocumentSourceActions({
     buildFigFile: buildRecoveryFigFile,
     buildCover: createRecoveryCover(editor, () => {
       const renderer = getRenderer()
-      return renderer ? drawHomeCardCover(editor.graph, renderer) : null
+      return renderer ? drawHomeCardCover(editor, renderer) : null
     }),
     autosaves: () => hasWritableSource() && state.autosaveEnabled
   })

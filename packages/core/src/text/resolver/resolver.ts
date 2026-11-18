@@ -34,6 +34,16 @@ export class FontResolver {
     return this.entries.get(key)?.snapshot ?? idleSnapshot(key)
   }
 
+  /** Whether any font is still being fetched, so text drawn now may change once it lands. */
+  isLoading(): boolean {
+    for (const entry of this.entries.values()) {
+      if (entry.snapshot.state === 'loading') {
+        return true
+      }
+    }
+    return false
+  }
+
   pendingNodeIds(demand: FontResolutionDemand | string): string[] {
     const key = typeof demand === 'string' ? demand : demand.key
     const entry = this.entries.get(key)

@@ -10,6 +10,7 @@ import {
   tileWorldBounds,
   tileWorldSize
 } from '#core/canvas/renderer/tiles'
+import { tileCountForWorldBounds } from '#core/canvas/renderer/tiles/geometry'
 
 describe('tile geometry', () => {
   test('quantizes scale upward in geometric steps and keeps fixed device-pixel targets', () => {
@@ -65,6 +66,24 @@ describe('tile geometry', () => {
       'page:2:0:0',
       'page:2:1:0'
     ])
+  })
+
+  test('counts the tiles of any bounds without making their keys', () => {
+    const cases = [
+      { level: 2, bounds: { minX: -10, minY: -10, maxX: 260, maxY: 130 } },
+      { level: 1, bounds: { minX: 0, minY: 0, maxX: 512, maxY: 512 } },
+      { level: 0.5, bounds: { minX: 3.5, minY: -2000, maxX: 9000.25, maxY: 4100 } },
+      { level: 4, bounds: { minX: 10, minY: 10, maxX: 10, maxY: 10 } }
+    ]
+    for (const { level, bounds } of cases) {
+      expect(tileCountForWorldBounds(level, bounds)).toBe(
+        tileKeysForWorldBounds('page', level, bounds).length
+      )
+    }
+
+    expect(
+      tileCountForWorldBounds(MAX_TILE_LEVEL, { minX: 0, minY: 0, maxX: 1e6, maxY: 1e6 })
+    ).toBe(8_000_000 ** 2)
   })
 
   test('produces adjacent non-overlapping world bounds', () => {

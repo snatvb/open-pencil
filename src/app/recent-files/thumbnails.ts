@@ -1,12 +1,12 @@
 import { stat, open, SeekMode } from '@tauri-apps/plugin-fs'
 import { isEqual } from 'es-toolkit'
+import { normalize } from 'pathe'
 import * as v from 'valibot'
 
-import type { Editor } from '@open-pencil/core'
+import type { Editor, EditorState } from '@open-pencil/core'
 import { figThumbnailPageId } from '@open-pencil/core/io/formats/fig'
-import { renderThumbnail } from '@open-pencil/core/io/formats/raster'
+import { renderCachedThumbnail, renderThumbnail } from '@open-pencil/core/io/formats/raster'
 import { extractFigThumbnailFromReader } from '@open-pencil/fig'
-import type { SceneGraph } from '@open-pencil/scene-graph'
 
 import {
   readCacheBytes,
@@ -36,8 +36,11 @@ async function fileFingerprint(path: string): Promise<CoverFingerprint | null> {
   }
 }
 
-async function coverEntry(path: string): Promise<{ image: string; fingerprint: string }> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(path))
+/** Where the cover of the file at `path` is cached, the same however the path spells its separators. */
+export async function recentFileCoverEntry(
+  path: string
+): Promise<{ image: string; fingerprint: string }> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalize(path)))
   const hash = [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('')
@@ -47,7 +50,7 @@ async function coverEntry(path: string): Promise<{ image: string; fingerprint: s
 
 export async function loadCachedRecentFileThumbnail(path: string): Promise<Uint8Array | null> {
   if (!isTauri()) return null
-  const [entry, current] = await Promise.all([coverEntry(path), fileFingerprint(path)])
+  const [entry, current] = await Promise.all([recentFileCoverEntry(path), fileFingerprint(path)])
   if (!current) return null
   const cached = await readCacheJSON(entry.fingerprint, coverFingerprintSchema)
   if (!cached || !isEqual(cached, current)) return null
@@ -61,7 +64,7 @@ async function writeCover(
   bytes: Uint8Array,
   fingerprint: CoverFingerprint
 ): Promise<void> {
-  const entry = await coverEntry(path)
+  const entry = await recentFileCoverEntry(path)
   await writeCacheBytes(entry.image, Uint8Array.from(bytes).buffer)
   await writeCacheJSON(entry.fingerprint, fingerprint)
 }
@@ -78,49 +81,76 @@ export async function cacheRecentFileThumbnail(path: string, bytes: Uint8Array):
  */
 const RECENT_FILE_COVER = { width: 800, height: 450 }
 
-/** Draws `graph`'s cover page as a Home card shows it; null when there is no page to draw. */
-export function drawHomeCardCover(
-  graph: SceneGraph,
-  renderer: NonNullable<Editor['renderer']>
-): Uint8Array | null {
+interface ShownDocument extends Pick<Editor, 'graph' | 'canvasRenderers'> {
+  state: Pick<EditorState, 'sceneVersion'>
+}
+
+/**
+ * The cover page as a Home card shows it, composed from the tiles a canvas of the document already
+ * rendered for its current content; null until one holds the whole page, as when it is not shown.
+ */
+export function shownHomeCardCover({
+  graph,
+  canvasRenderers,
+  state
+}: ShownDocument): Uint8Array | null {
   const pageId = figThumbnailPageId(graph.getPages())
   if (!pageId) return null
+  for (const renderer of canvasRenderers) {
+    const cover = renderCachedThumbnail(
+      renderer,
+      graph,
+      pageId,
+      { ...RECENT_FILE_COVER, fit: 'letterbox' },
+      state.sceneVersion
+    )
+    if (cover) return cover
+  }
+  return null
+}
+
+/**
+ * Draws the cover page as a Home card shows it, from a canvas's tiles when they hold it and with
+ * `renderer` from the scene otherwise; null when there is no page to draw.
+ */
+export function drawHomeCardCover(
+  document: ShownDocument,
+  renderer: NonNullable<Editor['renderer']>
+): Uint8Array | null {
+  const pageId = figThumbnailPageId(document.graph.getPages())
+  if (!pageId) return null
   const { width, height } = RECENT_FILE_COVER
-  return renderThumbnail(renderer.ck, renderer, graph, pageId, width, height, 'letterbox')
+  return (
+    shownHomeCardCover(document) ??
+    renderThumbnail(renderer.ck, renderer, document.graph, pageId, width, height, 'letterbox')
+  )
 }
 
 /** Cover writes still running, by file, so each file's covers are cached in the order drawn. */
 const coverWrites = new Map<string, Promise<void>>()
 
 /**
- * Draws the cover page of the document at `path` for its Home card and caches it for the file
- * as it is now, so call it once the file is written. The file is read and the cover drawn and
- * queued at once; caching waits for the file's earlier covers, so the last one drawn is kept.
- * False when there is no page to draw.
+ * Caches `bytes`, a cover just drawn for the document at `path`, for the file as it is now, so
+ * call it once the file is written. The file is read and the cover queued at once; caching waits
+ * for the file's earlier covers, so the last one drawn is kept.
  */
-export async function cacheRecentFileCover(
-  path: string,
-  graph: SceneGraph,
-  renderer: NonNullable<Editor['renderer']>
-): Promise<boolean> {
-  if (!isTauri()) return false
-  const bytes = drawHomeCardCover(graph, renderer)
-  if (!bytes) return false
+export async function cacheRecentFileCover(path: string, bytes: Uint8Array): Promise<void> {
+  if (!isTauri()) return
   // Read now, for the file this cover was drawn from, but queued at once, so covers keep the
   // order they were drawn in however their reads finish.
   const fingerprint = fileFingerprint(path)
-  const previous = coverWrites.get(path) ?? Promise.resolve()
+  const file = normalize(path)
+  const previous = coverWrites.get(file) ?? Promise.resolve()
   const write = previous
     .catch(() => undefined)
     .then(() => fingerprint)
     .then((drawnFor) => (drawnFor ? writeCover(path, bytes, drawnFor) : undefined))
-  coverWrites.set(path, write)
+  coverWrites.set(file, write)
   try {
     await write
   } finally {
-    if (coverWrites.get(path) === write) coverWrites.delete(path)
+    if (coverWrites.get(file) === write) coverWrites.delete(file)
   }
-  return true
 }
 
 /** Clears every cover once the writes already queued have landed, so none comes back. */

@@ -162,6 +162,11 @@ export class TileImageCache {
     return this.entriesByLevel.get(pageId)?.get(level)?.values() ?? []
   }
 
+  /** Every level of the page with a tile cached. */
+  cachedLevels(pageId: string): number[] {
+    return [...(this.entriesByLevel.get(pageId)?.keys() ?? [])]
+  }
+
   /** The levels `findFallback` may draw from for a page shown at `level`, nearest first. */
   fallbackLevels(pageId: string, level: number): number[] {
     return [...(this.entriesByLevel.get(pageId)?.keys() ?? [])]

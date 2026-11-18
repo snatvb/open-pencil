@@ -43,16 +43,29 @@ export function tileWorldBounds(key: TileKey): TileWorldBounds {
   return { minX, minY, maxX: minX + size, maxY: minY + size }
 }
 
+/** The first and last tile column and row of `level` that `bounds` touches. */
+function tileIndexRange(level: number, bounds: TileWorldBounds): TileWorldBounds {
+  const size = tileWorldSize(level)
+  return {
+    minX: Math.floor(bounds.minX / size),
+    minY: Math.floor(bounds.minY / size),
+    maxX: Math.ceil(bounds.maxX / size) - 1,
+    maxY: Math.ceil(bounds.maxY / size) - 1
+  }
+}
+
+/** How many keys `tileKeysForWorldBounds` gives, without making them. */
+export function tileCountForWorldBounds(level: number, bounds: TileWorldBounds): number {
+  const { minX, minY, maxX, maxY } = tileIndexRange(level, bounds)
+  return Math.max(0, maxX - minX + 1) * Math.max(0, maxY - minY + 1)
+}
+
 export function tileKeysForWorldBounds(
   pageId: string,
   level: number,
   bounds: TileWorldBounds
 ): TileKey[] {
-  const size = tileWorldSize(level)
-  const minX = Math.floor(bounds.minX / size)
-  const minY = Math.floor(bounds.minY / size)
-  const maxX = Math.ceil(bounds.maxX / size) - 1
-  const maxY = Math.ceil(bounds.maxY / size) - 1
+  const { minX, minY, maxX, maxY } = tileIndexRange(level, bounds)
   const keys: TileKey[] = []
   for (let y = minY; y <= maxY; y++) {
     for (let x = minX; x <= maxX; x++) keys.push({ pageId, level, x, y })

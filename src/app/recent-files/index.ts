@@ -25,5 +25,6 @@ export {
   drawHomeCardCover,
   cacheRecentFileThumbnail,
   loadCachedRecentFileThumbnail,
-  loadRecentFileThumbnail
+  loadRecentFileThumbnail,
+  shownHomeCardCover
 } from './thumbnails'

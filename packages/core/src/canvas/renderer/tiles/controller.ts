@@ -1,5 +1,6 @@
 import type { Canvas } from '@open-pencil/canvaskit'
 import type { SceneGraph } from '@open-pencil/scene-graph'
+import { intersectVisualBounds } from '@open-pencil/scene-graph/geometry'
 
 import { type RenderChunkIndex, RenderChunkPictureCache } from '#core/canvas/renderer/chunks'
 import { rendererNow } from '#core/canvas/renderer/clock'
@@ -32,6 +33,12 @@ import {
   type TileJob,
   type TileSchedulerMetrics
 } from './scheduler'
+import {
+  anyCompleteCachedLevel,
+  awaitsRedraw,
+  type CachedPage,
+  completeCachedLevel
+} from './snapshot'
 import {
   addBackgroundStages,
   dropBackgroundStages,
@@ -345,6 +352,64 @@ export class TiledSceneController {
     const presented =
       this.committedLevel === level ? visible : visible.map(({ key }) => ({ key, tile: null }))
     return resolveVisible(this.tileCache, presented, pageId, level, content)
+  }
+
+  /**
+   * Whether the tiles of `pageId` may be final: the page is shown and indexed, no tile work or
+   * edit is pending, and the renderer owes them no redraw.
+   */
+  private snapshotReady(renderer: SkiaRenderer, graph: SceneGraph, pageId: string): boolean {
+    return (
+      this.content.index !== null &&
+      renderer.pageId === pageId &&
+      !this.hasPendingWork() &&
+      !awaitsRedraw(renderer, graph)
+    )
+  }
+
+  /**
+   * Whether some cached level holds all the shown page draws as of `contentGeneration`. Reads
+   * the chunk index's bounds, so callers ask it before the costlier walk that frames the page.
+   */
+  holdsPage(
+    renderer: SkiaRenderer,
+    graph: SceneGraph,
+    pageId: string,
+    contentGeneration: number
+  ): boolean {
+    const index = this.content.index
+    if (!index || !this.snapshotReady(renderer, graph, pageId)) {
+      return false
+    }
+    const content = index.bounds()
+    return !content || anyCompleteCachedLevel(this.tileCache, pageId, content, contentGeneration)
+  }
+
+  /**
+   * The tiles already rendered for `contentGeneration` that show `bounds` of the shown page, at
+   * the level nearest `scale` that holds all of the page's content there, so a picture of the
+   * page costs a few image draws instead of rendering the scene again. Null when the tiles are
+   * not `snapshotReady` or no cached level holds the page yet.
+   */
+  cachedPage(
+    renderer: SkiaRenderer,
+    graph: SceneGraph,
+    pageId: string,
+    bounds: TileWorldBounds,
+    contentGeneration: number,
+    scale: number
+  ): CachedPage | null {
+    const index = this.content.index
+    if (!index || !this.snapshotReady(renderer, graph, pageId)) {
+      return null
+    }
+    const content = index.bounds()
+    const area = content ? intersectVisualBounds(bounds, content) : null
+    if (!area) {
+      return { area: bounds, tiles: [] }
+    }
+    const tiles = completeCachedLevel(this.tileCache, pageId, area, contentGeneration, scale)
+    return tiles ? { area, tiles } : null
   }
 
   invalidate(): void {

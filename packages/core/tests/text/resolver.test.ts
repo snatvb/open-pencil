@@ -36,6 +36,24 @@ function shapedLine(textLength: number, glyphs: number[], offsets: number[]): Ob
 }
 
 describe('FontResolver', () => {
+  test('is loading only while a demand is being fetched', async () => {
+    let finish: (loaded: boolean) => void = () => undefined
+    const resolver = new FontResolver(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve
+        })
+    )
+    expect(resolver.isLoading()).toBe(false)
+
+    const settled = resolver.demand(faceDemand())
+    expect(resolver.isLoading()).toBe(true)
+
+    finish(true)
+    await settled
+    expect(resolver.isLoading()).toBe(false)
+  })
+
   test('tries face candidates in source order', async () => {
     const attempted: string[] = []
     const resolver = new FontResolver(async (item) => {
