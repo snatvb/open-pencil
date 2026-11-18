@@ -1,3 +1,4 @@
+import { omit } from 'es-toolkit'
 import { computed, ref, watch, type Ref } from 'vue'
 
 import {
@@ -8,6 +9,7 @@ import {
   providerKind
 } from '@open-pencil/core/constants'
 
+import { AGENT_CHOICE_CATEGORIES, type AgentChoiceCategory } from '@/app/ai/agents/acp/options'
 import type { AIModelProfileDraft, AIModelCapability } from '@/app/ai/models'
 import { resolveModelsDevModel } from '@/app/ai/models/catalog'
 import { useProviderModelCatalog } from '@/app/ai/models/catalog/use'
@@ -19,9 +21,24 @@ import { OPENPENCIL_AI_PROVIDER } from '@/app/ai/providers/openpencil/provider'
 import { HOST_AGENT_MODELS, useAgentModelSelection, type AgentModelSource } from './agent'
 import { useCloudModelSelection } from './cloud'
 
+/** The texts the profile's model and option selects show. */
+export type ProfileSelectionLabels = ModelPickerLabels & {
+  customModel: string
+  agentDefaultModel: string
+  thinkingLevel: string
+}
+
+/** A select for one of an agent's options, such as its effort or mode. */
+export interface AgentOptionControl {
+  category: AgentChoiceCategory
+  /** What the agent calls the option; the effort is the app's thinking level. */
+  label: string
+  options: { value: string; label: string }[]
+}
+
 export function useProfileModelSelection(
   draft: AIModelProfileDraft,
-  ai: Readonly<Ref<ModelPickerLabels & { customModel: string; agentDefaultModel: string }>>,
+  ai: Readonly<Ref<ProfileSelectionLabels>>,
   agents: AgentModelSource = HOST_AGENT_MODELS
 ) {
   const CUSTOM_MODEL_VALUE = '__custom__'
@@ -48,6 +65,42 @@ export function useProfileModelSelection(
   })
   const isHarness = computed(() => providerKind(draft.providerID) === 'harness')
   const supportsThinking = computed(() => supportsThinkingLevel(draft.providerID))
+  /**
+   * One select per option the agent offers for the draft's model, such as its effort and mode,
+   * each with the agent's own pick first; none while they are not read yet. A saved value the
+   * model no longer lists stays, so it can be cleared. A custom model's options are never read,
+   * so it keeps the agent's.
+   */
+  const agentOptionControls = computed<AgentOptionControl[]>(() => {
+    if (!isACP.value || customModelSelected.value) return []
+    return AGENT_CHOICE_CATEGORIES.flatMap((category) => {
+      const choice = agent.choices.value?.[category]
+      const values = choice?.values ?? []
+      const saved = draft.agentChoices[category]
+      if (values.length === 0 && !saved) return []
+      const stranded = saved && !values.some((value) => value.id === saved)
+      return [
+        {
+          category,
+          label: category === 'thought_level' ? ai.value.thinkingLevel : (choice?.name ?? category),
+          options: [
+            { value: AGENT_DEFAULT_VALUE, label: ai.value.agentDefaultModel },
+            ...(stranded ? [{ value: saved, label: saved }] : []),
+            ...values.map((value) => ({ value: value.id, label: value.name }))
+          ]
+        }
+      ]
+    })
+  })
+  /** The draft's value of an option as its select shows it, which holds no empty value. */
+  function agentOptionValue(category: AgentChoiceCategory): string {
+    return draft.agentChoices[category] || AGENT_DEFAULT_VALUE
+  }
+  function setAgentOption(category: AgentChoiceCategory, value: string): void {
+    const kept = omit(draft.agentChoices, [category])
+    draft.agentChoices = value === AGENT_DEFAULT_VALUE ? kept : { ...kept, [category]: value }
+  }
+
   const providerDisplayName = computed(() => {
     if (!isACP.value) return providerDef.value.name
     return acpAgentFor(draft.providerID)?.name ?? draft.providerID
@@ -179,6 +232,7 @@ export function useProfileModelSelection(
     customModelSelected.value = providerKind(providerID) === 'harness'
     draft.customBaseURL = ''
     draft.customAPIType = 'completions'
+    draft.agentChoices = {}
     if (providerID !== OPENPENCIL_AI_PROVIDER) draft.cloudWorkspaceId = undefined
     if (isACP.value || isHarness.value) {
       draft.capabilities = ['tools']
@@ -195,11 +249,14 @@ export function useProfileModelSelection(
     if (modelID === CUSTOM_MODEL_VALUE) {
       customModelSelected.value = true
       draft.customModelID = ''
+      draft.agentChoices = {}
       catalogModel.value = null
 
       return
     }
     draft.modelID = modelID === AGENT_DEFAULT_VALUE ? '' : modelID
+    // Each model offers its own efforts, so another model starts on the agent's; modes stay.
+    draft.agentChoices = omit(draft.agentChoices, ['thought_level'])
     catalogModel.value = availableModels.value.find((model) => model.id === modelID) ?? null
     customModelSelected.value = false
     draft.customModelID = ''
@@ -230,6 +287,9 @@ export function useProfileModelSelection(
     customModelSelected,
     supportsCustomModel,
     supportsThinking,
+    agentOptionControls,
+    agentOptionValue,
+    setAgentOption,
     providerDisplayName,
     modelOptions,
     selectedModelValue,

@@ -3,7 +3,7 @@ import type { DerivedSymbolOverride } from '#fig/instance-overrides/types'
 import { effectiveFigmaRawNodeFields, effectiveFigmaSourcePayload } from '#fig/source-metadata'
 import { compact } from 'es-toolkit/array'
 
-import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
+import type { Effect as KiwiEffect, NodeChange } from '@open-pencil/kiwi/fig/codec'
 import type {
   ComponentPropertyDefinition,
   ComponentPropertyReferenceField,
@@ -34,6 +34,7 @@ import { savedVariantUnderBinding } from '@open-pencil/scene-graph/variables'
 import { bytesToHex } from '../bytes'
 import { exportCanvasGuides } from '../canvas-guides'
 import { instanceExportAddress, snapshotInstanceGeometry } from '../instance/geometry'
+import { modeledEffectIndexes } from '../paint'
 import {
   applyExportSettingsPluginData,
   applyLibrarySourcePluginData,
@@ -807,7 +808,9 @@ const SUPPORTED_NORMALIZED_EFFECT_TYPES = new Set([
   'LAYER_BLUR',
   'BACKGROUND_BLUR',
   'FOREGROUND_BLUR',
-  'GLASS'
+  'GLASS',
+  'NOISE',
+  'GRAIN'
 ])
 
 function hasRawUnsupportedEffects(node: SceneNode): boolean {
@@ -822,6 +825,36 @@ function hasRawUnsupportedEffects(node: SceneNode): boolean {
         !SUPPORTED_NORMALIZED_EFFECT_TYPES.has(String(effect.type))
     )
   )
+}
+
+/**
+ * `effects` with the record's own effects the scene graph does not model, such as a repeat, put
+ * back where they sat among the modeled ones. Editing a layer's effects makes its raw list stale,
+ * but those entries were never part of the edit.
+ */
+function withUnmodeledRawEffects(
+  context: SceneNodeToKiwiContext,
+  node: SceneNode,
+  effects: KiwiEffect[]
+): KiwiEffect[] {
+  const raw = node.source.fig.rawNodeFields.effects
+  if (!Array.isArray(raw)) return effects
+  const recorded = (
+    materializeFigmaPayload({ effects: raw }, context.blobs, {
+      blobIndexByHex: context.blobIndexByHex,
+      includePaintVariables: true
+    }) as Partial<KiwiNodeChange>
+  ).effects
+  if (!recorded) return effects
+  const indexes = modeledEffectIndexes(recorded)
+  if (!indexes.includes(null)) return effects
+  const merged: KiwiEffect[] = []
+  let next = 0
+  recorded.forEach((effect, index) => {
+    if (indexes[index] === null) merged.push(effect)
+    else if (next < effects.length) merged.push(effects[next++])
+  })
+  return merged.concat(effects.slice(next))
 }
 
 function nodeForGeometryExport(node: SceneNode): SceneNode {
@@ -889,8 +922,13 @@ function applyNodeVisualProps(
   if (node.type === 'POLYGON' || node.type === 'STAR') nc.count = node.pointCount
   if (node.type === 'STAR') nc.starInnerScale = node.starInnerRadius
 
-  if (node.effects.length > 0 && !hasRawUnsupportedEffects(node)) {
-    nc.effects = createEffects(context, node)
+  if (!hasRawUnsupportedEffects(node)) {
+    const effects = withUnmodeledRawEffects(
+      context,
+      node,
+      node.effects.length > 0 ? createEffects(context, node) : []
+    )
+    if (effects.length > 0) nc.effects = effects
   }
 
   if (node.type === 'TEXT') serializeText(context, node, nc)
