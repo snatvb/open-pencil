@@ -174,8 +174,8 @@ export function createCanvasSurfaceManager({
     return true
   }
 
-  /** Visible tiles the renderer had drawn by the last frame; a new renderer counts from zero. */
-  let lastTilesRendered = 0
+  /** The renderer's visible tile progress by the last frame; a new renderer starts at zero. */
+  let lastVisibleTileProgress = 0
   let progressRenderer: SkiaRenderer | null = null
 
   /**
@@ -193,17 +193,19 @@ export function createCanvasSurfaceManager({
       renderVersion: renderedState.renderVersion,
       sceneVersion: renderedState.sceneVersion
     }
-    // A scene still filling in reports the tiles it drew, so a wait for it can tell a large page
-    // drawing slowly, as on a slow machine, from a canvas that stopped drawing.
+    // A scene still filling in reports each tile it drew or recorded part of, so a wait for it can
+    // tell a large page drawing slowly, as on a slow machine, from a canvas that stopped drawing.
     if (renderer !== progressRenderer) {
       progressRenderer = renderer
-      lastTilesRendered = 0
+      lastVisibleTileProgress = 0
     }
-    const tilesRendered = renderer.tiledScene.visibleTilesRendered
-    const drewTiles = tilesRendered > lastTilesRendered
-    lastTilesRendered = tilesRendered
+    const visibleTileProgress = renderer.tiledScene.visibleTileProgress
+    const advanced = visibleTileProgress > lastVisibleTileProgress
+    lastVisibleTileProgress = visibleTileProgress
     if (layer === 'scene' && !renderer.tiledSceneCovered) {
-      if (drewTiles) editor.reportProgress(versions)
+      if (advanced) {
+        editor.reportProgress(versions)
+      }
       return
     }
     editor.reportPresented(versions)

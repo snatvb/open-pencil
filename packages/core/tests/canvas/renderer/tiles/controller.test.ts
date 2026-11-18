@@ -295,6 +295,25 @@ describe('tile scheduling', () => {
     }
   })
 
+  test('counts each frame that records part of a visible tile as progress', () => {
+    const { graph, surface, renderer } = createGridScene(ck)
+    let time = 0
+    const controller = new TiledSceneController({ now: () => (time += 10) })
+    try {
+      const progressByFrame: number[] = []
+      for (let frame = 0; frame < 3; frame++) {
+        const result = controller.renderFrame(renderer, surface.getCanvas(), graph, 1, 0)
+        expect(result.metrics.deferredJobs).toBe(1)
+        progressByFrame.push(controller.visibleTileProgress)
+      }
+      expect(controller.visibleTilesRendered).toBe(0)
+      expect(progressByFrame).toEqual([1, 2, 3])
+    } finally {
+      controller.destroy()
+      renderer.destroy()
+    }
+  })
+
   test('renders the tile under the viewport centre first', () => {
     const { graph, renderer, pageId } = createGridScene(ck)
     let time = 0

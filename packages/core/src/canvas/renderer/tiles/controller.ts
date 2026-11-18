@@ -55,6 +55,11 @@ const TILE_OVERSCAN = 1
  * rebuilt once the content has been still for this long.
  */
 const BACKGROUND_QUIET_MS = 300
+
+function isVisibleJob(job: TileJob): boolean {
+  return job.priority !== 'overscan'
+}
+
 export interface TiledSceneFrameResult {
   /** Every visible tile exists at the current level. */
   covered: boolean
@@ -87,6 +92,7 @@ export class TiledSceneController {
    * out; a test reads it to prove a gesture rebuilt none.
    */
   visibleTilesRendered = 0
+  visibleTileProgress = 0
   private readonly now: () => number
   /** The dot grid the cached tiles were painted with, which a document kind change replaces. */
   private dotGrid: number | null = null
@@ -465,6 +471,9 @@ export class TiledSceneController {
         remainingMs
       })
     ) {
+      if (isVisibleJob(job)) {
+        this.visibleTileProgress++
+      }
       return { renderMs: this.now() - startedAt, overBudget: false, deferred: true }
     }
     const tile =
@@ -484,7 +493,10 @@ export class TiledSceneController {
     }
     this.tileCache.takeWatchedEvictions()
     this.tileCache.install(tile, job.contentGeneration)
-    if (job.priority !== 'overscan') this.visibleTilesRendered++
+    if (isVisibleJob(job)) {
+      this.visibleTilesRendered++
+      this.visibleTileProgress++
+    }
     if (job.priority === 'overscan' && this.tileCache.takeWatchedEvictions() > 0) {
       this.backgroundSaturated = true
     }
