@@ -7,6 +7,7 @@ import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
 import { declareVariableBindingUnits } from '../bindings/variables'
 import { applyDerivedEntry } from '../derived-symbol-data'
 import type { PropertyLayer } from '../layers'
+import type { PreConstraintTransforms } from '../resize'
 import { resolvesInSourceComponent, type InterpreterIndex } from '../source-index'
 import { completeClearedStyleClaim } from '../style/cleared'
 import { yieldToInheritedTextStyle } from '../style/inherited-text'
@@ -145,7 +146,8 @@ export function applyPropertyClaims(
 export function applyDerivedBounds(
   context: ClaimContext,
   owner: InstanceOccurrence,
-  source: NodeChange
+  source: NodeChange,
+  preConstraint: PreConstraintTransforms
 ): void {
   if (!context.options.derivedBounds) {
     return
@@ -161,6 +163,6 @@ export function applyDerivedBounds(
     if (!target || target === owner) {
       continue
     }
-    applyDerivedEntry(target, entry)
+    applyDerivedEntry(target, entry, preConstraint.get(target))
   }
 }
