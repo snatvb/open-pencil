@@ -78,6 +78,11 @@ export function useEditorPropertyList<K extends PropertyListKey>(propKey: K) {
     const changes: Partial<SceneNode> = { [propKey]: value }
     if (sources) {
       changes.boundVariables = listBindingsAfterEdit(node.boundVariables, propKey, sources)
+      changes.variableBindingScales = listBindingsAfterEdit(
+        node.variableBindingScales,
+        propKey,
+        sources
+      )
     }
     editor.updateNodeWithUndo(node.id, editor.layerChanges(node.id, changes), label)
   }

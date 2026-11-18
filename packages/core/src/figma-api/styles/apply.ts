@@ -86,8 +86,9 @@ export function bindStylePaints(
 }
 
 /**
- * Binds `node`'s effects to the variables its effect style's effects are bound to, and drops
- * bindings the style's effects do not carry, so the layer follows them in its own mode as in Figma.
+ * Binds `node`'s effects to the variables its effect style's effects are bound to, with the
+ * style's constants, and drops bindings the style's effects do not carry, so the layer follows
+ * them in its own mode as in Figma.
  */
 export function bindStyleEffects(
   graph: SceneGraph,
@@ -98,7 +99,7 @@ export function bindStyleEffects(
   if (kind !== 'effect' || !styleId) return
   const style = findSharedStyle(graph, styleId, 'EFFECT')
   if (!style) return
-  setEffectBindings(graph, node, figmaEffects(style))
+  setEffectBindings(graph, node, figmaEffects(style), style)
 }
 
 /** Binds `node` to the variables the style it now uses binds, for each kind that binds any. */

@@ -164,11 +164,16 @@ export function shadowTokenValue(effects: readonly Effect[], references: ShadowR
   return values.length === 1 ? values[0] : values
 }
 
+/** A token reference has no place for a binding constant, so such a field writes its number. */
+function referencesEffectField(node: SceneNode, field: string): boolean {
+  return effectBindingTarget(field) !== null && node.variableBindingScales[field] === undefined
+}
+
 /** The token references of a layer's bound effect fields, by binding field. */
 function effectReferences(node: SceneNode, references: TokenReferences): ShadowReferences {
   return Object.fromEntries(
     Object.entries(node.boundVariables).flatMap(([field, variableId]) => {
-      const path = effectBindingTarget(field) ? references.get(variableId) : undefined
+      const path = referencesEffectField(node, field) ? references.get(variableId) : undefined
       return path ? [[field, tokenReference(path)]] : []
     })
   )
@@ -204,7 +209,7 @@ function shadowToken(
 /** Whether a style's token writes a reference for this bound field. */
 function writesBinding(node: SceneNode, field: string): boolean {
   if (node.sharedStyleType === 'TEXT') return TEXT_BINDING_FIELDS.some((bound) => bound === field)
-  return effectBindingTarget(field) !== null
+  return referencesEffectField(node, field)
 }
 
 /** Text and effect styles as typography and shadow tokens, nested by their names. */

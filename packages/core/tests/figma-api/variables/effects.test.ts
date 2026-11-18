@@ -2,6 +2,10 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 
 import { createAPI } from '#core-tests/helpers/figma-api'
 
+import { FigmaAPI, type FigmaEffect } from '@open-pencil/core/figma-api'
+import { SceneGraph } from '@open-pencil/scene-graph'
+import { findSharedStyle } from '@open-pencil/scene-graph/shared-styles'
+import { reconcileVariableBindings } from '@open-pencil/scene-graph/variables'
 import { registerTestFont } from '@open-pencil/test-support/fonts/bundled'
 beforeAll(() => registerTestFont())
 
@@ -34,6 +38,14 @@ function elevation() {
 }
 
 const alias = (id: string) => ({ type: 'VARIABLE_ALIAS' as const, id })
+
+function firstDropShadow(effects: readonly FigmaEffect[]) {
+  const [effect] = effects
+  if (effect?.type !== 'DROP_SHADOW') {
+    throw new Error('expected the bound drop shadow')
+  }
+  return effect
+}
 
 describe('setBoundVariableForEffect', () => {
   test('returns a bound copy whose values are not resolved and whose spread reads 0', () => {
@@ -203,6 +215,57 @@ describe('bound effects on a layer', () => {
     expect(rect.boundVariables).toEqual({ effects: [alias(twin.id)] })
   })
 
+  describe('an effect style over a variable × number binding', () => {
+    function doubledStyle(styleConstant: number | null) {
+      const graph = new SceneGraph()
+      const api = new FigmaAPI(graph)
+      const collection = api.variables.createVariableCollection('Elevation')
+      const dark = collection.addMode('Dark')
+      const radius = api.variables.createVariable('shadowRadius', collection, 'FLOAT')
+      radius.setValueForMode(collection.defaultModeId, 8)
+      radius.setValueForMode(dark, 24)
+      const shadow = api.variables.setBoundVariableForEffect(DROP, 'radius', radius)
+      const style = api.createEffectStyle()
+      style.effects = [shadow]
+      const rect = api.createRectangle()
+      rect.effects = [shadow]
+      const styleNode = findSharedStyle(graph, style.id, 'EFFECT')
+      if (!styleNode) {
+        throw new Error('expected the style’s node')
+      }
+      graph.updateNode(rect.id, { variableBindingScales: { 'effects/0/radius': 2 } })
+      if (styleConstant !== null) {
+        graph.updateNode(styleNode.id, {
+          variableBindingScales: { 'effects/0/radius': styleConstant }
+        })
+      }
+      reconcileVariableBindings(graph)
+      const radiusOf = () => rect.effects[0]?.type === 'DROP_SHADOW' && rect.effects[0].radius
+      return { collection, dark, rect, style, radiusOf }
+    }
+
+    test('take the style’s plain alias in place of the layer’s multiple', async () => {
+      const { collection, dark, rect, style, radiusOf } = doubledStyle(null)
+      expect(radiusOf()).toBe(16)
+
+      await rect.setEffectStyleIdAsync(style.id)
+
+      expect(radiusOf()).toBe(8)
+      rect.setExplicitVariableModeForCollection(collection, dark)
+      expect(radiusOf()).toBe(24)
+    })
+
+    test('take the style’s own multiple', async () => {
+      const { collection, dark, rect, style, radiusOf } = doubledStyle(3)
+
+      await rect.setEffectStyleIdAsync(style.id)
+
+      expect(radiusOf()).toBe(24)
+      rect.setExplicitVariableModeForCollection(collection, dark)
+      expect(radiusOf()).toBe(72)
+    })
+  })
+
   test('resolve in an instance’s mode', () => {
     const { api, collection, dark, color } = elevation()
     const component = api.createComponent()
@@ -215,6 +278,174 @@ describe('bound effects on a layer', () => {
       g: 0,
       b: 0,
       a: 0.6
+    })
+  })
+
+  test('bind a set effect as a plain alias, whatever multiple was bound at its place', () => {
+    const graph = new SceneGraph()
+    const api = new FigmaAPI(graph)
+    const collection = api.variables.createVariableCollection('Elevation')
+    const radius = api.variables.createVariable('shadowRadius', collection, 'FLOAT')
+    radius.setValueForMode(collection.defaultModeId, 8)
+    const shadow = api.variables.setBoundVariableForEffect(DROP, 'radius', radius)
+    const rect = api.createRectangle()
+    rect.effects = [shadow, shadow]
+    graph.updateNode(rect.id, { variableBindingScales: { 'effects/0/radius': 2 } })
+    reconcileVariableBindings(graph)
+    expect(rect.effects.map((effect) => effect.type === 'DROP_SHADOW' && effect.radius)).toEqual([
+      16, 8
+    ])
+
+    rect.effects = [rect.effects[1]]
+
+    expect(rect.effects[0]).toMatchObject({ radius: 8 })
+    radius.setValueForMode(collection.defaultModeId, 10)
+    expect(rect.effects[0]).toMatchObject({ radius: 10 })
+  })
+
+  describe('written back over a variable × number binding', () => {
+    function doubled() {
+      const graph = new SceneGraph()
+      const api = new FigmaAPI(graph)
+      const collection = api.variables.createVariableCollection('Elevation')
+      const radius = api.variables.createVariable('shadowRadius', collection, 'FLOAT')
+      radius.setValueForMode(collection.defaultModeId, 8)
+      const rect = api.createRectangle()
+      rect.effects = [api.variables.setBoundVariableForEffect(DROP, 'radius', radius)]
+      graph.updateNode(rect.id, { variableBindingScales: { 'effects/0/radius': 2 } })
+      reconcileVariableBindings(graph)
+      const shadow = () => firstDropShadow(rect.effects)
+      return { collection, radius, rect, shadow }
+    }
+
+    test('keep the multiple when the bound value is unchanged', () => {
+      const { collection, radius, rect, shadow } = doubled()
+
+      rect.effects = [{ ...shadow(), visible: false }]
+
+      expect(rect.effects[0]).toMatchObject({ radius: 16, visible: false })
+      radius.setValueForMode(collection.defaultModeId, 10)
+      expect(rect.effects[0]).toMatchObject({ radius: 20 })
+    })
+
+    test('drop the multiple when the bound value changes', () => {
+      const { collection, radius, rect, shadow } = doubled()
+
+      rect.effects = [{ ...shadow(), radius: 5 }]
+
+      radius.setValueForMode(collection.defaultModeId, 10)
+      expect(rect.effects[0]).toMatchObject({ radius: 10 })
+    })
+  })
+
+  describe('written back over a variable × number binding that differs by mode', () => {
+    function doubledFirstOfTwo() {
+      const graph = new SceneGraph()
+      const api = new FigmaAPI(graph)
+      const collection = api.variables.createVariableCollection('Elevation')
+      const dark = collection.addMode('Dark')
+      const radius = api.variables.createVariable('shadowRadius', collection, 'FLOAT')
+      radius.setValueForMode(collection.defaultModeId, 8)
+      radius.setValueForMode(dark, 24)
+      const shadow = api.variables.setBoundVariableForEffect(DROP, 'radius', radius)
+      const rect = api.createRectangle()
+      rect.effects = [shadow, { ...shadow, spread: 1 }]
+      graph.updateNode(rect.id, { variableBindingScales: { 'effects/0/radius': 2 } })
+      reconcileVariableBindings(graph)
+      const radii = () =>
+        rect.effects.map((effect) => effect.type === 'DROP_SHADOW' && effect.radius)
+      return { api, collection, dark, rect, radii }
+    }
+
+    test('keep the multiple with its effect when the effects come back reordered', () => {
+      const { collection, dark, rect, radii } = doubledFirstOfTwo()
+      expect(radii()).toEqual([16, 8])
+
+      rect.effects = [...rect.effects].reverse()
+
+      expect(radii()).toEqual([8, 16])
+      rect.setExplicitVariableModeForCollection(collection, dark)
+      expect(radii()).toEqual([24, 48])
+    })
+
+    test('keep the multiple when only another field of its effect changes', () => {
+      const { collection, dark, rect, radii } = doubledFirstOfTwo()
+
+      const green = { r: 0, g: 1, b: 0, a: 1 }
+      rect.effects = [{ ...firstDropShadow(rect.effects), color: green }, rect.effects[1]]
+
+      expect(radii()).toEqual([16, 8])
+      rect.setExplicitVariableModeForCollection(collection, dark)
+      expect(radii()).toEqual([48, 24])
+    })
+
+    test('drop the multiple when the bound field is written another number', () => {
+      const { collection, dark, rect, radii } = doubledFirstOfTwo()
+
+      rect.effects = [{ ...firstDropShadow(rect.effects), radius: 5 }, rect.effects[1]]
+
+      expect(radii()).toEqual([8, 8])
+      rect.setExplicitVariableModeForCollection(collection, dark)
+      expect(radii()).toEqual([24, 24])
+    })
+
+    test('drop the multiple when the field is bound to another variable', () => {
+      const { api, collection, dark, rect, radii } = doubledFirstOfTwo()
+      const twin = api.variables.createVariable('twin', collection, 'FLOAT')
+      twin.setValueForMode(collection.defaultModeId, 8)
+      twin.setValueForMode(dark, 24)
+
+      const swapped = api.variables.setBoundVariableForEffect(rect.effects[0], 'radius', twin)
+      rect.effects = [swapped, rect.effects[1]]
+
+      expect(radii()).toEqual([8, 8])
+      rect.setExplicitVariableModeForCollection(collection, dark)
+      expect(radii()).toEqual([24, 24])
+    })
+  })
+
+  describe('a variable × number binding reordered past an equal shadow', () => {
+    function doubledBeside(twinBinding: 'unbound' | 'other variable') {
+      const graph = new SceneGraph()
+      const api = new FigmaAPI(graph)
+      const collection = api.variables.createVariableCollection('Elevation')
+      const radius = api.variables.createVariable('shadowRadius', collection, 'FLOAT')
+      radius.setValueForMode(collection.defaultModeId, 8)
+      const other = api.variables.createVariable('otherRadius', collection, 'FLOAT')
+      other.setValueForMode(collection.defaultModeId, 16)
+      const plain = { ...DROP, radius: 16, spread: 0 }
+      const twin =
+        twinBinding === 'unbound'
+          ? plain
+          : api.variables.setBoundVariableForEffect(plain, 'radius', other)
+      const rect = api.createRectangle()
+      rect.effects = [api.variables.setBoundVariableForEffect(DROP, 'radius', radius), twin]
+      graph.updateNode(rect.id, { variableBindingScales: { 'effects/0/radius': 2 } })
+      reconcileVariableBindings(graph)
+      const radii = () =>
+        rect.effects.map((effect) => effect.type === 'DROP_SHADOW' && effect.radius)
+      return { collection, radius, other, rect, radii }
+    }
+
+    test('keeps the multiple on its effect when the twin is unbound', () => {
+      const { collection, radius, rect, radii } = doubledBeside('unbound')
+      expect(radii()).toEqual([16, 16])
+
+      rect.effects = [...rect.effects].reverse()
+      radius.setValueForMode(collection.defaultModeId, 10)
+
+      expect(radii()).toEqual([16, 20])
+    })
+
+    test('keeps the multiple on its effect when the twin binds another variable', () => {
+      const { collection, radius, other, rect, radii } = doubledBeside('other variable')
+      expect(radii()).toEqual([16, 16])
+
+      rect.effects = [...rect.effects].reverse()
+      radius.setValueForMode(collection.defaultModeId, 10)
+      other.setValueForMode(collection.defaultModeId, 12)
+
+      expect(radii()).toEqual([12, 20])
     })
   })
 

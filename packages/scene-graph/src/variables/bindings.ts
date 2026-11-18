@@ -1,4 +1,5 @@
 import { uniq } from 'es-toolkit/array'
+import { omit } from 'es-toolkit/object'
 import { isEmptyObject, isEqual } from 'es-toolkit/predicate'
 
 import type { SceneGraph } from '../graph'
@@ -75,7 +76,10 @@ export function assignVariableBindingUnits(
   node: SceneNode,
   field: string
 ): void {
-  if (!isNumericVariableBindingField(field)) return
+  if (!isNumericVariableBindingField(field)) {
+    node.variableBindingScales = omit(node.variableBindingScales, [field])
+    return
+  }
   const owner = variableBindingOwner(graph, node)
   node.variableBindingScales = {
     ...node.variableBindingScales,
@@ -183,8 +187,15 @@ function withBoundEffectValue(
 }
 
 /** A bound effect length in an occurrence's coordinates, which are 1:1 outside instances. */
-function scaledLength(length: number | undefined, node: SceneNode): number | undefined {
-  return length === undefined ? undefined : length * node.componentScale
+function scaledLength(
+  length: number | undefined,
+  node: SceneNode,
+  field: string
+): number | undefined {
+  if (length === undefined) {
+    return undefined
+  }
+  return length * (node.variableBindingScales[field] ?? 1) * node.componentScale
 }
 
 /**
@@ -208,7 +219,7 @@ export function resolvedEffectBindings(
     const value =
       target.property === 'color'
         ? graph.resolveColorVariableForNode(node.id, variableId)
-        : scaledLength(graph.resolveNumberVariableForNode(node.id, variableId), node)
+        : scaledLength(graph.resolveNumberVariableForNode(node.id, variableId), node, field)
     if (value == null || (typeof value === 'number' && !Number.isFinite(value))) continue
     const next = withBoundEffectValue(effect, target.property, value)
     if (isEqual(next, effect)) continue
@@ -504,26 +515,31 @@ export function reconcileVariableBindingUpdates(
 export type BoundLayerList = 'fills' | 'strokes' | 'effects'
 
 /**
- * `boundVariables` once the `list` items are rebuilt from `sources`, where `sources[i]` is the
- * position the new item `i` had before, or null for an added item. A binding moves with its item
- * and goes with a removed one, as Figma keeps a binding on its paint or effect.
+ * `bindings`, a node's `boundVariables` or `variableBindingScales`, once the `list` items are
+ * rebuilt from `sources`, where `sources[i]` is the position the new item `i` had before, or null
+ * for an added item. A binding moves with its item and goes with a removed one, as Figma keeps a
+ * binding on its paint or effect.
  */
-export function listBindingsAfterEdit(
-  boundVariables: Readonly<Record<string, string>>,
+export function listBindingsAfterEdit<Value>(
+  bindings: Readonly<Partial<Record<string, Value>>>,
   list: BoundLayerList,
   sources: readonly (number | null)[]
-): Record<string, string> {
+): Record<string, Value> {
   const prefix = `${list}/`
-  const moved: Record<string, string> = {}
-  for (const [field, variableId] of Object.entries(boundVariables)) {
+  const moved: Record<string, Value> = {}
+  for (const [field, value] of Object.entries(bindings)) {
+    if (value === undefined) {
+      continue
+    }
     if (!field.startsWith(prefix)) {
-      moved[field] = variableId
+      moved[field] = value
       continue
     }
     const [index, ...property] = field.slice(prefix.length).split('/')
     const next = sources.indexOf(Number(index))
-    if (next !== -1 && property.length > 0)
-      moved[`${prefix}${next}/${property.join('/')}`] = variableId
+    if (next !== -1 && property.length > 0) {
+      moved[`${prefix}${next}/${property.join('/')}`] = value
+    }
   }
   return moved
 }

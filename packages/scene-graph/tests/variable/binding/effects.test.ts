@@ -70,6 +70,37 @@ describe('effect bindings', () => {
     ])
   })
 
+  test('multiply a length by the constant a variable × number binding gives it, in each mode', () => {
+    const { graph, collection, dark, blur, lift, card } = elevation()
+    graph.updateNode(card.id, {
+      boundVariables: { 'effects/0/radius': blur.id, 'effects/0/offsetY': lift.id },
+      variableBindingScales: { 'effects/0/radius': 2, 'effects/0/offsetY': 0.5 }
+    })
+
+    reconcileVariableBindings(graph)
+    expect(graph.getNode(card.id)?.effects[0]).toMatchObject({ radius: 16, offset: { x: 1, y: 2 } })
+
+    graph.updateNode(card.id, { variableModes: { [collection.id]: dark } })
+    reconcileVariableBindings(graph)
+    expect(graph.getNode(card.id)?.effects[0]).toMatchObject({
+      radius: 48,
+      offset: { x: 1, y: -3.5 }
+    })
+  })
+
+  test('take the variable as it is once the property is bound again', () => {
+    const { graph, blur, card } = elevation()
+    graph.updateNode(card.id, {
+      boundVariables: { 'effects/0/radius': blur.id },
+      variableBindingScales: { 'effects/0/radius': 2 }
+    })
+    graph.bindVariable(card.id, 'effects/0/radius', blur.id)
+    reconcileVariableBindings(graph)
+
+    expect(graph.getNode(card.id)?.variableBindingScales).toEqual({})
+    expect(graph.getNode(card.id)?.effects[0].radius).toBe(8)
+  })
+
   test('keep a negative length as the variable gives it', () => {
     const { graph, collection, dark, lift, card } = elevation()
     graph.bindVariable(card.id, 'effects/0/spread', lift.id)

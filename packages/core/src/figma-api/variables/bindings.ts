@@ -1,8 +1,9 @@
 import { uniq } from 'es-toolkit/array'
-import { isEmptyObject } from 'es-toolkit/predicate'
+import { isEmptyObject, isEqual } from 'es-toolkit/predicate'
 
 import {
   TEXT_BINDABLE_FIELDS,
+  type Effect,
   type SceneGraph,
   type SceneNode,
   type TextBindableField,
@@ -16,7 +17,8 @@ import {
   effectBindingTarget,
   effectBindingVariableType,
   independentCornerChanges,
-  paintBindingTarget
+  paintBindingTarget,
+  type EffectBindingProperty
 } from '@open-pencil/scene-graph/variables'
 
 import type { FigmaEffect, FigmaEffectBindings } from '#core/figma-api/effects'
@@ -263,12 +265,16 @@ export function effectBindings(node: SceneNode): Map<number, FigmaEffectBindings
 /**
  * Binds each effect's properties to the variables its `boundVariables` names, as Figma does when
  * effects are set, and drops bindings the effects no longer carry. A reference to a missing
- * variable, one of the wrong type, or a property the effect lacks binds nothing.
+ * variable, one of the wrong type, or a property the effect lacks binds nothing. A reference is a
+ * plain alias, yet a field keeps the constant of its `variable × number` binding in `replaced`
+ * while its effect comes back, at any place, bound to the same variable with the same value there:
+ * Figma reads a bound field from its variable, so only writing another number edits it.
  */
 export function setEffectBindings(
   graph: SceneGraph,
   node: SceneNode,
-  effects: readonly FigmaEffect[]
+  effects: readonly FigmaEffect[],
+  replaced: ReplacedEffects
 ): void {
   const current = new Map(
     Object.entries(node.boundVariables).filter(([field]) => effectBindingTarget(field))
@@ -282,13 +288,95 @@ export function setEffectBindings(
         wanted.set(effectBindingField(index, property), id)
     }
   })
+  const kept = keptEffectConstants(node, wanted, replaced)
   for (const field of current.keys()) {
     if (!wanted.has(field)) graph.unbindVariable(node.id, field)
   }
   for (const [field, id] of wanted) {
-    if (current.get(field) !== id) graph.bindVariable(node.id, field, id)
+    if (current.get(field) !== id || node.variableBindingScales[field] !== kept[field]) {
+      graph.bindVariable(node.id, field, id)
+    }
+  }
+  const scales = node.variableBindingScales
+  if (Object.entries(kept).some(([field, constant]) => scales[field] !== constant)) {
+    graph.updateNode(node.id, {
+      variableBindingScales: { ...scales, ...kept }
+    })
   }
   if (current.size > 0 || wanted.size > 0) reconcileVariableLayouts(graph, { subtrees: [node.id] })
+}
+
+type BoundEffect = { effect: Effect; variables: (string | undefined)[] }
+
+function boundEffects(
+  effects: readonly Effect[],
+  variableAt: (field: string) => string | undefined
+): BoundEffect[] {
+  return effects.map((effect, index) => ({
+    effect,
+    variables: effectBindableProperties(effect.type).map((property) =>
+      variableAt(effectBindingField(index, property))
+    )
+  }))
+}
+
+function effectSources(
+  replaced: readonly BoundEffect[],
+  effects: readonly BoundEffect[]
+): (number | null)[] {
+  const claimed = new Set<number>()
+  const twins = effects.map((effect) => {
+    const index = replaced.findIndex((old, at) => !claimed.has(at) && isEqual(old, effect))
+    if (index === -1) {
+      return null
+    }
+    claimed.add(index)
+    return index
+  })
+  const editedInPlace = (index: number) => index < replaced.length && !claimed.has(index)
+  return twins.map((source, index) => source ?? (editedInPlace(index) ? index : null))
+}
+
+export type ReplacedEffects = Pick<
+  SceneNode,
+  'effects' | 'boundVariables' | 'variableBindingScales'
+>
+
+function keptEffectConstants(
+  node: SceneNode,
+  wanted: ReadonlyMap<string, string>,
+  replaced: ReplacedEffects
+): Record<string, number> {
+  const sources = effectSources(
+    boundEffects(replaced.effects, (field) => replaced.boundVariables[field]),
+    boundEffects(node.effects, (field) => wanted.get(field))
+  )
+  const kept: Record<string, number> = {}
+  for (const [field, id] of wanted) {
+    const target = effectBindingTarget(field)
+    const source = target ? sources[target.index] : null
+    if (!target || source === null) {
+      continue
+    }
+    const before = effectBindingField(source, target.property)
+    const constant = replaced.variableBindingScales[before]
+    const value = effectPropertyValue(node.effects[target.index], target.property)
+    const valueBefore = effectPropertyValue(replaced.effects[source], target.property)
+    if (constant !== undefined && replaced.boundVariables[before] === id && value === valueBefore) {
+      kept[field] = constant
+    }
+  }
+  return kept
+}
+
+function effectPropertyValue(effect: Effect | undefined, property: EffectBindingProperty) {
+  if (property === 'offsetX') {
+    return effect?.offset.x
+  }
+  if (property === 'offsetY') {
+    return effect?.offset.y
+  }
+  return effect?.[property]
 }
 
 /** Figma's order for a list of variables: by ID, each once. */

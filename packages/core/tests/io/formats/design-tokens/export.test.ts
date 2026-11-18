@@ -164,6 +164,48 @@ describe('design token export', () => {
     })
   })
 
+  test('a shadow field bound as a variable times a number keeps its shown length', () => {
+    const graph = new SceneGraph()
+    const theme = graph.createCollection('Theme')
+    const elevation = graph.createVariable('Elevation', 'FLOAT', theme.id, 8)
+    const raised = graph.createNode('RECTANGLE', graph.getPages()[0].id, {
+      name: 'Shadow/Raised',
+      sharedStyleType: 'EFFECT',
+      internalOnly: true,
+      effects: [
+        {
+          type: 'DROP_SHADOW',
+          color: { r: 0, g: 0, b: 0, a: 0.25 },
+          offset: { x: 0, y: 0 },
+          radius: 16,
+          spread: 0,
+          visible: true
+        }
+      ],
+      boundVariables: { 'effects/0/radius': elevation.id },
+      variableBindingScales: { 'effects/0/radius': 2 }
+    })
+    raised.source.id = 'style:raised'
+    const motion = graph.createCollection('Motion')
+    graph.createVariable('Elevation', 'FLOAT', motion.id, 3)
+
+    expect(file(graph, STYLES_FILE).Shadow).toEqual({
+      Raised: {
+        $type: 'shadow',
+        $value: {
+          color: { colorSpace: 'srgb', components: [0, 0, 0], alpha: 0.25, hex: '#000000' },
+          offsetX: { value: 0, unit: 'px' },
+          offsetY: { value: 0, unit: 'px' },
+          blur: { value: 16, unit: 'px' },
+          spread: { value: 0, unit: 'px' }
+        }
+      }
+    })
+    expect(exportDesignTokens(graph).issues).not.toContainEqual(
+      expect.objectContaining({ kind: 'ambiguous-reference' })
+    )
+  })
+
   test('a collection named like the styles set gets a name of its own in the resolver', () => {
     const graph = designSystem()
     const styles = graph.createCollection('Styles')

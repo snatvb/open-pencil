@@ -163,9 +163,14 @@ export function installVisualNodeProxyAccessors(
       set(this: ProxyThis, value: readonly FigmaEffect[]) {
         const node = raw(this, internals)
         const effects = parseFigmaEffects(value)
+        const replaced = {
+          effects: parseFigmaEffects(figmaEffects(node)),
+          boundVariables: node.boundVariables,
+          variableBindingScales: node.variableBindingScales
+        }
         const fills = fillsGainingGlass(node.effects, effects, node.fills)
         updateNode(this, internals, fills ? { effects, fills } : { effects })
-        setEffectBindings(graphOf(this), raw(this, internals), firstTextureOnly(value))
+        setEffectBindings(graphOf(this), raw(this, internals), firstTextureOnly(value), replaced)
       }
     },
     // Applied shared styles, as Figma exposes them; an assignment inside an instance is an override.

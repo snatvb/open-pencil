@@ -40,6 +40,14 @@ describe('list bindings after an edit', () => {
     })
   })
 
+  test('carry the constants a binding multiplies its variable by', () => {
+    const scales = { 'effects/0/radius': 2, 'effects/1/offsetY': 3, width: 1 }
+    expect(listBindingsAfterEdit(scales, 'effects', [1])).toEqual({
+      'effects/0/offsetY': 3,
+      width: 1
+    })
+  })
+
   test('stay put when an item is added after them, and go when the list is replaced', () => {
     expect(listBindingsAfterEdit(BOUND, 'fills', [0, 1, 2, null])).toEqual(BOUND)
     expect(listBindingsAfterEdit(BOUND, 'effects', [null])).toEqual({
