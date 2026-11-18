@@ -14,7 +14,7 @@ import {
   visibleLayerRows
 } from '@open-pencil/vue/primitives/LayerTree'
 
-import { dropIndex } from '#vue/primitives/LayerTree/model'
+import { createLayerTreeModel, dropIndex } from '#vue/primitives/LayerTree/model'
 
 describe('layer tree model', () => {
   test('marks icon frames, so rows can show them as icons', () => {
@@ -208,6 +208,26 @@ describe('layer tree model', () => {
       [nested.id, 2],
       [child.id, 3]
     ])
+  })
+
+  test('builds rows only for the top level and the expanded layers under it', () => {
+    const graph = makeSceneGraph()
+    const pageId = firstPageId(graph)
+    const frame = graph.createNode('FRAME', pageId, { name: 'Frame' })
+    const nested = graph.createNode('FRAME', frame.id, { name: 'Nested' })
+    const child = createRect(graph, nested.id, { name: 'Child' })
+    const other = graph.createNode('FRAME', pageId, { name: 'Other' })
+    createRect(graph, other.id, { name: 'Hidden' })
+    const model = createLayerTreeModel(graph, pageId)
+
+    expect([...model.byId.keys()]).toEqual([other.id, frame.id])
+    expect(model.hasChildren({ id: frame.id })).toBe(true)
+
+    model.buildExpanded((id) => id === frame.id || id === nested.id)
+
+    expect([...model.byId.keys()]).toEqual([other.id, frame.id, nested.id, child.id])
+    expect(model.byId.get(other.id)?.children).toBeUndefined()
+    expect(model.hasChildren({ id: child.id })).toBe(false)
   })
 
   test('patches an indexed node without replacing its identity', () => {

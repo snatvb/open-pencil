@@ -82,13 +82,30 @@ export function listsChildrenInFlow(node: Pick<SceneNode, 'layoutMode'>): boolea
   return node.layoutMode === 'HORIZONTAL' || node.layoutMode === 'VERTICAL'
 }
 
-export function buildLayerTreeModel(graph: SceneGraph, parentId: string): LayerTreeModel {
-  const byId = new Map<string, LayerNode>()
+export function listsChildren(graph: SceneGraph, node: SceneNode): boolean {
+  // A generated frame, such as a sticky note, is one layer; its template owns what is inside.
+  if (isGeneratedFrame(node)) {
+    return false
+  }
+  return node.childIds.some((childId) => {
+    const child = graph.getNode(childId)
+    return !!child && !child.internalOnly
+  })
+}
 
-  const buildChildren = (id: string): LayerNode[] => {
+export interface LazyLayerTreeModel extends LayerTreeModel {
+  hasChildren(node: Pick<LayerNode, 'id'>): boolean
+  buildExpanded(isExpanded: (id: string) => boolean): void
+}
+
+export function createLayerTreeModel(graph: SceneGraph, parentId: string): LazyLayerTreeModel {
+  const byId = new Map<string, LayerNode>()
+  const parents = new Set<string>()
+
+  const buildRows = (id: string): LayerNode[] => {
     const parent = graph.getNode(id)
     if (!parent) return []
-    const children: LayerNode[] = []
+    const rows: LayerNode[] = []
     // `childIds` runs from back to front, which is also an auto layout's flow.
     const rowOrder = listsChildrenInFlow(parent) ? parent.childIds : parent.childIds.toReversed()
     for (const childId of rowOrder) {
@@ -96,16 +113,36 @@ export function buildLayerTreeModel(graph: SceneGraph, parentId: string): LayerT
       if (!sceneNode || sceneNode.internalOnly) continue
       const node = nodeToLayerNode(sceneNode)
       byId.set(node.id, node)
-      // A generated frame, such as a sticky note, is one layer; its template owns what is inside.
-      if (sceneNode.childIds.length > 0 && !isGeneratedFrame(sceneNode)) {
-        node.children = buildChildren(node.id)
+      if (listsChildren(graph, sceneNode)) {
+        parents.add(node.id)
       }
-      children.push(node)
+      rows.push(node)
     }
-    return children
+    return rows
   }
 
-  return { items: buildChildren(parentId), byId }
+  const items = buildRows(parentId)
+
+  const buildExpanded = (isExpanded: (id: string) => boolean) => {
+    const visit = (rows: readonly LayerNode[]) => {
+      for (const row of rows) {
+        if (!parents.has(row.id) || !isExpanded(row.id)) {
+          continue
+        }
+        row.children ??= buildRows(row.id)
+        visit(row.children)
+      }
+    }
+    visit(items)
+  }
+
+  return { items, byId, hasChildren: (node) => parents.has(node.id), buildExpanded }
+}
+
+export function buildLayerTreeModel(graph: SceneGraph, parentId: string): LayerTreeModel {
+  const model = createLayerTreeModel(graph, parentId)
+  model.buildExpanded(() => true)
+  return { items: model.items, byId: model.byId }
 }
 
 export function indexLayerNodes(items: readonly LayerNode[]): Map<string, LayerNode> {
@@ -151,16 +188,22 @@ export function patchLayerNode(target: LayerNode, source: SceneNode): boolean {
   return true
 }
 
+function hasBuiltChildren(node: LayerNode): boolean {
+  return (node.children?.length ?? 0) > 0
+}
+
 export function visibleLayerRows(
   items: readonly LayerNode[],
-  expandedIds: ReadonlySet<string>
+  expandedIds: ReadonlySet<string>,
+  hasChildren: (node: LayerNode) => boolean = hasBuiltChildren
 ): LayerRow[] {
   const rows: LayerRow[] = []
   const append = (nodes: readonly LayerNode[], level: number) => {
     for (const node of nodes) {
-      const hasChildren = (node.children?.length ?? 0) > 0
-      rows.push({ node, level, hasChildren })
-      if (hasChildren && expandedIds.has(node.id)) append(node.children ?? [], level + 1)
+      rows.push({ node, level, hasChildren: hasChildren(node) })
+      if (node.children && expandedIds.has(node.id)) {
+        append(node.children, level + 1)
+      }
     }
   }
   append(items, 1)
