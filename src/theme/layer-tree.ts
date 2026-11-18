@@ -8,7 +8,13 @@ const layerTreeTheme = {
       'flex w-4 shrink-0 cursor-pointer items-center justify-center text-current transition-transform',
     disclosurePlaceholder: 'w-4 shrink-0',
     icon: 'size-3 shrink-0',
-    label: 'flex min-w-0 flex-1 items-center gap-1.5',
+    label: '@container/label flex min-w-0 flex-1 items-center gap-1.5',
+    name: 'min-w-0 truncate @max-[6rem]/label:min-w-[2.5ch]',
+    modeBadge:
+      'grid shrink-[100] items-center rounded-full border border-current/40 px-1.5 text-3xs leading-3.5',
+    modeName: 'min-w-0 truncate',
+    moreModes: 'ps-1 opacity-70 @max-[6rem]/label:hidden',
+    modeCount: 'hidden @max-[6rem]/label:inline',
     actions: 'flex shrink-0 items-center gap-0.5',
     action: [
       'flex size-4 items-center justify-center rounded text-current hover:bg-white/15',
@@ -50,6 +56,13 @@ const layerTreeTheme = {
       // Mirrored, the chevron points left and turns the other way to point down when open.
       true: { disclosure: 'rotate-90 rtl:-rotate-90' },
       false: { disclosure: 'rotate-0' }
+    },
+    severalModes: {
+      true: {
+        modeBadge: 'grid-cols-[minmax(1.5rem,auto)_auto] @max-[6rem]/label:grid-cols-[auto]',
+        modeName: '@max-[6rem]/label:hidden'
+      },
+      false: { modeBadge: 'grid-cols-[minmax(1.5rem,auto)]' }
     },
     actionsVisible: {
       true: {},

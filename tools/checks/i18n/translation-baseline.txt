@@ -746,10 +746,17 @@ ru:panels.iconSetNeedsNewerMacOS
 zh-cn:panels.iconSetNeedsNewerMacOS
 pt-br:email.invitationSignatureName
 ar:variables.numberedCollection
+ar:variables.appliedMode
 de:variables.numberedCollection
+de:variables.appliedMode
 es:variables.numberedCollection
+es:variables.appliedMode
 fr:variables.numberedCollection
 it:variables.numberedCollection
+it:variables.appliedMode
 pl:variables.numberedCollection
+pl:variables.appliedMode
 pt-br:variables.numberedCollection
+pt-br:variables.appliedMode
 ru:variables.numberedCollection
+ru:variables.appliedMode

@@ -1,13 +1,17 @@
 <script setup lang="ts">
+import { useStore } from '@nanostores/vue'
 import { tv } from 'tailwind-variants'
 import { computed } from 'vue'
 
+import { appliedVariableModes } from '@open-pencil/vue/controls/variable-modes'
+import { locale, useVariableMessages } from '@open-pencil/vue/i18n'
 import type { LayerNode } from '@open-pencil/vue/primitives/LayerTree'
 
 import { useEditorStore } from '@/app/editor/active-store'
 import type { LayerIssueMark as LayerIssueMarkData } from '@/app/editor/design-check/layers'
 import LayerIssueMark from '@/components/design-check/LayerIssueMark.vue'
 import { COMPONENT_TYPES, nodeIcon } from '@/components/icons'
+import Tip from '@/components/ui/overlay/Tip.vue'
 import layerTreeTheme from '@/theme/layer-tree'
 
 import LayerTreeActions from './LayerTreeActions.vue'
@@ -37,16 +41,22 @@ const emit = defineEmits<{
 
 const ui = useLayerTreeUI()
 const store = useEditorStore()
-/** The names of the variable modes set on the layer itself, tagged after its name as in Figma. */
-const modeNames = computed(() =>
-  (node.modeIds ?? []).flatMap((modeId) => {
-    for (const collection of store.graph.variableCollections.values()) {
-      const mode = collection.modes.find((candidate) => candidate.modeId === modeId)
-      if (mode) return [mode.name]
-    }
+const variables = useVariableMessages()
+const language = useStore(locale)
+const appliedModes = computed(() => {
+  const { variableModes } = node
+  if (!variableModes) {
     return []
-  })
-)
+  }
+  void store.state.sceneVersion
+  return appliedVariableModes(store.graph, variableModes, variables.value.numberedCollection)
+})
+const firstMode = computed(() => appliedModes.value[0])
+const moreModes = computed(() => appliedModes.value.length - 1)
+const modesLabel = computed(() => {
+  const entries = appliedModes.value.map((applied) => variables.value.appliedMode(applied))
+  return new Intl.ListFormat(language.value, { type: 'conjunction' }).format(entries)
+})
 const layerTree = tv(layerTreeTheme)
 const styles = computed(() =>
   layerTree({
@@ -58,6 +68,7 @@ const styles = computed(() =>
     visible: node.visible,
     component: COMPONENT_TYPES.has(node.type),
     slot: node.slot,
+    severalModes: moreModes.value > 0,
     childDropTarget:
       chrome.instructionTargetId === node.id && chrome.instruction?.type === 'make-child'
   })
@@ -94,15 +105,23 @@ const styles = computed(() =>
 
     <component :is="nodeIcon(node)" data-slot="icon" :class="styles.icon({ class: ui?.icon })" />
     <span data-slot="label" :class="styles.label({ class: ui?.label })">
-      <span class="min-w-0 truncate">{{ node.name }}</span>
-      <span
-        v-for="name in modeNames"
-        :key="name"
-        data-slot="variable-mode"
-        class="shrink-0 rounded-full border border-current/40 px-1.5 text-3xs leading-3.5"
-      >
-        {{ name }}
-      </span>
+      <span data-slot="name" :class="styles.name()">{{ node.name }}</span>
+      <Tip v-if="firstMode" :label="modesLabel" as-child>
+        <span data-slot="variable-mode" :class="styles.modeBadge()">
+          <span aria-hidden="true" data-slot="variable-mode-name" :class="styles.modeName()">{{
+            firstMode.mode
+          }}</span>
+          <template v-if="moreModes > 0">
+            <span aria-hidden="true" data-slot="variable-mode-more" :class="styles.moreModes()">
+              +{{ moreModes }}
+            </span>
+            <span aria-hidden="true" data-slot="variable-mode-count" :class="styles.modeCount()">
+              {{ appliedModes.length }}
+            </span>
+          </template>
+          <span class="sr-only">{{ modesLabel }}</span>
+        </span>
+      </Tip>
     </span>
     <LayerIssueMark v-if="issue && (issue.own || !expanded)" :mark="issue" />
 
