@@ -232,6 +232,7 @@ export function createDefaultNode(
     symbolLinks: ownList(overrides.symbolLinks),
     variantPropSpecs: ownList(overrides.variantPropSpecs),
     boundVariables: ownRecord(overrides.boundVariables),
+    variantBindings: ownRecord(overrides.variantBindings),
     variableBindingScales: ownRecord(overrides.variableBindingScales),
     variableAssignmentScales: ownRecord(overrides.variableAssignmentScales),
     componentScale: 1,
