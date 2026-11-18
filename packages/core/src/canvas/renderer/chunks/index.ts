@@ -16,6 +16,7 @@ import {
   type RenderChunk,
   type RenderChunkBuildStats
 } from './build'
+import { type ChunkSearch, RememberedChunkSearches } from './searches'
 
 export { nodeRequiresAtomicChunk } from './build'
 export type {
@@ -24,6 +25,8 @@ export type {
   RenderChunkContext,
   RenderChunkKind
 } from './build'
+
+export type { ChunkSearch } from './searches'
 
 export class RenderChunkIndex {
   private readonly tree = new RBush<RenderChunk>()
@@ -36,6 +39,7 @@ export class RenderChunkIndex {
   private cachedBounds: Pick<RenderChunk, 'minX' | 'minY' | 'maxX' | 'maxY'> | null | undefined
   /** At least the largest backdrop reach of any chunk: it only grows until the index is reset. */
   private maxBackdropReach = 0
+  private readonly searchResults = new RememberedChunkSearches()
 
   static build(
     graph: SceneGraph,
@@ -97,7 +101,7 @@ export class RenderChunkIndex {
   }
 
   private unregister(chunk: RenderChunk): void {
-    this.tree.remove(chunk)
+    this.removeFromTree(chunk)
     this.chunks.delete(chunk.id)
     this.chunkIdsByNode.get(chunk.nodeId)?.delete(chunk.id)
     this.chunkIdsByTop.get(chunk.topId)?.delete(chunk.id)
@@ -133,7 +137,7 @@ export class RenderChunkIndex {
         ? buildChunks(graph, topId, topId, topIndex, countDescendants(graph, [topId]).counts)
         : []
     for (const chunk of added) {
-      this.tree.insert(chunk)
+      this.insertIntoTree(chunk)
       this.register(chunk, graph)
     }
     if (removed.length > 0 || added.length > 0) this.cachedBounds = undefined
@@ -311,7 +315,7 @@ export class RenderChunkIndex {
     for (const [position, chunk] of built.entries()) {
       chunk.painterOrder = start + step * (position + 1)
       chunk.localOrder = chunk.painterOrder - topIndex * PAINTER_ORDER_SPAN
-      this.tree.insert(chunk)
+      this.insertIntoTree(chunk)
       this.register(chunk, graph)
     }
     this.cachedBounds = undefined
@@ -404,6 +408,23 @@ export class RenderChunkIndex {
     return this.tree.search(bounds).sort((a, b) => a.painterOrder - b.painterOrder)
   }
 
+  /** Remembered until the chunks change: the tile planner asks the same bounds every frame. */
+  searchUnordered(bounds: Pick<RenderChunk, 'minX' | 'minY' | 'maxX' | 'maxY'>): ChunkSearch {
+    const id = `${bounds.minX},${bounds.minY},${bounds.maxX},${bounds.maxY}`
+    const remembered = this.searchResults.get(id)
+    if (remembered) {
+      return remembered
+    }
+    const chunks = this.tree.search(bounds)
+    const backdropReach = chunks.reduce(
+      (farthest, chunk) => Math.max(farthest, chunk.backdropReach),
+      0
+    )
+    const found = { chunks, backdropReach }
+    this.searchResults.remember(id, found)
+    return found
+  }
+
   /** The chunks whose glass or background blur reads some of `bounds` from the canvas. */
   backdropsReaching(bounds: Pick<RenderChunk, 'minX' | 'minY' | 'maxX' | 'maxY'>): RenderChunk[] {
     const reach = this.maxBackdropReach
@@ -433,10 +454,10 @@ export class RenderChunkIndex {
     for (const id of ids) {
       const chunk = this.chunks.get(id)
       if (!chunk) continue
-      this.tree.remove(chunk)
+      this.removeFromTree(chunk)
       const bounds = indexableChunkBounds(graph, node, chunk.kind)
       if (!bounds) {
-        this.tree.insert(chunk)
+        this.insertIntoTree(chunk)
         continue
       }
       Object.assign(chunk, bounds, {
@@ -444,7 +465,7 @@ export class RenderChunkIndex {
         backdropReach: backdropReach(graph, node, chunk.kind === 'subtree')
       })
       this.maxBackdropReach = Math.max(this.maxBackdropReach, chunk.backdropReach)
-      this.tree.insert(chunk)
+      this.insertIntoTree(chunk)
       this.cachedBounds = undefined
       updated++
     }
@@ -492,12 +513,23 @@ export class RenderChunkIndex {
     this.dependenciesByChunk.set(chunk.id, [...dependencies])
   }
 
+  private insertIntoTree(chunk: RenderChunk): void {
+    this.tree.insert(chunk)
+    this.searchResults.clear()
+  }
+
+  private removeFromTree(chunk: RenderChunk): void {
+    this.tree.remove(chunk)
+    this.searchResults.clear()
+  }
+
   size(): number {
     return this.chunks.size
   }
 
   dispose(): void {
     this.tree.clear()
+    this.searchResults.clear()
     this.chunks.clear()
     this.chunkIdsByNode.clear()
     this.chunkIdsByDependency.clear()

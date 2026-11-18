@@ -33,9 +33,20 @@ export interface TileRegion {
  * a tile they draw into also renders the chunks within their reach of it, and keeps the middle.
  */
 export function tileRegion(index: RenderChunkIndex, key: TileKey): TileRegion {
+  const region = unorderedTileRegion(index, key)
+  return { ...region, chunks: [...region.chunks].sort(byPainterOrder) }
+}
+
+function byPainterOrder(a: RenderChunk, b: RenderChunk): number {
+  return a.painterOrder - b.painterOrder
+}
+
+function unorderedTileRegion(
+  index: RenderChunkIndex,
+  key: TileKey
+): { bounds: TileWorldBounds; margin: number; chunks: readonly RenderChunk[] } {
   const bounds = tileWorldBounds(key)
-  const chunks = index.search(bounds)
-  const reach = chunks.reduce((farthest, chunk) => Math.max(farthest, chunk.backdropReach), 0)
+  const { chunks, backdropReach: reach } = index.searchUnordered(bounds)
   if (reach === 0) return { bounds, margin: 0, chunks }
   const margin = Math.min(MAX_BACKDROP_MARGIN, Math.ceil(reach * key.level))
   const extra = margin / key.level
@@ -45,7 +56,7 @@ export function tileRegion(index: RenderChunkIndex, key: TileKey): TileRegion {
     maxX: bounds.maxX + extra,
     maxY: bounds.maxY + extra
   }
-  return { bounds: region, margin, chunks: index.search(region) }
+  return { bounds: region, margin, chunks: index.searchUnordered(region).chunks }
 }
 
 export interface RenderedTile {
@@ -286,7 +297,7 @@ export function estimateTileCost(
   key: TileKey,
   moving: boolean
 ): number {
-  const chunks = tileChunks(index, key)
+  const { chunks } = unorderedTileRegion(index, key)
   if (chunks.length === 0) return 0
   if (
     moving &&
