@@ -104,6 +104,10 @@ export function createDocumentComponentLoops(
   return createComponentLoops({ ...sources, discover: discoverChoices })
 }
 
+function componentExpandedBy(subtree: Subtree, root: RootResolution): GUID | undefined {
+  return subtree.base ? root.effective : undefined
+}
+
 /** A value computed the first time it is asked for. */
 function lazily<T>(compute: () => T): () => T {
   let value: { readonly current: T } | undefined
@@ -343,7 +347,7 @@ function interpretRoot(
       } else {
         subtree = expandChildren(id, source, bindings, root.groups, root.descendant, rank, modes)
       }
-      const expandedComponent = subtree.base ? root.effective : undefined
+      const expandedComponent = componentExpandedBy(subtree, root)
       const placed = placedRootRecord(source, raw, expandedComponent, sources)
       const occurrence = createOccurrence(sources, id, raw, placed, root, subtree, record.claims)
       if (record.slotContent) occurrence.slotContentId = record.slotContent
