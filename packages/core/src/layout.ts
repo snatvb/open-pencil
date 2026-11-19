@@ -3,7 +3,7 @@ import { once } from 'es-toolkit'
 import { resolveNodeLayoutDirection } from '@open-pencil/scene-graph/text/direction'
 import { computeLayout as computeBoxes, type LayoutNode } from '@open-pencil/taffy'
 
-import { applyComputedLayout } from './layout/apply'
+import { applyComputedLayout, laysOutOwnChildrenAlone } from './layout/apply'
 import {
   asLaidOutIn,
   fillKeepsSizeInHuggingParent,
@@ -19,6 +19,7 @@ import { insertFlowBox, setFlexFlow, setFlowEdges } from './layout/flow-edges'
 import { buildGridTree, createGridChildNode } from './layout/grid'
 import { configureChildAsLeaf } from './layout/leaf'
 import { sizeAutoResizingText } from './layout/text-auto-resize'
+import { asTurnedInLayout, measureTurnedText } from './layout/turned'
 export { sizeAutoResizingText } from './layout/text-auto-resize'
 export {
   flowChildren,
@@ -52,7 +53,8 @@ import {
   mapGridTrack,
   parentSizedAcross,
   parentStretchedAxis,
-  setLayoutPadding
+  setLayoutPadding,
+  turnedFrameGrownAxis
 } from './layout/node'
 import { fitShapeWithTextFrame } from './layout/shape-with-text'
 
@@ -191,6 +193,13 @@ function buildFlexTree(
   const stretchedAxis = parentStretchedAxis(graph, frame)
   if (stretchedAxis === 'width') root.style.width = frame.width
   if (stretchedAxis === 'height') root.style.height = frame.height
+  const grownAxis = turnedFrameGrownAxis(graph, frame)
+  if (grownAxis === 'width') {
+    root.style.width = frame.width
+  }
+  if (grownAxis === 'height') {
+    root.style.height = frame.height
+  }
   const heldAxes = heldHugAxes(graph, frame)
   if (heldAxes.includes('width')) root.style.width = frame.width
   if (heldAxes.includes('height')) root.style.height = frame.height
@@ -210,7 +219,8 @@ function insertFlexChildren(
   const box = insertFlowBox(parentNode, parent)
   const flow: LayoutNode[] = []
   const sizedAcross = once(() => parentSizedAcross(graph, parent))
-  for (const node of graph.getChildren(parent.id)) {
+  for (const listed of graph.getChildren(parent.id)) {
+    const node = sizedOnItsOwn(graph, listed, parent)
     const child = asLaidOutIn(graph, node, parent)
     const item = createLayoutNode()
 
@@ -219,14 +229,24 @@ function insertFlexChildren(
     } else if (!child.visible) {
       item.style.display = 'none'
     } else {
-      configureInFlowChild(item, child, parent, graph, direction)
-      alignCappedFill(item, child, parent, sizedAcross)
+      const laidOut = asTurnedInLayout(child, parent)
+      configureInFlowChild(item, laidOut, parent, graph, direction)
+      measureTurnedText(item, child)
+      alignCappedFill(item, laidOut, parent, sizedAcross)
       flow.push(item)
     }
 
     box.append(item)
   }
   setFlowEdges(parentNode, box, parent, flow, direction)
+}
+
+function sizedOnItsOwn(graph: SceneGraph, child: SceneNode, parent: SceneNode): SceneNode {
+  if (!laysOutOwnChildrenAlone(child, parent)) {
+    return child
+  }
+  computeLayoutInternal(graph, child.id)
+  return graph.getNode(child.id) ?? child
 }
 
 function configureInFlowChild(

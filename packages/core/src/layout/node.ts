@@ -2,6 +2,7 @@ import type { GridTrack, SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 import {
   enforcedAspectRatio,
   includedStrokeWeights,
+  layoutSizing,
   layoutSizingInParent
 } from '@open-pencil/scene-graph/layout'
 import {
@@ -12,6 +13,7 @@ import {
 } from '@open-pencil/taffy'
 
 import { heldHugAxes } from './axis-sizing'
+import { ownAxisAlong, turnOf } from './turn'
 
 /**
  * A layout node with auto layout's defaults where they differ from CSS's, as Figma lays layers
@@ -254,24 +256,45 @@ export function mapAlignSelf(alignSelf: string): AlignItems | null {
 }
 
 /** Whether a child stretches across its auto layout parent, by its own alignment or the parent's. */
-function stretchesAcross(child: SceneNode, parent: SceneNode): boolean {
+export function stretchesAcross(child: SceneNode, parent: SceneNode): boolean {
   return (
     child.layoutAlignSelf === 'STRETCH' ||
     (child.layoutAlignSelf === 'AUTO' && parent.counterAxisAlign === 'STRETCH')
   )
 }
 
-/** The axis a frame's auto layout parent stretches it along, if any. */
 export function parentStretchedAxis(
   graph: SceneGraph,
   frame: SceneNode
 ): 'width' | 'height' | null {
+  const parent = flexParentOf(graph, frame)
+  if (!parent || !stretchesAcross(frame, parent)) {
+    return null
+  }
+  return ownAxisAlong(frame, parent.layoutMode === 'VERTICAL' ? 'width' : 'height')
+}
+
+export function turnedFrameGrownAxis(
+  graph: SceneGraph,
+  frame: SceneNode
+): 'width' | 'height' | null {
+  if (frame.layoutGrow <= 0 || turnOf(frame) !== 'quarter') {
+    return null
+  }
+  const parent = flexParentOf(graph, frame)
+  if (!parent) {
+    return null
+  }
+  const column = parent.layoutMode === 'VERTICAL'
+  if (layoutSizing(graph, parent, column ? 'VERTICAL' : 'HORIZONTAL') === 'HUG') {
+    return null
+  }
+  return ownAxisAlong(frame, column ? 'height' : 'width')
+}
+
+function flexParentOf(graph: SceneGraph, frame: SceneNode): SceneNode | null {
   const parent = frame.parentId ? graph.getNode(frame.parentId) : undefined
   if (!parent || frame.layoutPositioning === 'ABSOLUTE') return null
   if (parent.layoutMode !== 'HORIZONTAL' && parent.layoutMode !== 'VERTICAL') return null
-  const stretched =
-    frame.layoutAlignSelf === 'STRETCH' ||
-    (frame.layoutAlignSelf === 'AUTO' && parent.counterAxisAlign === 'STRETCH')
-  if (!stretched) return null
-  return parent.layoutMode === 'VERTICAL' ? 'width' : 'height'
+  return parent
 }

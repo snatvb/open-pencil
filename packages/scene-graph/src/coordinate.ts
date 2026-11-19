@@ -180,7 +180,7 @@ export function getNodeLocalMatrix(n: NodePlacement, position: Vector = n) {
   }
   return matrix
 }
-export function getNodeWorldBounds(node: SceneNode) {
+export function getNodeWorldBounds(node: NodePlacement) {
   return boundsOfPoints(Matrix.mapPoints(getNodeLocalMatrix(node), cornersOf(node)))
 }
 

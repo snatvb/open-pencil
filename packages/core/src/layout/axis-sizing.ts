@@ -2,6 +2,8 @@ import type { LayoutSizing, SceneGraph, SceneNode } from '@open-pencil/scene-gra
 import { layoutSizing } from '@open-pencil/scene-graph/layout'
 import type { LayoutNode } from '@open-pencil/taffy'
 
+import { keepsOwnAxes } from './turn'
+
 type Axis = 'width' | 'height'
 
 /**
@@ -23,8 +25,9 @@ export function asLaidOutIn(graph: SceneGraph, child: SceneNode, parent: SceneNo
  */
 export function asFlatLeaf(child: SceneNode, parent: SceneNode): SceneNode {
   if (child.type !== 'LINE' && child.type !== 'VECTOR') return child
-  // A turned layer's own width and height do not run along the layout's axes.
-  if (child.rotation !== 0) return child
+  if (!keepsOwnAxes(child)) {
+    return child
+  }
   const isRow = parent.layoutMode === 'HORIZONTAL'
   const main = isRow ? child.width : child.height
   const cross = isRow ? child.height : child.width

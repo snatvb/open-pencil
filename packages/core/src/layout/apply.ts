@@ -4,11 +4,13 @@ import { enforcedAspectRatio } from '@open-pencil/scene-graph/layout'
 import { FITTED_CONTAINER_TYPES } from '@open-pencil/scene-graph/node-defaults'
 import type { Vector } from '@open-pencil/scene-graph/primitives'
 import { constrainedChildRect, flipChanges } from '@open-pencil/scene-graph/resize'
-import type { LayoutNode } from '@open-pencil/taffy'
+import type { Box, LayoutNode } from '@open-pencil/taffy'
 
 import { keepsSavedLayout, markResizedByLayout, usesDetachedDerivedLayout } from './derived'
 import { laidOutFlowBox } from './flow-edges'
 import { layoutPadding, ratioRoomShift } from './node'
+import { keepsOwnAxes, isTurned } from './turn'
+import { placedInTurnedBox } from './turned'
 
 export type ComputeLayoutFn = (graph: SceneGraph, frameId: string) => void
 
@@ -208,15 +210,15 @@ function applyFrameSize(
 
 function computedChildPosition(
   child: SceneNode,
-  item: LayoutNode,
+  placed: Box,
   axis: 'x' | 'y',
   origin: number,
   preservesImportedGeometry: boolean,
   keepsSaved: boolean
 ): number {
   if (preservesImportedGeometry) return child[axis]
-  const computed = origin + (axis === 'x' ? item.layout.left : item.layout.top)
-  if (!keepsSaved) {
+  const computed = origin + (axis === 'x' ? placed.left : placed.top)
+  if (!keepsSaved || isTurned(child)) {
     return computed
   }
   return child.derivedLayout?.[axis] ?? computed
@@ -234,7 +236,7 @@ function preservesStaleImportedTextSize(child: SceneNode, axis: 'width' | 'heigh
 
 function computedChildSize(
   child: SceneNode,
-  item: LayoutNode,
+  placed: Box,
   axis: 'width' | 'height',
   preservesImportedFrameGeometry: boolean,
   keepsSaved: boolean
@@ -245,7 +247,7 @@ function computedChildSize(
   ) {
     return child[axis]
   }
-  const computed = axis === 'width' ? item.layout.width : item.layout.height
+  const computed = placed[axis]
   if (child.type === 'TEXT' && child.source.format === 'fig') {
     return computed > 0 ? computed : child[axis]
   }
@@ -268,16 +270,16 @@ function updateChildFromLayout(
   const { width, height } = child
   const preservesImportedFrameGeometry =
     savedFig && frame.source.format === 'fig' && (child.type === 'FRAME' || child.type === 'LINE')
-  const preservesImportedPosition =
-    preservesImportedFrameGeometry || (savedFig && Math.abs(child.rotation) > 0.001)
+  const preservesImportedPosition = preservesImportedFrameGeometry || (savedFig && isTurned(child))
+  const placed = placedInTurnedBox(child, item.layout)
   writeLayoutGeometry(
     graph,
     child.id,
     {
-      x: computedChildPosition(child, item, 'x', origin.x, preservesImportedPosition, keepsSaved),
-      y: computedChildPosition(child, item, 'y', origin.y, preservesImportedPosition, keepsSaved),
-      width: computedChildSize(child, item, 'width', preservesImportedFrameGeometry, keepsSaved),
-      height: computedChildSize(child, item, 'height', preservesImportedFrameGeometry, keepsSaved)
+      x: computedChildPosition(child, placed, 'x', origin.x, preservesImportedPosition, keepsSaved),
+      y: computedChildPosition(child, placed, 'y', origin.y, preservesImportedPosition, keepsSaved),
+      width: computedChildSize(child, placed, 'width', preservesImportedFrameGeometry, keepsSaved),
+      height: computedChildSize(child, placed, 'height', preservesImportedFrameGeometry, keepsSaved)
     },
     computeLayout
   )
@@ -285,6 +287,26 @@ function updateChildFromLayout(
   if (resized && !keepsSaved && child.layoutMode !== 'NONE') {
     markResizedByLayout(graph, child.id)
   }
+}
+
+export function laysOutOwnChildrenAlone(child: SceneNode, parent: SceneNode): boolean {
+  return (
+    child.visible &&
+    child.layoutPositioning !== 'ABSOLUTE' &&
+    child.layoutMode !== 'NONE' &&
+    parent.layoutMode !== 'GRID' &&
+    !preservesImportedInstanceInternals(child) &&
+    !keepsOwnAxes(child)
+  )
+}
+
+function resizedSince(
+  graph: SceneGraph,
+  id: string,
+  before: { width: number; height: number }
+): boolean {
+  const node = graph.getNode(id)
+  return node !== undefined && (node.width !== before.width || node.height !== before.height)
 }
 
 function preservesImportedInstanceInternals(child: SceneNode): boolean {
@@ -343,6 +365,7 @@ export function applyComputedLayout(
       across === 'width'
         ? { x: box.origin.x + shift, y: box.origin.y }
         : { x: box.origin.x, y: box.origin.y + shift }
+    const sizedAlone = { width: child.width, height: child.height }
     updateChildFromLayout(graph, frame, child, item, origin, keepsSaved, computeLayout)
 
     if (!child.visible) continue
@@ -350,6 +373,13 @@ export function applyComputedLayout(
 
     if (usesDetachedDerivedLayout(graph, child)) {
       computeLayout(graph, child.id)
+      continue
+    }
+
+    if (laysOutOwnChildrenAlone(child, frame)) {
+      if (resizedSince(graph, child.id, sizedAlone)) {
+        computeLayout(graph, child.id)
+      }
       continue
     }
 

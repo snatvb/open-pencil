@@ -4,6 +4,8 @@ import { resolveNodeLayoutDirection } from '@open-pencil/scene-graph/text/direct
 import type { LayoutNode } from '@open-pencil/taffy'
 
 import { configureAbsoluteChild, createLayoutNode, mapGridTrack, setLayoutPadding } from './node'
+import { ownAxisAlong } from './turn'
+import { sizeInParent } from './turned'
 
 function configureAsGrid(
   layoutNode: LayoutNode,
@@ -30,6 +32,14 @@ function configureAsGrid(
   setLayoutPadding(layoutNode, node)
 }
 
+function fillsCell(graph: SceneGraph, child: SceneNode, axis: 'width' | 'height'): boolean {
+  const own = ownAxisAlong(child, axis)
+  if (own === null) {
+    return false
+  }
+  return layoutSizing(graph, child, own === 'width' ? 'HORIZONTAL' : 'VERTICAL') === 'FILL'
+}
+
 export function createGridChildNode(graph: SceneGraph, child: SceneNode): LayoutNode {
   const item = createLayoutNode()
   if (!child.visible) {
@@ -41,10 +51,17 @@ export function createGridChildNode(graph: SceneGraph, child: SceneNode): Layout
       item.style.gridRow = { start: pos.row, span: pos.rowSpan }
     }
     // Each axis fills its cell on its own, as in Figma: grow for width, stretch for height.
-    if (layoutSizing(graph, child, 'HORIZONTAL') === 'FILL') item.style.justifySelf = 'stretch'
-    else item.style.width = child.width
-    if (layoutSizing(graph, child, 'VERTICAL') === 'FILL') item.style.alignSelf = 'stretch'
-    else item.style.height = child.height
+    const size = sizeInParent(child)
+    if (fillsCell(graph, child, 'width')) {
+      item.style.justifySelf = 'stretch'
+    } else {
+      item.style.width = size.width
+    }
+    if (fillsCell(graph, child, 'height')) {
+      item.style.alignSelf = 'stretch'
+    } else {
+      item.style.height = size.height
+    }
   }
   return item
 }
