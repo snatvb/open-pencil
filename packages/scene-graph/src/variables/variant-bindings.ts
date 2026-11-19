@@ -1,6 +1,6 @@
 import { partition } from 'es-toolkit/array'
 
-import { appendAll } from '../arrays'
+import { appendAll } from '@open-pencil/std/arrays'
 import {
   findComponentPropertyTargets,
   reapplyComponentPropertyAssignments,

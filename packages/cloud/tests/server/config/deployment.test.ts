@@ -109,6 +109,20 @@ lease_ms = 180000
 `
 
 describe('Cloud TOML deployment configuration', () => {
+  test('reads GitHub’s client secret from GITHUB_CLIENT_SECRET', () => {
+    const source = minimalSource.replace(
+      '[authentication.providers.google]',
+      '[authentication.providers.google]\n\n[authentication.providers.github]\nclient_id = "Iv-client"'
+    )
+    expect(
+      parseCloudDeploymentTOML(source, {
+        ...environment,
+        GITHUB_CLIENT_SECRET: 'github-secret'
+      })
+    ).toMatchObject({ githubClientId: 'Iv-client', githubClientSecret: 'github-secret' })
+    expect(() => parseCloudDeploymentTOML(source, environment)).toThrow()
+  })
+
   test('uses conventional secret references without TOML boilerplate', () => {
     expect(parseCloudDeploymentTOML(minimalSource, environment)).toMatchObject({
       deployment: 'self-hosted',
@@ -291,7 +305,12 @@ provider = "posthog"
     expect(
       parseCloudDeploymentTOML(tracked, { ...environment, POSTHOG_PROJECT_API_KEY: 'phc_test' })
         .errorTracking
-    ).toEqual({ provider: 'posthog', host: 'https://eu.i.posthog.com', projectAPIKey: 'phc_test' })
+    ).toEqual({
+      provider: 'posthog',
+      host: 'https://eu.i.posthog.com',
+      projectAPIKey: 'phc_test',
+      includeIds: false
+    })
 
     const inline = tracked.replace(
       'provider = "posthog"',
@@ -300,8 +319,15 @@ provider = "posthog"
     expect(parseCloudDeploymentTOML(inline, environment).errorTracking).toEqual({
       provider: 'posthog',
       host: 'https://eu.i.posthog.com',
-      projectAPIKey: 'phc_inline'
+      projectAPIKey: 'phc_inline',
+      includeIds: false
     })
+    expect(
+      parseCloudDeploymentTOML(
+        inline.replace('provider = "posthog"', 'provider = "posthog"\ninclude_ids = true'),
+        environment
+      ).errorTracking?.includeIds
+    ).toBe(true)
   })
 
   test('advertises services and billing only when configured', () => {
@@ -339,7 +365,9 @@ endpoint = "https://billing.example.com"
     })
     expect(discovery.billing).toEqual({
       endpoint: 'https://billing.example.com',
-      contractVersion: '1'
+      contractVersion: '1',
+      // Without default entitlements, an account without a plan has no limit and no services.
+      freePlan: { storageBytes: null, services: false, monthlyCredits: null }
     })
 
     expect(() => parseCloudDeploymentTOML(source, environment)).toThrow(
@@ -351,6 +379,47 @@ endpoint = "https://billing.example.com"
     // Billing signs with the services' key and sets plans through the internal API.
     const billingOnly = `${minimalSource}\n[billing]\nendpoint = "https://billing.example.com"\n`
     expect(() => parseCloudDeploymentTOML(billingOnly, withSecrets)).toThrow('signing key')
+  })
+
+  test("advertises the free plan billing's pricing compares with, from the default entitlements", () => {
+    const withSecrets = {
+      ...environment,
+      OPENPENCIL_CLOUD_SERVICES_SIGNING_KEY: 'signing-key-pem',
+      OPENPENCIL_CLOUD_SERVICE_TOKEN: 'service-token-with-at-least-32-characters'
+    }
+    const source = (services: string) => `${minimalSource}
+[services]
+endpoint = "https://services.example.com"
+
+[billing]
+endpoint = "https://billing.example.com"
+
+[internal_api]
+
+[entitlements]
+source = "database"
+storage = { maximum_bytes = 314572800 }
+services = ${services}
+`
+    const freePlan = (services: string) =>
+      cloudDiscoveryFromConfig(parseCloudDeploymentTOML(source(services), withSecrets)).billing
+        ?.freePlan
+    expect(freePlan('{ enabled = false }')).toEqual({
+      storageBytes: 314572800,
+      services: false,
+      monthlyCredits: null
+    })
+    expect(freePlan('{ enabled = true, monthly_credit_allowance = 100 }')).toEqual({
+      storageBytes: 314572800,
+      services: true,
+      monthlyCredits: 100
+    })
+    // Services without an allowance have no monthly limit, which is not the same as none.
+    expect(freePlan('{ enabled = true }')).toEqual({
+      storageBytes: 314572800,
+      services: true,
+      monthlyCredits: null
+    })
   })
 
   test('reads a relay URL override and requires a WebSocket scheme', () => {

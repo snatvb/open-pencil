@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 import { FigmaAPI } from '@open-pencil/core/figma-api'
 import { exportBounds } from '@open-pencil/core/io/formats/raster'
 import { SceneGraph, type VectorNetwork } from '@open-pencil/scene-graph'
-import { maxOf, minOf } from '@open-pencil/scene-graph/arrays'
+import { maxOf, minOf } from '@open-pencil/std/arrays'
 import { registerTestFont } from '@open-pencil/test-support/fonts/bundled'
 
 type Rectangle = ReturnType<FigmaAPI['createRectangle']>

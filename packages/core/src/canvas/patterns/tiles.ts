@@ -1,6 +1,6 @@
 import type { Shader } from '@open-pencil/canvaskit'
 import type { SceneGraph } from '@open-pencil/scene-graph'
-import { appendAll } from '@open-pencil/scene-graph/arrays'
+import { appendAll } from '@open-pencil/std/arrays'
 
 import { ResourceCache } from '#core/cache/resource'
 import type { SkiaRenderer } from '#core/canvas/renderer/skia'

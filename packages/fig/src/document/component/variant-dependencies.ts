@@ -13,7 +13,7 @@ import { isEmptyObject } from 'es-toolkit/predicate'
 import type { GUID } from '@open-pencil/kiwi/fig'
 import type { NodeChange, VariableDataEntry } from '@open-pencil/kiwi/fig/codec'
 import { guidToString } from '@open-pencil/kiwi/fig/guid'
-import { appendAll } from '@open-pencil/scene-graph/arrays'
+import { appendAll } from '@open-pencil/std/arrays'
 import { parseVariantName } from '@open-pencil/scene-graph/variant-name'
 
 type ResolveReference = (reference: NodeChange['variableSetID']) => string | undefined

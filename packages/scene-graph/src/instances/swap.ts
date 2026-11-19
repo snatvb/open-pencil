@@ -1,6 +1,7 @@
 import { isEqual } from 'es-toolkit/predicate'
 
-import { appendAll } from '../arrays'
+import { appendAll } from '@open-pencil/std/arrays'
+
 import { reapplyComponentPropertyAssignments } from '../components/properties'
 import { copyDerivedGlyphs, markCopySource } from '../copy'
 import { TEXT_SHAPING_FIELDS } from '../fields/text'

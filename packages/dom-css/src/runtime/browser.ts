@@ -1,3 +1,5 @@
+import { DEADLINE_MS } from '@open-pencil/std/timing'
+
 import { serializeHTML } from '../export/html'
 import type {
   CSSComputeOptions,
@@ -58,6 +60,9 @@ const DEFAULT_COMPUTED_PROPERTIES = [
   'column-gap',
   'content',
   'display',
+  'fill',
+  'fill-opacity',
+  'fill-rule',
   'filter',
   'flex-basis',
   'flex-direction',
@@ -112,7 +117,14 @@ const DEFAULT_COMPUTED_PROPERTIES = [
   'rotate',
   'row-gap',
   'scale',
+  'stroke',
+  'stroke-dasharray',
+  'stroke-linecap',
+  'stroke-linejoin',
+  'stroke-opacity',
+  'stroke-width',
   'text-align',
+  'text-anchor',
   'text-decoration-color',
   'text-decoration-line',
   'text-decoration-style',
@@ -256,7 +268,7 @@ function keepAutoSideMargins(element: Element, style: Record<string, string>): v
  * How long layout waits for an image to load. An image without a size takes its own once loaded,
  * moving what follows it, but a request that never ends must not hold an import forever.
  */
-const IMAGE_LOAD_LIMIT_MS = 10_000
+const IMAGE_LOAD_LIMIT_MS = DEADLINE_MS.request
 
 /** Resolves once every image under `root` has loaded or failed, or the time limit passes. */
 function imagesLoaded(root: ParentNode, view: Window): Promise<void> {

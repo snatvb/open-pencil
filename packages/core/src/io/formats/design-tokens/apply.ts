@@ -17,8 +17,8 @@ import {
 import { copyEffects } from '@open-pencil/scene-graph/copy'
 import { findInstanceAncestor } from '@open-pencil/scene-graph/instances'
 import { createDefaultSourceMetadata } from '@open-pencil/scene-graph/node-defaults'
-import { randomHex } from '@open-pencil/scene-graph/random'
 import { effectBindingTarget } from '@open-pencil/scene-graph/variables'
+import { randomHex } from '@open-pencil/std/random'
 
 import { reconcileVariableLayouts } from '#core/layout/variables'
 

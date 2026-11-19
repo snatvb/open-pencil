@@ -2,7 +2,6 @@ import { maxBy } from 'es-toolkit'
 
 import type { SelectionTheme } from '@open-pencil/core/canvas'
 import { SELECTION_COLOR } from '@open-pencil/core/constants'
-import { minOf } from '@open-pencil/scene-graph/arrays'
 import {
   colorToHex,
   contrastRatio,
@@ -12,6 +11,7 @@ import {
 } from '@open-pencil/scene-graph/color'
 import { WHITE } from '@open-pencil/scene-graph/constants'
 import type { Color } from '@open-pencil/scene-graph/primitives'
+import { minOf } from '@open-pencil/std/arrays'
 
 import type { AccentPreference, AccentPreset } from './schema'
 
@@ -82,7 +82,7 @@ const LIGHTNESS_SHIFTS = Array.from({ length: 121 }, (_, index) =>
 const INK = parseColor('#1F2328')
 
 /**
- * The surfaces primary text such as a link sits on in each theme, from `src/theme/tokens.css`:
+ * The surfaces primary text such as a link sits on in each theme, from `packages/vue/src/theme/tokens.css`:
  * the panel, the secondary panel, a hovered row or table header, and a field.
  */
 const TEXT_SURFACES: Readonly<Record<AccentTheme, readonly Color[]>> = {

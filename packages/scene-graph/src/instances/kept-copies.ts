@@ -1,7 +1,7 @@
 import { omitBy } from 'es-toolkit/object'
 import { isUndefined } from 'es-toolkit/predicate'
 
-import { appendAll } from '../arrays'
+import { appendAll } from '@open-pencil/std/arrays'
 import type { SceneGraph } from '../graph'
 import type { SceneNode } from '../types'
 import { DEFAULT_HISTORY_LIMIT } from '../undo'

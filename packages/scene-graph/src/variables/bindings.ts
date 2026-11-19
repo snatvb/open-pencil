@@ -57,7 +57,7 @@ export {
   VISIBILITY_VARIABLE_TYPES,
   type PaintBindingList
 } from './fields'
-import { appendAll } from '../arrays'
+import { appendAll } from '@open-pencil/std/arrays'
 
 /** New declarations belong to the outermost occurrence, bounded by a component definition. */
 export function variableBindingOwner(graph: SceneGraph, node: SceneNode): SceneNode {

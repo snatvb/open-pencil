@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import { SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
-import { appendAll } from '@open-pencil/scene-graph/arrays'
+import { appendAll } from '@open-pencil/std/arrays'
 import { recordInstanceOverride } from '@open-pencil/scene-graph/instances'
 import {
   collectionsBoundIn,

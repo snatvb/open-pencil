@@ -12,7 +12,6 @@ import type {
   SceneNode,
   VariantPropSpec
 } from '@open-pencil/scene-graph'
-import { appendAll } from '@open-pencil/scene-graph/arrays'
 import { variantOptions } from '@open-pencil/scene-graph/components'
 import {
   DEFAULT_STROKE_MITER_LIMIT,
@@ -29,6 +28,7 @@ import { siblingOrderKeys } from '@open-pencil/scene-graph/order-keys'
 import { OPEN_PENCIL_PLUGIN_DATA, withPluginData } from '@open-pencil/scene-graph/plugin-data'
 import type { GUID, Matrix, Vector } from '@open-pencil/scene-graph/primitives'
 import { savedVariantUnderBinding } from '@open-pencil/scene-graph/variables'
+import { appendAll } from '@open-pencil/std/arrays'
 
 /* eslint-disable max-lines */
 import { bytesToHex } from '../bytes'
@@ -902,6 +902,15 @@ function applySharedStyleProps(
   if (node.guides.length > 0) nc.guides = exportCanvasGuides(node.guides)
 }
 
+/**
+ * The dash a record writes: a layer's strokes draw with their own pattern, as they do with their
+ * weight and alignment, and a layer without strokes keeps its pattern for the next stroke.
+ */
+function nodeDashPattern(node: SceneNode): number[] {
+  if (node.strokes.length === 0) return node.dashPattern
+  return node.strokes[0].dashPattern ?? []
+}
+
 function applyNodeVisualProps(
   context: SceneNodeToKiwiContext,
   node: SceneNode,
@@ -945,7 +954,8 @@ function applyNodeVisualProps(
   if (node.strokeMiterLimit !== DEFAULT_STROKE_MITER_LIMIT || 'miterLimit' in rawNodeFields) {
     nc.miterLimit = node.strokeMiterLimit
   }
-  if (node.dashPattern.length > 0) nc.dashPattern = node.dashPattern
+  const dashPattern = nodeDashPattern(node)
+  if (dashPattern.length > 0 || 'dashPattern' in rawNodeFields) nc.dashPattern = dashPattern
   if (node.arcData) {
     nc.arcData = {
       startingAngle: node.arcData.startingAngle,
