@@ -2,9 +2,6 @@ import type { Image, Surface } from '@open-pencil/canvaskit'
 import type { SceneGraph } from '@open-pencil/scene-graph'
 import type { Mat3 } from '@open-pencil/scene-graph/matrix'
 
-import { ResourceCache } from '#core/cache/resource'
-
-import type { AdjustmentTable } from './adjustments/image'
 import { createImageCache } from './cache'
 import { ImagePreviewCache } from './previews'
 
@@ -39,41 +36,11 @@ export interface RendererImages {
   /** Images whose sharper preview has decoded since the last frame. */
   readonly decodedPreviewHashes: Set<string>
   supersampledOutput: SupersampledOutput | null
-  readonly adjustmentTables: ResourceCache<string, AdjustmentTable>
-  readonly adjustedOverBudget: ResourceCache<string, Image>
-  drawsExport: boolean
 }
-
-export function drawingExport<T>(
-  images: Pick<RendererImages, 'drawsExport' | 'adjustedOverBudget'>,
-  draw: () => T
-): T {
-  const outermost = !images.drawsExport
-  images.drawsExport = true
-  try {
-    return draw()
-  } finally {
-    if (outermost) {
-      images.drawsExport = false
-      images.adjustedOverBudget.clear()
-    }
-  }
-}
-
-const KEPT_ADJUSTMENT_TABLES = 16
-const KEPT_ADJUSTED_OVER_BUDGET = 1
 
 export function createRendererImages(): RendererImages {
   const images: RendererImages = {
     cache: createImageCache(),
-    adjustmentTables: new ResourceCache({
-      maxEntries: KEPT_ADJUSTMENT_TABLES,
-      dispose: (table) => table.texture?.delete()
-    }),
-    adjustedOverBudget: new ResourceCache({
-      maxEntries: KEPT_ADJUSTED_OVER_BUDGET,
-      dispose: (image) => image.delete()
-    }),
     live: new Map(),
     memoryGraph: null,
     memoryPage: null,
@@ -86,8 +53,7 @@ export function createRendererImages(): RendererImages {
     previewsDrawn: false,
     fillUsers: new Map(),
     decodedPreviewHashes: new Set(),
-    supersampledOutput: null,
-    drawsExport: false
+    supersampledOutput: null
   }
   return images
 }

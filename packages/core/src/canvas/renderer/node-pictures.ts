@@ -1,25 +1,16 @@
 import type { Canvas } from '@open-pencil/canvaskit'
-import type { Fill, SceneNode } from '@open-pencil/scene-graph'
+import type { SceneNode } from '@open-pencil/scene-graph'
 import { isLayerContainer } from '@open-pencil/scene-graph/node-defaults'
 
-import { slidersMoved } from '#core/canvas/images/adjustments/color'
 import { recordPicture } from '#core/canvas/renderer/picture'
 import type { SkiaRenderer } from '#core/canvas/renderer/skia'
 import { localPaintBounds } from '#core/geometry/render-bounds'
 
-function imagePaints(node: SceneNode): Fill[] {
+function drawsImage(node: SceneNode): boolean {
   const regionFills = node.vectorNetwork?.regions.flatMap((region) => region.fills ?? []) ?? []
-  return [...node.fills, ...node.strokes, ...regionFills].filter(
+  return [...node.fills, ...node.strokes, ...regionFills].some(
     (paint) => paint.visible && paint.imageHash !== undefined
   )
-}
-
-function drawsImage(node: SceneNode): boolean {
-  return imagePaints(node).length > 0
-}
-
-function drawsAdjustedImageForExport(r: SkiaRenderer, node: SceneNode): boolean {
-  return r.images.drawsExport && imagePaints(node).some((paint) => slidersMoved(paint.filters))
 }
 
 /** Noise samples once per output pixel in an export, so it follows that export's pixel grid. */
@@ -46,11 +37,7 @@ export function drawShapeThroughNodePicture(
   node: SceneNode,
   draw: (target: Canvas) => void
 ): void {
-  if (
-    r.builtInBlendModesOnly ||
-    samplesImagesForExport(r, node) ||
-    drawsAdjustedImageForExport(r, node)
-  ) {
+  if (r.builtInBlendModesOnly || samplesImagesForExport(r, node)) {
     draw(canvas)
     return
   }

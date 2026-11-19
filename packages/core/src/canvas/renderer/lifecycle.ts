@@ -38,8 +38,6 @@ export function destroyRenderer(r: SkiaRenderer): void {
   r.images.onPreviewReady = null
   r.images.previews.destroy()
   r.images.cache.clear()
-  r.images.adjustedOverBudget.clear()
-  r.images.adjustmentTables.clear()
   releaseLiveImages(r)
   disposePathCaches(r)
   r.renderedBounds.dispose()
