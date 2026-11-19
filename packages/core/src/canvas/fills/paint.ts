@@ -6,6 +6,7 @@ import Matrix from '@open-pencil/scene-graph/matrix'
 import { fillGeometryMatchesRegions, hasRegionFills } from '@open-pencil/scene-graph/vector-network'
 
 import { setPaintBlendMode } from '#core/canvas/blend/modes'
+import { hasImageAdjustments, makeAdjustedImageShader } from '#core/canvas/images/adjustments'
 import { previewEdge } from '#core/canvas/images/previews'
 import { landsOnOutputPixels, makeImageShader } from '#core/canvas/images/sampling'
 import { applyPatternFill } from '#core/canvas/patterns/fill'
@@ -254,18 +255,21 @@ function setImageShader(
     imgH,
     preview && { width: preview.originalWidth, height: preview.originalHeight }
   )
-  const shader = makeImageShader(
+  const image = makeImageShader(
     r,
     img,
     scaleMode,
     localMatrix,
     landsOnOutputPixels(r, node, graph, localMatrix)
   )
+  let shader = image
   try {
+    if (hasImageAdjustments(fill.filters)) shader = makeAdjustedImageShader(r, image, fill.filters)
     paint.setShader(shader)
     markShaded(r, paint)
   } finally {
-    shader.delete()
+    if (shader !== image) shader.delete()
+    image.delete()
   }
   return true
 }
