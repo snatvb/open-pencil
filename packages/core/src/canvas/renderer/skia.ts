@@ -540,10 +540,9 @@ export class SkiaRenderer {
    * rendered again, and redraws whatever showed it. Previews notice new bytes themselves.
    */
   forgetImage(hash: string): void {
-    const keys = Array.from(this.images.cache.entries(), ([key]) => key)
-    for (const key of keys) {
-      if (key === hash || key.startsWith(`${hash}:`)) this.images.cache.delete(key)
-    }
+    const shows = (key: string) => key === hash || key.startsWith(`${hash}:`)
+    this.images.cache.deleteWhere((_, key) => shows(key))
+    this.images.adjustedOverBudget.deleteWhere((_, key) => shows(key))
     this.invalidateAllPictures()
   }
 

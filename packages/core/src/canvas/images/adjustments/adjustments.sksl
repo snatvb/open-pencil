@@ -1,0 +1,69 @@
+uniform shader image;
+uniform shader table;
+uniform float side;
+uniform float slicesPerRow;
+uniform float saturationBoost;
+uniform float saturationReach;
+uniform float gamma;
+uniform float epsilon;
+uniform float3 luma;
+
+float3 srgbEncoded(float3 light) {
+  return mix(light * 12.92, 1.055 * pow(max(light, 0.0), float3(1.0 / 2.4)) - 0.055, step(0.0031308, light));
+}
+
+float3 srgbDecoded(float3 encoded) {
+  return mix(encoded / 12.92, pow((encoded + 0.055) / 1.055, float3(2.4)), step(0.04045, encoded));
+}
+
+half3 entry(float3 cell) {
+  float row = floor(cell.b / slicesPerRow);
+  float column = cell.b - row * slicesPerRow;
+  half3 sampled = table.eval(float2(column * side + cell.r + 0.5, row * side + cell.g + 0.5)).rgb;
+  return half3(clamp(srgbEncoded(float3(toLinearSrgb(sampled))), 0.0, 1.0));
+}
+
+float3 toned(float3 color) {
+  float3 scaled = color * (side - 1.0);
+  float3 base = min(floor(scaled), float3(side - 2.0));
+  float3 t = scaled - base;
+  float high = max(t.r, max(t.g, t.b));
+  float low = min(t.r, min(t.g, t.b));
+  float middle = t.r + t.g + t.b - high - low;
+  return (1.0 - high) * float3(entry(base)) +
+    (high - middle) * float3(entry(base + step(high, t))) +
+    (middle - low) * float3(entry(base + 1.0 - step(t, float3(low)))) +
+    low * float3(entry(base + 1.0));
+}
+
+float channelReach(float luminance, float channel) {
+  if (channel > epsilon) {
+    return (1.0 - luminance) / channel;
+  }
+  if (channel < -epsilon) {
+    return luminance / -channel;
+  }
+  return saturationReach;
+}
+
+float3 boosted(float3 color) {
+  if (saturationBoost <= 0.0) {
+    return color;
+  }
+  float3 light = pow(color, float3(gamma));
+  float luminance = dot(light, luma);
+  float3 chroma = light - luminance;
+  float reach = min(
+    saturationReach,
+    min(channelReach(luminance, chroma.r),
+      min(channelReach(luminance, chroma.g), channelReach(luminance, chroma.b))));
+  float scale = 1.0 + saturationBoost * (reach - 1.0);
+  return pow(clamp(luminance + chroma * scale, 0.0, 1.0), float3(1.0 / gamma));
+}
+
+half4 main(float2 position) {
+  half4 sampled = image.eval(position);
+  float3 srgb = clamp(srgbEncoded(float3(toLinearSrgb(unpremul(sampled).rgb))), 0.0, 1.0);
+  float3 adjusted = boosted(toned(srgb));
+  return half4(fromLinearSrgb(half3(srgbDecoded(adjusted))) * sampled.a, sampled.a);
+}

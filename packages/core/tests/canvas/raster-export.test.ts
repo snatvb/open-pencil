@@ -10,6 +10,7 @@ import { pixelLength } from '@open-pencil/scene-graph/text'
 import { expectDefined } from '@open-pencil/test-support/assert'
 import { asDouble } from '@open-pencil/test-support/doubles'
 
+import { createRendererImages } from '#core/canvas/images/state'
 import { NodePathCaches } from '#core/canvas/paths/cache'
 import { renderSceneToCanvas } from '#core/canvas/renderer/pipeline'
 import { prepareSelectionRenderGraph } from '#core/io/formats/raster/render'
@@ -41,7 +42,7 @@ beforeAll(async () => {
 })
 
 describe('raster export', () => {
-  test('full-resolution rendering disables previews and restores viewport/mode even on failure', () => {
+  test('an export draws full images as an export and restores viewport and mode on failure', () => {
     const graph = new SceneGraph()
     const page = graph.getPages()[0]
     graph.createNode('RECTANGLE', page.id)
@@ -53,8 +54,10 @@ describe('raster export', () => {
       halfFloatLayers: false,
       worldViewport: viewport,
       nodePaths: new NodePathCaches(),
+      images: createRendererImages(),
       renderNode() {
         expect(this.viewportImageRendering).toBe(false)
+        expect(this.images.drawsExport).toBe(true)
         throw new Error('drawing failed')
       }
     }
@@ -62,6 +65,7 @@ describe('raster export', () => {
       'drawing failed'
     )
     expect(renderer.viewportImageRendering).toBe(true)
+    expect(renderer.images.drawsExport).toBe(false)
     expect(renderer.worldViewport).toBe(viewport)
   })
 
@@ -80,6 +84,7 @@ describe('raster export', () => {
       halfFloatLayers: false,
       worldViewport: { x: 0, y: 0, w: 1, h: 1 },
       nodePaths: new NodePathCaches(),
+      images: createRendererImages(),
       renderNode() {
         seen.push(this.editingTextId)
       }

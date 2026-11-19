@@ -2,6 +2,7 @@ import type { PDFDocument } from '@open-pencil/canvaskit'
 import type { SceneGraph } from '@open-pencil/scene-graph'
 
 import type { SkiaRenderer } from '#core/canvas'
+import { drawingExport } from '#core/canvas/images/state'
 import { exportBounds, prepareSelectionRenderGraph } from '#core/io/formats/raster/render'
 import { extractExportGraph } from '#core/io/subgraph'
 
@@ -39,7 +40,9 @@ export function renderPagesToPDF(
   const builtInBlendModesOnly = renderer.builtInBlendModesOnly
   renderer.builtInBlendModesOnly = true
   try {
-    const pages = specs.flatMap((spec) => drawPage(doc, renderer, graph, spec) ?? [])
+    const pages = drawingExport(renderer.images, () =>
+      specs.flatMap((spec) => drawPage(doc, renderer, graph, spec) ?? [])
+    )
     if (pages.length === 0) {
       doc.abort()
       return null

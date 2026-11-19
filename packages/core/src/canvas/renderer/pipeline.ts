@@ -2,6 +2,7 @@ import type { Canvas } from '@open-pencil/canvaskit'
 import type { SceneGraph } from '@open-pencil/scene-graph'
 
 import { needsImagePreviews } from '#core/canvas/images/previews'
+import { drawingExport, type RendererImages } from '#core/canvas/images/state'
 import { paintPageBackground } from '#core/canvas/page/background'
 import type { RenderOverlays, SkiaRenderer } from '#core/canvas/renderer/skia'
 import { warmUpEffectPrograms } from '#core/canvas/warm-up'
@@ -26,7 +27,7 @@ export function renderSceneToCanvas(
     | 'nodePaths'
     | 'editingTextId'
     | 'invalidateNodePicture'
-  >,
+  > & { readonly images: Pick<RendererImages, 'drawsExport' | 'adjustedOverBudget'> },
   canvas: Canvas,
   graph: SceneGraph,
   pageId: string
@@ -45,10 +46,12 @@ export function renderSceneToCanvas(
   if (editing) r.invalidateNodePicture(editing)
   r.worldViewport = { x: -1e9, y: -1e9, w: 2e9, h: 2e9 }
   try {
-    const pageNode = graph.getNode(pageId)
-    if (pageNode) {
-      for (const childId of pageNode.childIds) r.renderNode(canvas, graph, childId, {})
-    }
+    drawingExport(r.images, () => {
+      const pageNode = graph.getNode(pageId)
+      if (pageNode) {
+        for (const childId of pageNode.childIds) r.renderNode(canvas, graph, childId, {})
+      }
+    })
   } finally {
     r.worldViewport = prevViewport
     r.viewportImageRendering = previewMode
@@ -85,6 +88,7 @@ export function renderFromEditorState(
   ) {
     r.invalidateAllPictures()
     r.images.cache.clear()
+    r.images.adjustedOverBudget.clear()
     // Previews of another document hold its encoded images, which a document without
     // previews would otherwise keep alive.
     if (r.images.memoryGraph !== graph) {

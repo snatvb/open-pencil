@@ -1,13 +1,16 @@
 import type { Canvas, Image, Paint, Shader } from '@open-pencil/canvaskit'
-import type { SceneNode, SceneGraph, Fill } from '@open-pencil/scene-graph'
+import type { SceneNode, SceneGraph, Fill, ImageFilters } from '@open-pencil/scene-graph'
 import { invertGradientTransform } from '@open-pencil/scene-graph/gradient'
 import { drawnImageHash, imageFillMatrix } from '@open-pencil/scene-graph/images'
 import Matrix from '@open-pencil/scene-graph/matrix'
 import { fillGeometryMatchesRegions, hasRegionFills } from '@open-pencil/scene-graph/vector-network'
 
 import { setPaintBlendMode } from '#core/canvas/blend/modes'
+import { adjustedImageShader } from '#core/canvas/images/adjustments/shader'
+import { releaseKeptImage } from '#core/canvas/images/cache'
 import { previewEdge } from '#core/canvas/images/previews'
 import { landsOnOutputPixels, makeImageShader } from '#core/canvas/images/sampling'
+import { storedImageToDraw } from '#core/canvas/images/stored'
 import { applyPatternFill } from '#core/canvas/patterns/fill'
 import { resolveGradientStopColor } from '#core/canvas/renderer/colors'
 import type { SkiaRenderer } from '#core/canvas/renderer/skia'
@@ -242,6 +245,7 @@ function setImageShader(
   graph: SceneGraph,
   img: Image,
   paint: Paint,
+  shaderFilters: ImageFilters | undefined,
   preview?: { originalWidth: number; originalHeight: number }
 ): boolean {
   const imgW = img.width()
@@ -254,12 +258,16 @@ function setImageShader(
     imgH,
     preview && { width: preview.originalWidth, height: preview.originalHeight }
   )
-  const shader = makeImageShader(
+  const shader = adjustedImageShader(
     r,
-    img,
-    scaleMode,
-    localMatrix,
-    landsOnOutputPixels(r, node, graph, localMatrix)
+    shaderFilters,
+    makeImageShader(
+      r,
+      img,
+      scaleMode,
+      localMatrix,
+      landsOnOutputPixels(r, node, graph, localMatrix)
+    )
   )
   try {
     paint.setShader(shader)
@@ -281,7 +289,7 @@ export function applyImageFill(
   if (!hash) return false
   const live = r.images.live.get(hash)
   if (live?.surface === r.surface) {
-    return setImageShader(r, fill, node, graph, live.image, paint)
+    return setImageShader(r, fill, node, graph, live.image, paint, fill.filters)
   }
   if (r.viewportImageRendering) {
     r.noteImageFillUser(hash, node.id)
@@ -293,25 +301,27 @@ export function applyImageFill(
     ? r.images.previews.get(graph, hash, previewEdge(node, r.images.detailScale))
     : undefined
   if (r.viewportImageRendering && !preview) return false
-  const key = preview?.key ?? hash
-  let img = r.images.cache.get(key)
-  let temporary = false
-  if (!img) {
-    const data = preview?.preview.bytes ?? graph.images.get(hash)
-    if (!data) return false
-    const decoded = r.ck.MakeImageFromEncoded(data)
-    if (!decoded) return false
-    try {
-      img = decoded.makeCopyWithDefaultMipmaps()
-    } finally {
-      decoded.delete()
-    }
-    temporary = !r.images.cache.set(key, img)
+  const drawn = storedImageToDraw(
+    r,
+    preview?.key ?? hash,
+    fill.filters,
+    () => preview?.preview.bytes ?? graph.images.get(hash)
+  )
+  if (!drawn) {
+    return false
   }
-
   try {
-    return setImageShader(r, fill, node, graph, img, paint, preview?.preview)
+    return setImageShader(
+      r,
+      fill,
+      node,
+      graph,
+      drawn.image,
+      paint,
+      drawn.shaderFilters,
+      preview?.preview
+    )
   } finally {
-    if (temporary) img.delete()
+    releaseKeptImage(drawn)
   }
 }
