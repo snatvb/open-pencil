@@ -6,14 +6,12 @@ import { basename } from 'pathe'
 import { decode } from 'ufo'
 
 import { BUILTIN_IO_FORMATS, IORegistry } from '@open-pencil/core/io'
+import { readBoundedBody } from '@open-pencil/core/io/remote'
+import { errorMessage, isAbortError } from '@open-pencil/std/errors'
 import { anySignal } from '@open-pencil/std/timing'
 
 import { setOpenPencilOpenFileHandler } from '@/app/browser-bridge'
-import {
-  resolveBrowserFileURL,
-  MAX_REMOTE_DOCUMENT_BYTES,
-  readBoundedBody
-} from '@/app/document/io/browser'
+import { resolveBrowserFileURL, MAX_REMOTE_DOCUMENT_BYTES } from '@/app/document/io/browser'
 import type { EditorStore } from '@/app/editor/active-store'
 import { notificationMessages } from '@/app/i18n/notifications'
 import { rememberRecentFile } from '@/app/recent-files'
@@ -55,7 +53,7 @@ fileDialog.onChange((files) => {
  */
 export async function openDesignFile(file: File, handle?: FileSystemFileHandle): Promise<void> {
   assertSupportedDesignFile(file.name)
-  await openFileInNewTab(file, handle)
+  await openFileInNewTab(file, { handle })
 }
 
 if (IS_BROWSER && 'window' in globalThis) {
@@ -91,7 +89,7 @@ export async function openBrowserFileFromURL(url: URL, init?: RequestInit): Prom
   const name = fileNameFromURL(url)
   assertSupportedDesignFile(name)
   const file = new File([bytes], name, { type: 'application/octet-stream' })
-  return openFileInNewTab(file, undefined, url.href)
+  return openFileInNewTab(file, { path: url.href })
 }
 
 function isSupportedDesignFile(fileName: string): boolean {
@@ -120,7 +118,7 @@ export async function openDesignFileBatch<T>(
       await openItem(item)
     } catch (error) {
       const name = displayName(item)
-      const detail = error instanceof Error ? error.message : String(error)
+      const detail = errorMessage(error)
       console.error(`Failed to open ${name}:`, error)
       toast.error(notificationMessages.get().openFileFailed({ name, error: detail }))
     }
@@ -146,7 +144,7 @@ export async function chooseTauriOpenPaths(): Promise<string[]> {
 export async function openFileFromPath(path: string): Promise<EditorStore | undefined> {
   if (!isTauri()) return undefined
   const file = await readTauriDesignFile(path)
-  const store = await openFileInNewTab(file, undefined, path)
+  const store = await openFileInNewTab(file, { path })
   rememberRecentFile(path, store.state.documentKind)
   return store
 }
@@ -195,12 +193,12 @@ export async function openFileDialog() {
         async (handle) => {
           const file = await handle.getFile()
           assertSupportedDesignFile(file.name)
-          await openFileInNewTab(file, handle)
+          await openFileInNewTab(file, { handle })
         }
       )
       return
     } catch (e) {
-      if ((e as Error).name === 'AbortError') return
+      if (isAbortError(e)) return
     }
   }
 
