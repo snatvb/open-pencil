@@ -125,6 +125,9 @@ const actions = {
   setVirtualizer
 }
 
+/** The rows as listed, top to bottom, for a consumer that sizes or measures them. */
+defineExpose({ visibleRows })
+
 provideLayerTree({
   editor,
   items,

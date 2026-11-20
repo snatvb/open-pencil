@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { useStore } from '@nanostores/vue'
 import { tv } from 'tailwind-variants'
-import { computed, useTemplateRef } from 'vue'
+import { type ComponentPublicInstance, computed, useTemplateRef } from 'vue'
 
-import { appliedVariableModes } from '@open-pencil/vue/controls/variable-modes'
 import { locale, useVariableMessages } from '@open-pencil/vue/i18n'
 import type { LayerNode } from '@open-pencil/vue/primitives/LayerTree'
 
 import { useEditorStore } from '@/app/editor/active-store'
-import type { LayerIssueMark as LayerIssueMarkData } from '@/app/editor/design-check/layers'
+import {
+  showsLayerIssueMark,
+  type LayerIssueMark as LayerIssueMarkData
+} from '@/app/editor/design-check/layers'
 import LayerIssueMark from '@/components/design-check/LayerIssueMark.vue'
 import { COMPONENT_TYPES, nodeIcon } from '@/components/icons'
 import Tip from '@/components/ui/overlay/Tip.vue'
@@ -19,6 +21,7 @@ import LayerTreeDisclosure from './LayerTreeDisclosure.vue'
 import LayerTreeDropIndicator from './LayerTreeDropIndicator.vue'
 import LayerTreeRowShell from './LayerTreeRowShell.vue'
 import { useFullModeBadgeFitsBesideName } from './mode-badge-fit'
+import { layerAppliedModes } from './mode-names'
 import type { LayerTreeChrome, LayerTreeItemActions } from './types'
 import { useLayerTreeUI } from './ui'
 
@@ -45,12 +48,8 @@ const store = useEditorStore()
 const variables = useVariableMessages()
 const language = useStore(locale)
 const appliedModes = computed(() => {
-  const { variableModes } = node
-  if (!variableModes) {
-    return []
-  }
   void store.state.sceneVersion
-  return appliedVariableModes(store.graph, variableModes, variables.value.numberedCollection)
+  return layerAppliedModes(store.graph, node.variableModes, variables.value.numberedCollection)
 })
 const firstMode = computed(() => appliedModes.value[0])
 const moreModes = computed(() => appliedModes.value.length - 1)
@@ -64,15 +63,17 @@ const fullBadgeFits = useFullModeBadgeFitsBesideName(
     name: useTemplateRef('name'),
     badge: useTemplateRef('badge'),
     fullForm: useTemplateRef('fullForm'),
-    actions: useTemplateRef('actions')
+    actions: useTemplateRef<ComponentPublicInstance>('actions')
   },
   [() => node.name, () => firstMode.value?.mode, moreModes]
 )
+const showIssue = computed(() => showsLayerIssueMark(issue, expanded))
 const layerTree = tv(layerTreeTheme)
 const styles = computed(() =>
   layerTree({
     expanded,
     actionsVisible: node.locked || !node.visible,
+    trailingShown: node.locked || !node.visible || showIssue.value,
     selected,
     focused: chrome.focused,
     dragging: chrome.draggingId === node.id,
@@ -89,6 +90,7 @@ const styles = computed(() =>
 <template>
   <LayerTreeRowShell
     :pad-left="padLeft"
+    :content-class="styles.content({ class: ui?.content })"
     data-test-id="layers-item"
     data-slot="row"
     :data-selected="selected || undefined"
@@ -142,22 +144,28 @@ const styles = computed(() =>
         </span>
       </Tip>
     </span>
-    <LayerIssueMark v-if="issue && (issue.own || !expanded)" :mark="issue" />
+    <template #end>
+      <span data-slot="trailing" :class="styles.trailing({ class: ui?.trailing })">
+        <LayerIssueMark v-if="issue && showIssue" :mark="issue" />
 
-    <LayerTreeActions
-      ref="actions"
-      :node="node"
-      :ui="{
-        actions: styles.actions({ class: ui?.actions }),
-        action: styles.action({ class: ui?.action }),
-        lockIcon: layerTree({ actionActive: node.locked }).actionIcon({ class: ui?.actionIcon }),
-        visibilityIcon: layerTree({ actionActive: !node.visible }).actionIcon({
-          class: ui?.actionIcon
-        })
-      }"
-      @toggle-lock="actions.toggleLock"
-      @toggle-visibility="actions.toggleVisibility"
-    />
+        <LayerTreeActions
+          ref="actions"
+          :node="node"
+          :ui="{
+            actions: styles.actions({ class: ui?.actions }),
+            action: styles.action({ class: ui?.action }),
+            lockIcon: layerTree({ actionActive: node.locked }).actionIcon({
+              class: ui?.actionIcon
+            }),
+            visibilityIcon: layerTree({ actionActive: !node.visible }).actionIcon({
+              class: ui?.actionIcon
+            })
+          }"
+          @toggle-lock="actions.toggleLock"
+          @toggle-visibility="actions.toggleVisibility"
+        />
+      </span>
+    </template>
 
     <LayerTreeDropIndicator
       :active="chrome.instructionTargetId === node.id"

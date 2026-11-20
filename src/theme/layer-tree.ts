@@ -2,8 +2,12 @@ import { focusStyles } from './focus/styles'
 
 const layerTreeTheme = {
   slots: {
-    viewport: 'h-full overflow-y-auto px-1',
-    row: 'group/row relative flex w-full cursor-pointer items-center gap-1 rounded border-none bg-transparent pe-1 text-start text-2xs text-surface hover:bg-hover',
+    // No padding here: scrolled names would show through it beside the buttons pinned to the edge.
+    viewport: 'h-full overflow-auto text-2xs',
+    row: 'group/row relative flex w-full cursor-pointer items-center gap-1 rounded border-none bg-panel text-start text-2xs text-surface hover:bg-hover',
+    // Everything before the buttons, indented by depth. The indent is here and not on the row,
+    // since a sticky part stays inside its row's padding and the buttons must reach the edge.
+    content: 'flex h-full min-w-0 flex-1 items-center gap-1',
     disclosure:
       'flex w-4 shrink-0 cursor-pointer items-center justify-center text-current transition-transform',
     disclosurePlaceholder: 'w-4 shrink-0',
@@ -15,6 +19,9 @@ const layerTreeTheme = {
     modeFull: 'flex w-max shrink-0 items-center whitespace-nowrap',
     moreModes: 'shrink-0 ps-1 opacity-70',
     modeCount: 'tabular-nums',
+    // The issue mark and buttons stay at the panel's edge however far the rows scroll sideways.
+    // While they show, they sit on the row's own background so a long name runs under them.
+    trailing: 'sticky inset-e-0 flex shrink-0 items-center gap-1 pe-1',
     actions: 'flex shrink-0 items-center gap-0.5',
     action: [
       'flex size-4 items-center justify-center rounded text-current hover:bg-white/15',
@@ -22,7 +29,7 @@ const layerTreeTheme = {
     ],
     actionIcon: 'size-3',
     dropIndicator: 'pointer-events-none absolute bg-accent',
-    renameRow: 'group/row relative flex w-full items-center gap-1 pe-1 text-2xs text-surface',
+    renameRow: 'group/row relative flex w-full items-center pe-1 text-2xs text-surface',
     renameIcon: 'size-3 shrink-0 opacity-70',
     renameInput:
       'min-w-0 flex-1 rounded border border-accent bg-input px-1 py-0 text-2xs text-surface outline-none'
@@ -30,7 +37,7 @@ const layerTreeTheme = {
   variants: {
     selected: {
       true: { row: 'bg-panel-selected text-on-accent hover:bg-panel-selected' },
-      false: { row: 'bg-transparent text-surface hover:bg-hover' }
+      false: { row: 'bg-panel text-surface hover:bg-hover' }
     },
     focused: {
       true: {},
@@ -60,6 +67,10 @@ const layerTreeTheme = {
     compactModes: {
       true: { modeBadge: 'shrink-0', modeFull: 'invisible absolute inset-e-0 top-0' },
       false: { modeBadge: 'shrink-[100]' }
+    },
+    trailingShown: {
+      true: { trailing: 'bg-inherit' },
+      false: { trailing: 'group-focus-within/row:bg-inherit group-hover/row:bg-inherit' }
     },
     actionsVisible: {
       true: {},
@@ -113,6 +124,7 @@ const layerTreeTheme = {
     slot: false,
     expanded: false,
     actionsVisible: true,
+    trailingShown: true,
     actionActive: false,
     childDropTarget: false,
     compactModes: false
