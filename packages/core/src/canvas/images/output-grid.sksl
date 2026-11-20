@@ -1,0 +1,13 @@
+uniform shader image;
+
+uniform float3 outputFromLocalX;
+uniform float3 outputFromLocalY;
+uniform float3 localFromOutputX;
+uniform float3 localFromOutputY;
+
+half4 main(float2 local) {
+  float3 point = float3(local, 1.0);
+  float2 outputPixel = floor(float2(dot(outputFromLocalX, point), dot(outputFromLocalY, point)));
+  float3 centre = float3(outputPixel + 0.5, 1.0);
+  return image.eval(float2(dot(localFromOutputX, centre), dot(localFromOutputY, centre)));
+}

@@ -7,6 +7,7 @@ import type { ResourceCache } from '#core/cache/resource'
 import type { SourceScan } from './baked'
 import { createImageCache } from './cache'
 import { ImagePreviewCache } from './previews'
+import { EVERY_DETAIL, type SamplingDetailRange } from './sampling'
 
 /** A raster export drawn finer than its pixels, and where world space lands on those pixels. */
 export interface SupersampledOutput {
@@ -59,6 +60,8 @@ export interface RendererImages {
   readonly decodedPreviewHashes: Set<string>
   supersampledOutput: SupersampledOutput | null
   exporting: ExportImages | null
+  laidOutByShader: boolean
+  samplingDetail: SamplingDetailRange
 }
 
 export function createRendererImages(): RendererImages {
@@ -77,7 +80,9 @@ export function createRendererImages(): RendererImages {
     fillUsers: new Map(),
     decodedPreviewHashes: new Set(),
     supersampledOutput: null,
-    exporting: null
+    exporting: null,
+    laidOutByShader: false,
+    samplingDetail: EVERY_DETAIL
   }
   return images
 }

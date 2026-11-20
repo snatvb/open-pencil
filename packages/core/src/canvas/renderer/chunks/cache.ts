@@ -1,12 +1,18 @@
 import type { SkPicture } from '@open-pencil/canvaskit'
 import type { SceneGraph } from '@open-pencil/scene-graph'
 
+import { recordSamplingDetail } from '#core/canvas/images/sampling'
+import {
+  type SampledPicture,
+  type SamplingSlots,
+  samplingSlotsFor
+} from '#core/canvas/renderer/sampling-slots'
 import type { SkiaRenderer } from '#core/canvas/renderer/skia'
 
 import type { RenderChunk } from './index'
 import { recordRenderChunk } from './record'
 
-interface CachedChunkPicture {
+interface CachedChunkPicture extends SampledPicture {
   picture: SkPicture
   fontGeneration: number
   /** The detail the picture's image previews were chosen for; none when it drew no preview. */
@@ -19,7 +25,7 @@ function drewPreviews(renderer: Pick<SkiaRenderer, 'images'>): boolean {
 }
 
 export class RenderChunkPictureCache {
-  private readonly entries = new Map<string, CachedChunkPicture>()
+  private readonly entries = new Map<string, SamplingSlots<CachedChunkPicture>>()
 
   /**
    * A picture holds for the renderer's fonts, and, when it drew image previews, for a detail no
@@ -34,34 +40,53 @@ export class RenderChunkPictureCache {
     )
   }
 
+  private sampledAlike(renderer: SkiaRenderer, chunkId: string): CachedChunkPicture | undefined {
+    return this.entries.get(chunkId)?.at(renderer.images.detailScale)
+  }
+
+  private dropStale(chunkId: string, stale: CachedChunkPicture): void {
+    const slots = this.entries.get(chunkId)
+    slots?.drop(stale)
+    if (slots?.size === 0) {
+      this.entries.delete(chunkId)
+    }
+  }
+
   get(renderer: SkiaRenderer, graph: SceneGraph, chunk: RenderChunk): SkPicture {
-    const cached = this.entries.get(chunk.id)
-    if (cached && this.current(renderer, cached)) return cached.picture
-    cached?.picture.delete()
-    this.entries.delete(chunk.id)
+    const cached = this.sampledAlike(renderer, chunk.id)
+    if (cached && this.current(renderer, cached)) {
+      return cached.picture
+    }
+    if (cached) {
+      this.dropStale(chunk.id, cached)
+    }
     renderer.images.previewsDrawn = false
-    const recorded = recordRenderChunk(renderer, graph, chunk)
-    this.entries.set(chunk.id, {
+    const { value: recorded, detail } = recordSamplingDetail(renderer, () =>
+      recordRenderChunk(renderer, graph, chunk)
+    )
+    samplingSlotsFor(this.entries, chunk.id).put({
       picture: recorded.picture,
       fontGeneration: renderer.fontGeneration,
-      previewDetail: drewPreviews(renderer) ? renderer.images.detailScale : null
+      previewDetail: drewPreviews(renderer) ? renderer.images.detailScale : null,
+      samplingDetail: detail
     })
     return recorded.picture
   }
 
   /** Whether `chunk`'s picture is recorded for the renderer's current fonts and detail. */
   has(renderer: SkiaRenderer, chunk: RenderChunk): boolean {
-    return this.current(renderer, this.entries.get(chunk.id))
+    return this.current(renderer, this.sampledAlike(renderer, chunk.id))
   }
 
   invalidate(chunkId: string): void {
-    const entry = this.entries.get(chunkId)
-    entry?.picture.delete()
+    this.entries.get(chunkId)?.release()
     this.entries.delete(chunkId)
   }
 
   clear(): void {
-    for (const entry of this.entries.values()) entry.picture.delete()
+    for (const slots of this.entries.values()) {
+      slots.release()
+    }
     this.entries.clear()
   }
 

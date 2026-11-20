@@ -11,7 +11,7 @@ import { clipsChildren } from '@open-pencil/scene-graph/node-defaults'
 
 import type { SkiaRenderer } from '#core/canvas'
 import { drawingExport } from '#core/canvas/images/exporting'
-import type { SupersampledOutput } from '#core/canvas/images/state'
+import { smallestSingularValue } from '#core/canvas/images/sampling'
 import { computeContentBounds } from '#core/canvas/renderer/visual-bounds'
 import { getPageColor } from '#core/figma-api/page-backgrounds'
 import { absoluteRenderBounds } from '#core/geometry/render-bounds'
@@ -171,9 +171,9 @@ interface SurfaceTarget {
   trimTransparent?: boolean
 }
 
-function supersampledOutput(canvas: Canvas, renderScale: number): SupersampledOutput {
+function outputFromWorld(canvas: Canvas, renderScale: number): Mat3 {
   const outputFromRender = Matrix.scaled(1 / renderScale, 1 / renderScale)
-  return { outputFromWorld: Matrix.multiply(outputFromRender, canvas.getTotalMatrix()) }
+  return Matrix.multiply(outputFromRender, canvas.getTotalMatrix())
 }
 
 function renderToSurface(
@@ -206,12 +206,14 @@ function renderToSurface(
   }
 
   const drawnFor = renderer.images.supersampledOutput
+  const detailFor = renderer.images.detailScale
   try {
     const canvas = surface.getCanvas()
     canvas.scale(renderScale, renderScale)
     setup(canvas)
-    renderer.images.supersampledOutput =
-      renderScale > 1 ? supersampledOutput(canvas, renderScale) : null
+    const output = outputFromWorld(canvas, renderScale)
+    renderer.images.supersampledOutput = renderScale > 1 ? { outputFromWorld: output } : null
+    renderer.images.detailScale = smallestSingularValue(output)
     drawingExport(renderer.images, { canvas, rasterPixelsPerDeviceUnit: 1 }, () =>
       renderer.renderSceneToCanvas(canvas, graph, pageId)
     )
@@ -272,6 +274,7 @@ function renderToSurface(
     return resultBytes
   } finally {
     renderer.images.supersampledOutput = drawnFor
+    renderer.images.detailScale = detailFor
     surface.dispose()
     ck.Free(pixels)
   }

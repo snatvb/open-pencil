@@ -3,7 +3,9 @@ import type { Fill, SceneNode } from '@open-pencil/scene-graph'
 import { isLayerContainer } from '@open-pencil/scene-graph/node-defaults'
 
 import { hasImageAdjustments } from '#core/canvas/images/adjustments'
+import { noteSamplingDetail, recordSamplingDetail } from '#core/canvas/images/sampling'
 import { recordPicture } from '#core/canvas/renderer/picture'
+import { samplingSlotsFor } from '#core/canvas/renderer/sampling-slots'
 import type { SkiaRenderer } from '#core/canvas/renderer/skia'
 import { localPaintBounds } from '#core/geometry/render-bounds'
 
@@ -58,13 +60,16 @@ export function drawShapeThroughNodePicture(
     draw(canvas)
     return
   }
-  const cached = r.nodePictures.get(node.id)
+  const slots = r.nodePictures.get(node.id)
+  const cached = slots?.at(r.images.detailScale)
   if (cached && cached.fontGeneration === r.fontGeneration) {
+    noteSamplingDetail(r, cached.samplingDetail)
     canvas.drawPicture(cached.picture)
     return
   }
-  cached?.picture.delete()
-  r.nodePictures.delete(node.id)
+  if (cached) {
+    slots?.drop(cached)
+  }
 
   const castsShadowsInPicture = !isLayerContainer(node)
   const drawn = localPaintBounds(node, castsShadowsInPicture) ?? {
@@ -74,7 +79,11 @@ export function drawShapeThroughNodePicture(
     maxY: 0
   }
   const bounds = r.ck.LTRBRect(drawn.minX, drawn.minY, drawn.maxX, drawn.maxY)
-  const picture = recordPicture(r, bounds, draw)
-  r.nodePictures.set(node.id, { picture, fontGeneration: r.fontGeneration })
+  const { value: picture, detail } = recordSamplingDetail(r, () => recordPicture(r, bounds, draw))
+  samplingSlotsFor(r.nodePictures, node.id).put({
+    picture,
+    fontGeneration: r.fontGeneration,
+    samplingDetail: detail
+  })
   canvas.drawPicture(picture)
 }

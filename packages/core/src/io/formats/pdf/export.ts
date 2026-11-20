@@ -3,6 +3,7 @@ import type { SceneGraph } from '@open-pencil/scene-graph'
 
 import type { SkiaRenderer } from '#core/canvas'
 import { drawingExport } from '#core/canvas/images/exporting'
+import { drawAtDetail } from '#core/canvas/images/sampling'
 import { exportBounds, prepareSelectionRenderGraph } from '#core/io/formats/raster/render'
 import { extractExportGraph } from '#core/io/subgraph'
 
@@ -43,7 +44,9 @@ export function renderPagesToPDF(
   renderer.builtInBlendModesOnly = true
   try {
     const pages = drawingExport(renderer.images, null, () =>
-      specs.flatMap((spec) => drawPage(doc, renderer, graph, spec) ?? [])
+      drawAtDetail(renderer, PDF_RASTER_PIXELS_PER_POINT, () =>
+        specs.flatMap((spec) => drawPage(doc, renderer, graph, spec) ?? [])
+      )
     )
     if (pages.length === 0) {
       doc.abort()

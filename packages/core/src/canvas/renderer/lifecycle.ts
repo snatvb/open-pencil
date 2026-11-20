@@ -74,7 +74,7 @@ export function destroyRenderer(r: SkiaRenderer): void {
   r.textPreparationCache.clear()
   clearPatternTiles(r)
   r.tiledScene.destroy()
-  r.wholeScene.picture?.delete()
+  r.wholeScene.pictures.release()
   r.profiler.destroy()
   r.surface.dispose()
 }

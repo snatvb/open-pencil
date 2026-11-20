@@ -8,8 +8,9 @@ import { fillGeometryMatchesRegions, hasRegionFills } from '@open-pencil/scene-g
 import { setPaintBlendMode } from '#core/canvas/blend/modes'
 import { hasImageAdjustments, makeAdjustedImageShader } from '#core/canvas/images/adjustments'
 import { adjustedImageForExport } from '#core/canvas/images/exporting'
+import { sampledOncePerOutputPixel } from '#core/canvas/images/output-grid'
 import { previewEdge } from '#core/canvas/images/previews'
-import { landsOnOutputPixels, makeImageShader } from '#core/canvas/images/sampling'
+import { imageSampling, makeImageShader } from '#core/canvas/images/sampling'
 import { applyPatternFill } from '#core/canvas/patterns/fill'
 import { resolveGradientStopColor } from '#core/canvas/renderer/colors'
 import type { SkiaRenderer } from '#core/canvas/renderer/skia'
@@ -245,20 +246,40 @@ function placedImageShader(
   img: Image,
   preview?: { originalWidth: number; originalHeight: number }
 ): Shader {
+  const imgW = img.width()
+  const imgH = img.height()
   const localMatrix = imageFillMatrix(
     fill,
     node,
-    img.width(),
-    img.height(),
+    imgW,
+    imgH,
     preview && { width: preview.originalWidth, height: preview.originalHeight }
   )
-  return makeImageShader(
+  const drawsOriginalPixels =
+    !preview || (imgW >= preview.originalWidth && imgH >= preview.originalHeight)
+  const sampling = imageSampling(r, node, graph, localMatrix, drawsOriginalPixels)
+  const image = makeImageShader(
     r,
     img,
     fill.imageScaleMode ?? 'FILL',
     localMatrix,
-    landsOnOutputPixels(r, node, graph, localMatrix)
+    sampling !== 'smooth'
   )
+  if (sampling !== 'nearest-at-output-pixel-centres') {
+    return image
+  }
+  let gridded: Shader | null
+  try {
+    gridded = sampledOncePerOutputPixel(r, node, graph, image)
+  } catch (error) {
+    image.delete()
+    throw error
+  }
+  if (!gridded) {
+    return image
+  }
+  image.delete()
+  return gridded
 }
 
 function setImageShader(

@@ -14,7 +14,12 @@ export type EyedropperTarget = 'fill' | 'stroke'
 
 type SampleRenderer = Pick<
   SkiaRenderer,
-  'worldViewport' | 'viewportImageRendering' | 'presentationColorSpace' | 'renderNode'
+  | 'worldViewport'
+  | 'viewportImageRendering'
+  | 'presentationColorSpace'
+  | 'renderNode'
+  | 'images'
+  | 'dpr'
 >
 
 /** A square of the document's pixels: RGBA rows, `size` pixels a side, the centre one sampled. */
@@ -52,6 +57,7 @@ export function sampleScenePixels(
   const previousViewport = renderer.worldViewport
   const previousImageRendering = renderer.viewportImageRendering
   const previousColorSpace = renderer.presentationColorSpace
+  const previousDetail = renderer.images.detailScale
   try {
     const canvas = surface.getCanvas()
     const background = getPageColor(page)
@@ -65,6 +71,7 @@ export function sampleScenePixels(
     renderer.worldViewport = { x: x - reach, y: y - reach, w: reach * 2, h: reach * 2 }
     renderer.viewportImageRendering = false
     renderer.presentationColorSpace = graph.documentColorSpace
+    renderer.images.detailScale = scale * renderer.dpr
     for (const childId of page.childIds) renderer.renderNode(canvas, graph, childId, {})
     surface.flush()
     const data = canvas.readPixels(0, 0, {
@@ -80,6 +87,7 @@ export function sampleScenePixels(
     renderer.worldViewport = previousViewport
     renderer.viewportImageRendering = previousImageRendering
     renderer.presentationColorSpace = previousColorSpace
+    renderer.images.detailScale = previousDetail
     surface.dispose()
   }
 }

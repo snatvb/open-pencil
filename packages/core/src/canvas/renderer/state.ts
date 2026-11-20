@@ -2,6 +2,7 @@ import type { SkPicture } from '@open-pencil/canvaskit'
 import type { SceneNode } from '@open-pencil/scene-graph'
 
 import { clearPatternTiles, invalidatePatternTargets } from '#core/canvas/patterns/tiles'
+import { type SampledPicture, SamplingSlots } from '#core/canvas/renderer/sampling-slots'
 import type { SkiaRenderer } from '#core/canvas/renderer/skia'
 import { changesShaping } from '#core/canvas/text/paragraph/inputs'
 
@@ -22,14 +23,17 @@ export function createFeedbackMarks(): FeedbackMarks {
 }
 
 /** A node's picture of itself with its effects, good while the font generation holds. */
-export interface NodePictureEntry {
+export interface NodePictureEntry extends SampledPicture {
   picture: SkPicture
   fontGeneration: number
 }
 
-/** The whole page in one picture, with what it was recorded for; stale when any of those moved. */
+export interface ScenePicture extends SampledPicture {
+  picture: SkPicture
+}
+
 export interface WholeScenePicture {
-  picture: SkPicture | null
+  readonly pictures: SamplingSlots<ScenePicture>
   version: number
   fontGeneration: number
   positionPreviewVersion: number
@@ -38,7 +42,7 @@ export interface WholeScenePicture {
 
 export function createWholeScenePicture(): WholeScenePicture {
   return {
-    picture: null,
+    pictures: new SamplingSlots(),
     version: -1,
     fontGeneration: -1,
     positionPreviewVersion: -1,
@@ -47,14 +51,15 @@ export function createWholeScenePicture(): WholeScenePicture {
 }
 
 export function invalidateScenePicture(r: SkiaRenderer): void {
-  r.wholeScene.picture?.delete()
-  r.wholeScene.picture = null
+  r.wholeScene.pictures.release()
   r.wholeScene.version = -1
   r.wholeScene.fontGeneration = -1
 }
 
 export function clearNodePictures(r: Pick<SkiaRenderer, 'nodePictures'>): void {
-  for (const { picture } of r.nodePictures.values()) picture.delete()
+  for (const slots of r.nodePictures.values()) {
+    slots.release()
+  }
   r.nodePictures.clear()
 }
 
@@ -79,11 +84,8 @@ export function invalidateNodePicture(
   r.textFonts.readiness.delete(nodeId)
   invalidatePatternTargets(r, nodeId)
   r.renderedBounds.forget(nodeId)
-  const cached = r.nodePictures.get(nodeId)
-  if (cached) {
-    cached.picture.delete()
-    r.nodePictures.delete(nodeId)
-  }
+  r.nodePictures.get(nodeId)?.release()
+  r.nodePictures.delete(nodeId)
 }
 
 export function flashNode(r: SkiaRenderer, nodeId: string): void {

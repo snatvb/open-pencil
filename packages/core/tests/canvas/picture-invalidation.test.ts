@@ -1,5 +1,7 @@
 import { expect, mock, test } from 'bun:test'
 
+import { EVERY_DETAIL } from '#core/canvas/images/sampling'
+import { SamplingSlots } from '#core/canvas/renderer/sampling-slots'
 import { invalidateAllPictures, invalidateNodePicture } from '#core/canvas/renderer/state'
 import { TextPreparationCache } from '#core/canvas/text/preparation/cache'
 
@@ -7,6 +9,12 @@ import { asRenderer } from './helpers'
 
 function deletable() {
   return { delete: mock() }
+}
+
+function slotsHolding(picture: ReturnType<typeof deletable>) {
+  const slots = new SamplingSlots()
+  slots.put({ picture, samplingDetail: EVERY_DETAIL })
+  return slots
 }
 
 test('full picture invalidation resets tiled font-dependent resources', () => {
@@ -17,8 +25,8 @@ test('full picture invalidation resets tiled font-dependent resources', () => {
   const renderer = asRenderer({
     textPreparationCache,
     textFonts: { readiness: new Map() },
-    wholeScene: { picture: scenePicture, version: 1, fontGeneration: 1 },
-    nodePictures: new Map([['node', { picture: nodePicture, fontGeneration: 1 }]]),
+    wholeScene: { pictures: slotsHolding(scenePicture), version: 1, fontGeneration: 1 },
+    nodePictures: new Map([['node', slotsHolding(nodePicture)]]),
     tiledScene: { invalidateStructure: mock() },
     renderedBounds: { clear: mock() }
   })
@@ -41,8 +49,8 @@ test('node picture invalidation removes the changed node picture and keeps its p
     textPreparationCache,
     textFonts: { readiness: new Map() },
     nodePictures: new Map([
-      ['parent', { picture: parentPicture, fontGeneration: 1 }],
-      ['child', { picture: childPicture, fontGeneration: 1 }]
+      ['parent', slotsHolding(parentPicture)],
+      ['child', slotsHolding(childPicture)]
     ]),
     renderedBounds: { forget: mock() }
   })

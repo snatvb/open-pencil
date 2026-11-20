@@ -1,7 +1,8 @@
-import type { Canvas } from '@open-pencil/canvaskit'
+import type { Canvas, SkPicture } from '@open-pencil/canvaskit'
 import type { SceneGraph } from '@open-pencil/scene-graph'
 
 import { needsImagePreviews } from '#core/canvas/images/previews'
+import { recordSamplingDetail } from '#core/canvas/images/sampling'
 import { paintPageBackground } from '#core/canvas/page/background'
 import type { RenderOverlays, SkiaRenderer } from '#core/canvas/renderer/skia'
 import { warmUpEffectPrograms } from '#core/canvas/warm-up'
@@ -177,13 +178,35 @@ function scenePictureMissReason(
   if (hasPositionPreview) return 'position-preview'
   if (hasTransientPreviews(r, graph)) return 'transient-preview'
   if (sceneContentDependsOnOverlay(overlays)) return 'volatile-overlay'
-  if (!r.wholeScene.picture) return 'missing-picture'
+  if (r.wholeScene.pictures.size === 0) {
+    return 'missing-picture'
+  }
   if (graph.positionPreviewVersion !== r.wholeScene.positionPreviewVersion)
     return 'position-preview-version'
   if (sceneVersion !== r.wholeScene.version) return 'scene-version'
   if (r.fontGeneration !== r.wholeScene.fontGeneration) return 'font-generation'
   if (r.pageId !== r.wholeScene.pageId) return 'page'
+  if (!scenePictureAtDetail(r)) {
+    return 'image-sampling'
+  }
   return 'unknown'
+}
+
+function scenePictureAtDetail(r: SkiaRenderer): SkPicture | undefined {
+  return r.wholeScene.pictures.at(r.images.detailScale)?.picture
+}
+
+function scenePicturesRecordedFor(
+  r: SkiaRenderer,
+  graph: SceneGraph,
+  sceneVersion: number
+): boolean {
+  return (
+    graph.positionPreviewVersion === r.wholeScene.positionPreviewVersion &&
+    sceneVersion === r.wholeScene.version &&
+    r.fontGeneration === r.wholeScene.fontGeneration &&
+    r.pageId === r.wholeScene.pageId
+  )
 }
 
 function canUseScenePicture(
@@ -194,11 +217,8 @@ function canUseScenePicture(
 ): boolean {
   return (
     !requiresUncachedSceneRender &&
-    !!r.wholeScene.picture &&
-    graph.positionPreviewVersion === r.wholeScene.positionPreviewVersion &&
-    sceneVersion === r.wholeScene.version &&
-    r.fontGeneration === r.wholeScene.fontGeneration &&
-    r.pageId === r.wholeScene.pageId
+    scenePicturesRecordedFor(r, graph, sceneVersion) &&
+    scenePictureAtDetail(r) !== undefined
   )
 }
 
@@ -386,8 +406,8 @@ function renderSceneContent(
   if (canUsePicture) {
     p.setScenePictureMode('hit')
     p.beginPhase('render:drawPicture')
-    if (r.wholeScene.picture) {
-      const picture = r.wholeScene.picture
+    const picture = scenePictureAtDetail(r)
+    if (picture) {
       const { duration } = measure(() => canvas.drawPicture(picture))
       p.setScenePictureDrawTime(duration)
     }
@@ -430,8 +450,9 @@ function recordScenePicture(
   graph: SceneGraph,
   sceneVersion: number
 ): void {
-  r.wholeScene.picture?.delete()
-  r.wholeScene.picture = null
+  if (!scenePicturesRecordedFor(r, graph, sceneVersion)) {
+    r.wholeScene.pictures.release()
+  }
   const prevViewport = r.worldViewport
   r.worldViewport = { x: -1e6, y: -1e6, w: 2e6, h: 2e6 }
   try {
@@ -452,16 +473,19 @@ function recordScenePicture(
       sceneBounds.x + sceneBounds.width + padding,
       sceneBounds.y + sceneBounds.height + padding
     )
-    r.wholeScene.picture = recordPicture(r, bounds, (recCanvas) => {
-      for (const childId of pageNode?.childIds ?? []) {
-        r.renderNode(recCanvas, graph, childId, {})
-      }
-    })
+    const { value: picture, detail } = recordSamplingDetail(r, () =>
+      recordPicture(r, bounds, (recCanvas) => {
+        for (const childId of pageNode?.childIds ?? []) {
+          r.renderNode(recCanvas, graph, childId, {})
+        }
+      })
+    )
+    r.wholeScene.pictures.put({ picture, samplingDetail: detail })
     r.wholeScene.version = sceneVersion
     r.wholeScene.fontGeneration = r.fontGeneration
     r.wholeScene.positionPreviewVersion = graph.positionPreviewVersion
     r.wholeScene.pageId = r.pageId
-    canvas.drawPicture(r.wholeScene.picture)
+    canvas.drawPicture(picture)
   } finally {
     r.worldViewport = prevViewport
   }

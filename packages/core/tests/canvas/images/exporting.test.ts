@@ -262,3 +262,27 @@ describe('a Display P3 image', () => {
     })
   })
 })
+
+describe('a baked image scaled up in an export', () => {
+  function bakedColours(size: number) {
+    const { graph, pageId, nodeIds } = layersOf(SMALL_PNG, [size])
+    let png = new Uint8Array()
+    const work = exportWork(renderer, () => {
+      png = exportedNodes(renderer, graph, pageId, nodeIds)
+    })
+    const pixels = readEncoded(png, 'unpremultiplied')
+    const colours = new Set<string>()
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+      colours.add(pixels.subarray(offset, offset + 4).join(','))
+    }
+    return { bakes: work.bakes, colours }
+  }
+
+  test('takes each output pixel from one adjusted image pixel at 1.5x', () => {
+    const atOwnSize = bakedColours(SMALL_EDGE)
+    const enlarged = bakedColours(SMALL_EDGE * 1.5)
+
+    expect([atOwnSize.bakes, enlarged.bakes]).toEqual([1, 1])
+    expect([...enlarged.colours].filter((colour) => !atOwnSize.colours.has(colour))).toEqual([])
+  })
+})

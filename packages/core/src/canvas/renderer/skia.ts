@@ -43,6 +43,7 @@ import {
   initializeSelectionPaintColors
 } from './paints'
 import * as RenderPipeline from './pipeline'
+import type { SamplingSlots } from './sampling-slots'
 import { createCompiledShaders } from './shaders'
 import { createFeedbackMarks, createWholeScenePicture, type NodePictureEntry } from './state'
 import * as RendererState from './state'
@@ -198,7 +199,7 @@ export class SkiaRenderer {
   builtInBlendModesOnly = false
   nodePaths = new NodePathCaches()
   /** Each node's picture of itself with its effects, good for the font generation it was recorded at. */
-  readonly nodePictures = new Map<string, NodePictureEntry>()
+  readonly nodePictures = new Map<string, SamplingSlots<NodePictureEntry>>()
   /** What each node and its subtree put on screen, which the layers it opens are bounded by. */
   readonly renderedBounds = new RenderedBoundsCache()
   /** The one picture of the whole page a single-canvas consumer draws from. */

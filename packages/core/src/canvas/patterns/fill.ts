@@ -8,7 +8,7 @@ import {
 import { regionFills } from '@open-pencil/scene-graph/vector-network'
 
 import { drawingPictureRasterizedByExport } from '#core/canvas/images/exporting'
-import { drawOffOutputGrid } from '#core/canvas/images/sampling'
+import { drawLaidOutByShader } from '#core/canvas/images/sampling'
 import { withWorldViewport } from '#core/canvas/renderer/picture'
 import type { SkiaRenderer } from '#core/canvas/renderer/skia'
 
@@ -104,7 +104,7 @@ function recordWithoutReentry(
 ): Shader {
   tiles.sourcesInProgress.add(source.id)
   try {
-    return drawOffOutputGrid(r, () =>
+    return drawLaidOutByShader(r, () =>
       recordPatternTile(r, source, graph, patternTileLayout(source, fill), drawSourceFills)
     )
   } finally {
