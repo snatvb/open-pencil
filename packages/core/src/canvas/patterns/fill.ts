@@ -7,6 +7,7 @@ import {
 } from '@open-pencil/scene-graph/paints'
 import { regionFills } from '@open-pencil/scene-graph/vector-network'
 
+import { drawingPictureRasterizedByExport } from '#core/canvas/images/exporting'
 import { drawOffOutputGrid } from '#core/canvas/images/sampling'
 import { withWorldViewport } from '#core/canvas/renderer/picture'
 import type { SkiaRenderer } from '#core/canvas/renderer/skia'
@@ -46,17 +47,19 @@ function recordPatternTile(
   const recorder = new r.ck.PictureRecorder()
   try {
     const canvas = recorder.beginRecording(tile)
-    for (const position of layout.positions) {
-      canvas.save()
-      canvas.translate(position.x, position.y)
-      canvas.scale(layout.scale, layout.scale)
-      if (source.visible) {
-        drawSourceLayer(r, canvas, source, graph)
-      } else {
-        drawSourceFills(r, canvas, source, graph)
+    drawingPictureRasterizedByExport(r.images, canvas, () => {
+      for (const position of layout.positions) {
+        canvas.save()
+        canvas.translate(position.x, position.y)
+        canvas.scale(layout.scale, layout.scale)
+        if (source.visible) {
+          drawSourceLayer(r, canvas, source, graph)
+        } else {
+          drawSourceFills(r, canvas, source, graph)
+        }
+        canvas.restore()
       }
-      canvas.restore()
-    }
+    })
     const picture = recorder.finishRecordingAsPicture()
     const shader = picture.makeShader(
       r.ck.TileMode.Repeat,
@@ -138,7 +141,7 @@ export function applyPatternFill(
   if (!source) {
     return false
   }
-  const dependsOnRenderState = nested || r.viewportImageRendering
+  const dependsOnRenderState = nested || r.viewportImageRendering || r.images.exporting !== null
   const shader = recordWithoutReentry(r, tiles, source, fill, graph, drawSourceFills)
   r.fillPaint.setShader(shader)
   r.fillPaintShaded = true
