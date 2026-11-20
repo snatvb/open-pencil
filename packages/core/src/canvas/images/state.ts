@@ -27,7 +27,8 @@ export interface ExportSource {
 }
 
 export interface ExportImages {
-  readonly adjusted: Map<string, Image | null>
+  readonly adjusted: ResourceCache<string, Image>
+  readonly unbakeable: Set<string>
   readonly sources: Map<string, ExportSource>
   readonly scans: ResourceCache<string, SourceScan>
   target: ExportTarget | null

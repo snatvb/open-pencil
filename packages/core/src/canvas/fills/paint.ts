@@ -7,7 +7,7 @@ import { fillGeometryMatchesRegions, hasRegionFills } from '@open-pencil/scene-g
 
 import { setPaintBlendMode } from '#core/canvas/blend/modes'
 import { hasImageAdjustments, makeAdjustedImageShader } from '#core/canvas/images/adjustments'
-import { adjustedImageForExport } from '#core/canvas/images/exporting'
+import { withAdjustedImageForExport } from '#core/canvas/images/exporting'
 import { sampledOncePerOutputPixel } from '#core/canvas/images/output-grid'
 import { previewEdge } from '#core/canvas/images/previews'
 import { imageSampling, makeImageShader } from '#core/canvas/images/sampling'
@@ -368,12 +368,17 @@ export function applyImageFill(
   let temporary = false
   try {
     const filters = fill.filters
-    const baked =
-      !preview &&
-      hasImageAdjustments(filters) &&
-      adjustedImageForExport(r, { hash, filters, node, stroke }, () => cached ?? encoded.image())
-    if (baked) {
-      return setBakedImageShader(r, fill, node, graph, baked, paint)
+    const shadedBaked =
+      !preview && hasImageAdjustments(filters)
+        ? withAdjustedImageForExport(
+            r,
+            { hash, filters, node, stroke },
+            () => cached ?? encoded.image(),
+            (baked) => setBakedImageShader(r, fill, node, graph, baked, paint)
+          )
+        : null
+    if (shadedBaked !== null) {
+      return shadedBaked
     }
     if (!img) {
       const decoded = encoded.image()
