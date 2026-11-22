@@ -274,7 +274,7 @@ export function materializeInstance(
     return node
   }
   const root = create(occurrence, parentId)
-  recordPropertyClaims(nodes)
+  recordPropertyClaims(graph, nodes)
   return { root, nodes }
 }
 
@@ -371,7 +371,10 @@ function recordEffectBindingClaims(owner: SceneNode, target: SceneNode, effects:
   if (declared) setInstanceOverride(owner.instanceOverrides, owner.id, target.id, 'boundVariables')
 }
 
-function recordPropertyClaims(nodes: ReadonlyMap<InstanceOccurrence, SceneNode>): void {
+function recordPropertyClaims(
+  graph: SceneGraph,
+  nodes: ReadonlyMap<InstanceOccurrence, SceneNode>
+): void {
   for (const [ownerOccurrence, owner] of nodes) {
     if (owner.type !== 'INSTANCE') continue
     for (const claim of ownerOccurrence.propertyClaims) {
@@ -396,7 +399,7 @@ function recordPropertyClaims(nodes: ReadonlyMap<InstanceOccurrence, SceneNode>)
           recordPaintBindingClaims(owner, target, field.scene[0], claim.properties[raw])
         if (raw === 'effects') recordEffectBindingClaims(owner, target, claim.properties[raw])
       }
-      recordVariableBindingClaims(owner, target, claim.properties)
+      recordVariableBindingClaims(graph, owner, target, claim.properties)
       recordVariableModeClaims(owner, target, claim.properties)
       if (claim.declaredBy === ownerOccurrence.sourceId && setsVariantBindings(claim.properties)) {
         setInstanceOverride(owner.instanceOverrides, owner.id, target.id, 'variantBindings')
