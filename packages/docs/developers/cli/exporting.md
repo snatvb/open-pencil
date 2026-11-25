@@ -45,6 +45,12 @@ openpencil convert design.pen --font-policy strict
 - `strict` — stop with a nonzero exit status if font preparation cannot faithfully resolve the requested faces.
 - `allow` — export without the additional font-fidelity check.
 
+Installed fonts count as available. Add `--font-dir <folder>` (repeatable) for fonts kept outside the system font folders, such as a project's `fonts/` folder:
+
+```sh
+openpencil export design.fig -f png --font-dir ./fonts
+```
+
 Run [`openpencil fonts`](./inspecting#font-diagnostics) first to inspect affected faces. Export preparation may use configured font providers, so its result can differ from the offline file diagnostic.
 
 `convert` loads fonts for `.pen`, draw.io, and Mermaid files, which store layout intent rather than sizes: it lays them out again with their text measured in their own fonts before writing, so `strict` stops it before anything is written. A Mermaid flowchart (`.mmd` or `.mermaid`) is laid out as it is read, its text measured in the fonts it is drawn in.
