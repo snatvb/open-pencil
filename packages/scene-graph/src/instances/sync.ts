@@ -17,13 +17,17 @@ import {
 } from '../strokes'
 import type { SceneNode } from '../types'
 import { isNumericVariableBindingField } from '../variables/fields'
-import { resolvedNumericBindings } from '../variables/numeric-bindings'
+import { resolvedNumericBindings, resolvedRunBindings } from '../variables/numeric-bindings'
 import {
   applyBoundPaintColorsIn,
   copyAppliedBoundPaints,
   keepCopyBoundPaints
 } from '../variables/paints'
-import { createStyleBindingLookup, effectiveBoundVariables } from '../variables/style-bindings'
+import {
+  createStyleBindingLookup,
+  effectiveBoundVariables,
+  type TextStyleLookup
+} from '../variables/style-bindings'
 import { scaleVariableBindingUnits } from '../variables/units'
 import { applyEnclosingAssignments, assignedFieldValues, propertyDrivenFields } from './assignments'
 import { keepOwnContentSize, remeasureChangedText, type SyncedPlacement } from './content-size'
@@ -234,14 +238,58 @@ function resolveBoundNumbersInPlace(
   const rebound = updates.boundVariables
     ? Object.keys(own).filter((field) => own[field] !== target.boundVariables[field])
     : []
-  const bound = effectiveBoundVariables({ ...target, ...updates }, createStyleBindingLookup(graph))
+  const styles = styleBindingsOf(graph)
+  const textStyleId = updates.textStyleId === undefined ? target.textStyleId : updates.textStyleId
+  const bound = effectiveBoundVariables(
+    { type: target.type, textStyleId, boundVariables: own },
+    styles
+  )
   const synced = uniq([...Object.keys(updates), ...rebound]).filter(
     (field) => isNumericVariableBindingField(field) && bound[field] && !kept(field)
   )
+  resolveSyncedRunsInPlace(graph, target, updates, kept, styles)
   if (synced.length === 0) return
   applySyncedModes(graph, target, updates)
-  const resolved = resolvedNumericBindings(graph, { ...target, ...updates })
+  const resolved = resolvedNumericBindings(graph, { ...target, ...updates }, styles)
   Object.assign(updates, pick(resolved, synced as (keyof SceneNode)[]))
+}
+
+function resolveSyncedRunsInPlace(
+  graph: SceneGraph,
+  target: SceneNode,
+  updates: Partial<SceneNode>,
+  kept: (field: string) => boolean,
+  styles: TextStyleLookup
+): void {
+  if (!updates.styleRuns || kept('styleRuns')) {
+    return
+  }
+  applySyncedModes(graph, target, updates)
+  const copy = {
+    id: target.id,
+    styleRuns: updates.styleRuns,
+    componentScale: updates.componentScale ?? target.componentScale
+  }
+  Object.assign(updates, resolvedRunBindings(graph, copy, styles))
+}
+
+const styleBindingsDuringSync = new WeakMap<SceneGraph, TextStyleLookup>()
+
+export function withSyncedStyleBindings(graph: SceneGraph, sync: () => void): void {
+  if (styleBindingsDuringSync.has(graph)) {
+    sync()
+    return
+  }
+  styleBindingsDuringSync.set(graph, createStyleBindingLookup(graph))
+  try {
+    sync()
+  } finally {
+    styleBindingsDuringSync.delete(graph)
+  }
+}
+
+function styleBindingsOf(graph: SceneGraph): TextStyleLookup {
+  return styleBindingsDuringSync.get(graph) ?? createStyleBindingLookup(graph)
 }
 
 /** The modes the copy takes in this sync decide what its bindings resolve to. */

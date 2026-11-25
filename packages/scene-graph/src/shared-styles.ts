@@ -6,8 +6,8 @@ import { BLACK } from './constants'
 import { copyEffects, copyFills, copyLayoutGrids } from './copy'
 import type { SceneGraph } from './graph'
 import { newStrokeGeometry } from './node-defaults'
+import { scaledTextStyleLengths } from './scaling/node'
 import { STROKE_LINE_KEYS } from './strokes'
-import { styleLengthsAtScale } from './text/lengths'
 import { styleRunReferences } from './text/references'
 import type {
   CharacterStyleOverride,
@@ -219,7 +219,8 @@ export function sharedStylePatch(
   kind: SharedStyleKind,
   target: SceneNode,
   styleId: string,
-  style: SceneNode | null
+  style: SceneNode | null,
+  occurrenceScale = 1
 ): Partial<SceneNode> {
   const patch: Partial<SceneNode> = { [STYLE_REF_KEYS[kind]]: styleId }
   if (!style) return patch
@@ -229,7 +230,7 @@ export function sharedStylePatch(
   else if (kind === 'grid') patch.layoutGrids = copyLayoutGrids(style.layoutGrids)
   else {
     const fields = structuredClone(pick(style, SHARED_STYLE_FIELDS.text))
-    Object.assign(patch, styleLengthsAtScale(fields, target.componentScale))
+    Object.assign(patch, scaledTextStyleLengths(fields, occurrenceScale))
   }
   return patch
 }

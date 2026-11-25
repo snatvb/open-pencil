@@ -75,6 +75,16 @@ export function sourceWithEffectiveFill(
   }
 }
 
+export function liveOccurrenceScale(
+  graph: SceneGraph,
+  node: Pick<SceneNode, 'id' | 'componentScale'>
+): number {
+  if (node.componentScale === 1) {
+    return 1
+  }
+  return findInstanceAncestor(graph, node.id) ? node.componentScale : 1
+}
+
 /** Nearest INSTANCE at or above `nodeId` — self, parent, grandparent, etc. */
 export function findInstanceAncestor(
   graph: SceneGraph,

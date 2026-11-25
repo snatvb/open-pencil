@@ -36,7 +36,8 @@ import {
   copyProp,
   sourceInTargetCoordinates,
   syncChildren,
-  updateSyncedProps
+  updateSyncedProps,
+  withSyncedStyleBindings
 } from './sync'
 
 export { canCreateInstance, createsComponentCycle, cycleSafeParent } from './cycles'
@@ -52,7 +53,7 @@ export {
   updateNodeOrKept,
   type KeptCopy
 } from './kept-copies'
-export { findInstanceAncestor, instanceMainComponent } from './main-component'
+export { findInstanceAncestor, instanceMainComponent, liveOccurrenceScale } from './main-component'
 export {
   INSTANCE_FOLLOWED_FIELDS,
   INSTANCE_OVERRIDE_FIELDS,
@@ -312,17 +313,19 @@ function syncInstancesOf(
   if (syncing.has(componentId)) return
   syncing.add(componentId)
   try {
-    groupCopyRemovals(graph, (removals) => {
-      for (const instance of instances) {
-        const source = sourceInTargetCoordinates(component, instance.componentScale)
-        const { updates, kept } = ownSyncedProps(graph, instance, source)
-        // An instance that hugs its layers sizes to what it shows, not to the component.
-        keepOwnContentSize(graph, updates, instance, source)
-        updateSyncedProps(graph, instance, updates, kept)
-        const context = createInstanceSyncContext(instance.id, instance.instanceOverrides)
-        syncChildren(graph, component.id, instance.id, instance.instanceOverrides, context)
-        removeLeftoverCopies(graph, context, removals)
-      }
+    withSyncedStyleBindings(graph, () => {
+      groupCopyRemovals(graph, (removals) => {
+        for (const instance of instances) {
+          const source = sourceInTargetCoordinates(component, instance.componentScale)
+          const { updates, kept } = ownSyncedProps(graph, instance, source)
+          // An instance that hugs its layers sizes to what it shows, not to the component.
+          keepOwnContentSize(graph, updates, instance, source)
+          updateSyncedProps(graph, instance, updates, kept)
+          const context = createInstanceSyncContext(instance.id, instance.instanceOverrides)
+          syncChildren(graph, component.id, instance.id, instance.instanceOverrides, context)
+          removeLeftoverCopies(graph, context, removals)
+        }
+      })
     })
   } finally {
     syncing.delete(componentId)

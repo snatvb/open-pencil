@@ -1,8 +1,10 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 
 import { SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
+import { liveOccurrenceScale } from '@open-pencil/scene-graph/instances'
 import { createDefaultSourceMetadata } from '@open-pencil/scene-graph/node-defaults'
 import { rescaleNodeTree } from '@open-pencil/scene-graph/scaling'
+import { sharedStylePatch } from '@open-pencil/scene-graph/shared-styles'
 import {
   collectionsBoundIn,
   createStyleBindingLookup,
@@ -14,7 +16,7 @@ import { expectDefined } from '@open-pencil/test-support/assert'
 
 const px = (value: number) => ({ value, unit: 'PIXELS' }) as const
 
-function styledText() {
+function styledText(holder: 'FRAME' | 'INSTANCE' = 'FRAME') {
   const graph = new SceneGraph()
   const page = graph.getPages()[0].id
   const collection = graph.createCollection('Type scale')
@@ -32,7 +34,7 @@ function styledText() {
     boundVariables: { fontSize: size.id, lineHeight: leading.id },
     source: { ...createDefaultSourceMetadata(), id: 'style:body' }
   })
-  const frame = graph.createNode('FRAME', page, {
+  const frame = graph.createNode(holder, page, {
     variableModes: { [collection.id]: roomy }
   })
   const text = graph.createNode('TEXT', frame.id, {
@@ -194,7 +196,7 @@ describe('text style bindings', () => {
 
 describe('text style bindings in a scaled occurrence', () => {
   test('a text takes the lengths its style binds at the scale of its occurrence', () => {
-    const { graph, text } = styledText()
+    const { graph, text } = styledText('INSTANCE')
     graph.updateNode(text.id, { componentScale: 3 })
 
     reconcileVariableBindings(graph, { subtrees: [text.id] })
@@ -203,7 +205,7 @@ describe('text style bindings in a scaled occurrence', () => {
   })
 
   test('a text binding the size itself keeps its own scaled variable over the style', () => {
-    const { graph, collection, roomy, text } = styledText()
+    const { graph, collection, roomy, text } = styledText('INSTANCE')
     const own = graph.createVariable('Caption size', 'FLOAT', collection.id, 11)
     own.valuesByMode[roomy] = 12
     graph.updateNode(text.id, {
@@ -218,7 +220,7 @@ describe('text style bindings in a scaled occurrence', () => {
   })
 
   test('characters using a style take its bound size at the scale of their occurrence', () => {
-    const { graph, frame } = styledText()
+    const { graph, frame } = styledText('INSTANCE')
     const text = graph.createNode('TEXT', frame.id, {
       text: 'Hello world',
       fontSize: 10,
@@ -308,7 +310,7 @@ describe('text style bindings in a scaled instance', () => {
     expect(graph.getChildren(plain.id)[0].fontSize).toBe(20)
   })
 
-  test("characters binding a size themselves keep the variable's own value", () => {
+  test('characters binding a size themselves take it at the instance scale', () => {
     const { graph, size, component, frame } = scaledInstance()
     graph.createNode('TEXT', component.id, {
       text: 'Hello world',
@@ -323,7 +325,100 @@ describe('text style bindings in a scaled instance', () => {
 
     reconcileVariableBindings(graph, { subtrees: [frame.id] })
 
-    expect(runs().styleRuns[0].style.fontSize).toBe(10)
+    expect(runs().styleRuns[0].style.fontSize).toBe(30)
+  })
+})
+
+describe('text style values in a scaled instance', () => {
+  function plainStyle(graph: SceneGraph) {
+    const page = graph.getPages()[0].id
+    return graph.createNodeWithId('style:plain', 'TEXT', page, {
+      sharedStyleType: 'TEXT',
+      internalOnly: true,
+      fontSize: 7,
+      lineHeight: px(9),
+      letterSpacing: { value: 5, unit: 'PERCENT' },
+      paragraphSpacing: 4,
+      source: { ...createDefaultSourceMetadata(), id: 'style:plain' }
+    })
+  }
+
+  test('a style applied to a layer gives its lengths at the instance scale', () => {
+    const { graph, text } = scaledInstance()
+    const style = plainStyle(graph)
+
+    const patch = sharedStylePatch(
+      'text',
+      text(),
+      'style:plain',
+      style,
+      liveOccurrenceScale(graph, text())
+    )
+
+    expect(patch).toMatchObject({
+      fontSize: 21,
+      lineHeight: px(27),
+      letterSpacing: { value: 5, unit: 'PERCENT' },
+      paragraphSpacing: 12
+    })
+  })
+
+  test('a style applied to a text of a detached instance gives its own lengths', () => {
+    const { graph, text } = scaledInstance()
+    const style = plainStyle(graph)
+    const detached = text()
+    graph.detachInstance(expectDefined(detached.parentId, 'instance'))
+
+    const patch = sharedStylePatch(
+      'text',
+      detached,
+      'style:plain',
+      style,
+      liveOccurrenceScale(graph, detached)
+    )
+
+    expect(patch).toMatchObject({ fontSize: 7, paragraphSpacing: 4 })
+  })
+
+  test('a text of a detached instance takes what its style binds at its own size', () => {
+    const { graph, text, toRoomy } = scaledInstance()
+    const detached = text()
+    graph.detachInstance(expectDefined(detached.parentId, 'instance'))
+
+    toRoomy()
+
+    expect(detached.fontSize).toBe(20)
+  })
+
+  test('characters on a style keep the mode and the scale through a sync', () => {
+    const { graph, component, frame, toRoomy } = scaledInstance()
+    const source = graph.createNode('TEXT', component.id, {
+      text: 'Hello world',
+      fontSize: 8,
+      styleRuns: [{ start: 0, length: 5, style: { textStyleId: 'style:body', fontSize: 10 } }]
+    })
+    graph.syncInstances(component.id)
+    const instance = expectDefined(graph.getChildren(frame.id)[0], 'instance')
+    const runs = (): SceneNode => graph.getChildren(instance.id)[1]
+    toRoomy()
+
+    graph.updateNode(source.id, { text: 'Changed text' })
+    graph.syncInstances(component.id)
+
+    expect(runs().styleRuns[0].style.fontSize).toBe(60)
+  })
+
+  test('a style the component layer takes reaches the synced copy in its mode and scale', () => {
+    const { graph, component, frame, toRoomy } = scaledInstance()
+    const source = graph.createNode('TEXT', component.id, { text: 'Hi', fontSize: 8 })
+    graph.syncInstances(component.id)
+    const instance = expectDefined(graph.getChildren(frame.id)[0], 'instance')
+    toRoomy()
+
+    graph.updateNode(source.id, { textStyleId: 'style:body', fontSize: 10 })
+    graph.syncInstances(component.id)
+
+    expect(graph.getChildren(instance.id)[1].fontSize).toBe(60)
   })
 })
 

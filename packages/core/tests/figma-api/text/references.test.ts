@@ -401,21 +401,28 @@ describe('style ranges with bound lengths', () => {
     expect(text.getRangeLineHeight(0, 5)).toEqual({ value: 54, unit: 'PIXELS' })
   })
 
-  test('a style made after the style index was built reaches the texts using it', () => {
-    const { api, text } = styledText()
-    const { graph, collection, roomy, size } = boundStyle(api)
-    text.textStyleId = api.createTextStyle().id
-    reconcileVariableBindings(graph)
+  test('give a range in a scaled instance a style binding nothing at the instance scale', () => {
+    const { api } = styledText()
+    const graph = graphOf(api)
+    textStyle(api, '1:30', {
+      fontSize: 7,
+      lineHeight: { value: 9, unit: 'PIXELS' },
+      letterSpacing: { value: 5, unit: 'PERCENT' }
+    })
+    const page = graph.getPages()[0]
+    const component = graph.createNode('COMPONENT', page.id, { width: 40, height: 20 })
+    graph.createNode('TEXT', component.id, { text: 'Hello world', fontSize: 14 })
+    const instance = expectDefined(graph.createInstance(component.id, page.id), 'instance')
+    rescaleNodeTree(graph, instance.id, 3)
+    const text = api.getNodeById(graph.getChildren(instance.id)[0].id)
+    if (text?.type !== 'TEXT') {
+      throw new Error('Expected the instance to hold a text')
+    }
 
-    const style = api.createTextStyle()
-    const styleNode = expectDefined(graph.getSharedStyleNode(style.id, 'TEXT'), 'style')
-    graph.bindVariable(styleNode.id, 'fontSize', size.id)
-    const later = api.createText()
-    later.characters = 'World'
-    later.textStyleId = style.id
-    graph.updateNode(later.id, { variableModes: { [collection.id]: roomy } })
-    reconcileVariableBindings(graph, { subtrees: [later.id] })
+    text.setRangeTextStyleId(0, 5, '1:30')
 
-    expect(later.fontSize).toBe(20)
+    expect(text.getRangeFontSize(0, 5)).toBe(21)
+    expect(text.getRangeLineHeight(0, 5)).toEqual({ value: 27, unit: 'PIXELS' })
+    expect(text.getRangeLetterSpacing(0, 5)).toEqual({ value: 5, unit: 'PERCENT' })
   })
 })

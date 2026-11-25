@@ -2,12 +2,15 @@ import { isEqual } from 'es-toolkit/predicate'
 
 import type { SceneGraph } from '../graph'
 import { hasInstanceOverride } from '../instances/overrides'
-import { isStyleLengthField, pixelLength } from '../text/lengths'
-import type { SceneNode, TextLength } from '../types'
+import { liveOccurrenceScale } from '../instances/main-component'
+import { isTextStyleLength } from '../scaling/node'
+import { pixelLength } from '../text/lengths'
+import type { SceneNode, StyleRun, TextLength } from '../types'
 import { NUMERIC_FIELDS } from './fields'
 import {
   createStyleBindingLookup,
   effectiveBoundVariables,
+  effectiveRunBoundVariables,
   type TextStyleLookup,
   type VariableBindings
 } from './style-bindings'
@@ -21,15 +24,15 @@ export function overriddenInInstance(graph: SceneGraph, nodeId: string, field: s
   return !!instance && hasInstanceOverride(instance.instanceOverrides, instance.id, nodeId, field)
 }
 
-export function inheritedBindingScale(node: SceneNode, field: string): number {
-  return isStyleLengthField(field) ? node.componentScale : 1
+function lengthScale(field: string, occurrenceScale: number): number {
+  return isTextStyleLength(field) ? occurrenceScale : 1
 }
 
-function bindingScale(node: SceneNode, field: string): number {
+function bindingScale(node: SceneNode, field: string, occurrenceScale: number): number {
   if (field in node.boundVariables) {
     return node.variableBindingScales[field] ?? 1
   }
-  return inheritedBindingScale(node, field)
+  return lengthScale(field, occurrenceScale)
 }
 
 /** A bound number as the field stores it. */
@@ -55,13 +58,14 @@ export function resolvedNumbers(
   bindings: VariableBindings
 ): Partial<SceneNode> {
   const updates: Partial<SceneNode> = {}
+  const occurrenceScale = liveOccurrenceScale(graph, node)
   for (const [field, variableId] of Object.entries(bindings)) {
     if (!NUMERIC_FIELDS.has(field)) continue
     if ((field === 'width' || field === 'height') && overriddenInInstance(graph, node.id, field))
       continue
     const value = graph.resolveNumberVariableForNode(node.id, variableId)
     if (value === undefined || !Number.isFinite(value)) continue
-    const effective = value * bindingScale(node, field)
+    const effective = value * bindingScale(node, field, occurrenceScale)
     if (!Number.isFinite(effective)) continue
     const next = boundNumberValue(
       field,
@@ -70,4 +74,45 @@ export function resolvedNumbers(
     if (!isEqual(node[field as keyof SceneNode], next)) Object.assign(updates, { [field]: next })
   }
   return updates
+}
+
+/** Fields of a range of characters a bound number gives its value; the rest need fonts loaded. */
+export const NUMERIC_RUN_FIELDS = ['fontSize', 'fontWeight', 'letterSpacing', 'lineHeight'] as const
+
+type RunHolder = Pick<SceneNode, 'id' | 'styleRuns' | 'componentScale'>
+
+/**
+ * The runs a text's character bindings resolve to in its mode, when a bound number differs from
+ * what its characters hold. Bound font families and styles are left as stored, as the text's own.
+ */
+export function resolvedRunBindings(
+  graph: SceneGraph,
+  node: RunHolder,
+  styles: TextStyleLookup = createStyleBindingLookup(graph)
+): Pick<Partial<SceneNode>, 'styleRuns'> {
+  return resolvedRuns(graph, node, (run) => effectiveRunBoundVariables(run, styles))
+}
+
+export function resolvedRuns(
+  graph: SceneGraph,
+  node: RunHolder,
+  runBindings: (run: StyleRun) => VariableBindings
+): Pick<Partial<SceneNode>, 'styleRuns'> {
+  const occurrenceScale = liveOccurrenceScale(graph, node)
+  const styleRuns = node.styleRuns.map((run): StyleRun => {
+    const bound = runBindings(run)
+    let style = run.style
+    for (const field of NUMERIC_RUN_FIELDS) {
+      const variableId = bound[field]
+      if (!variableId) continue
+      const value = graph.resolveNumberVariableForNode(node.id, variableId)
+      if (value === undefined || !Number.isFinite(value)) continue
+      const next = boundNumberValue(field, value * lengthScale(field, occurrenceScale))
+      if (isEqual(style[field], next)) continue
+      style = { ...style, [field]: next }
+    }
+    return style === run.style ? run : { ...run, style }
+  })
+  const changed = styleRuns.some((run, index) => run !== node.styleRuns[index])
+  return changed ? { styleRuns } : {}
 }

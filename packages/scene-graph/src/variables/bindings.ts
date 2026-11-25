@@ -3,8 +3,9 @@ import { omit, pick } from 'es-toolkit/object'
 import { isEmptyObject, isEqual } from 'es-toolkit/predicate'
 
 import type { SceneGraph } from '../graph'
+import { liveOccurrenceScale } from '../instances/main-component'
 import type { Color } from '../primitives'
-import { styleLengthsAtScale } from '../text/lengths'
+import { scaledTextStyleLengths } from '../scaling/node'
 import type { CharacterStyleOverride, Effect, SceneNode, StyleRun } from '../types'
 import {
   effectBindableProperties,
@@ -13,10 +14,11 @@ import {
   type EffectBindingProperty
 } from './fields'
 import {
-  boundNumberValue,
-  inheritedBindingScale,
+  NUMERIC_RUN_FIELDS,
   overriddenInInstance,
-  resolvedNumbers
+  resolvedNumbers,
+  resolvedRunBindings,
+  resolvedRuns
 } from './numeric-bindings'
 import { refreshBoundPaints } from './paints'
 import { collectionsResolving } from './resolution'
@@ -49,7 +51,7 @@ export {
   unbindVariantsForSwap
 } from './variant-bindings'
 export { showBoundVariants } from './variant-reconcile'
-export { boundNumberValue, resolvedNumericBindings } from './numeric-bindings'
+export { boundNumberValue, resolvedNumericBindings, resolvedRunBindings } from './numeric-bindings'
 export {
   EFFECT_BINDING_PROPERTIES,
   effectBindableProperties,
@@ -113,52 +115,6 @@ export function resolvedValueBindings(graph: SceneGraph, node: SceneNode): Parti
   const visible = variableTruthy(resolve('visible'))
   if (visible !== undefined && visible !== node.visible) updates.visible = visible
   return updates
-}
-
-/** Fields of a range of characters a bound number gives its value; the rest need fonts loaded. */
-const NUMERIC_RUN_FIELDS = ['fontSize', 'fontWeight', 'letterSpacing', 'lineHeight'] as const
-
-function runBindingScale(
-  node: SceneNode,
-  run: StyleRun,
-  field: (typeof NUMERIC_RUN_FIELDS)[number]
-): number {
-  return run.style.boundVariables?.[field] === undefined ? inheritedBindingScale(node, field) : 1
-}
-
-/**
- * The runs a text's character bindings resolve to in its mode, when a bound number differs from
- * what its characters hold. Bound font families and styles are left as stored, as the text's own.
- */
-export function resolvedRunBindings(
-  graph: SceneGraph,
-  node: SceneNode,
-  styles: TextStyleLookup = createStyleBindingLookup(graph)
-): Pick<Partial<SceneNode>, 'styleRuns'> {
-  return resolvedRuns(graph, node, (run) => effectiveRunBoundVariables(run, styles))
-}
-
-function resolvedRuns(
-  graph: SceneGraph,
-  node: SceneNode,
-  runBindings: (run: StyleRun) => VariableBindings
-): Pick<Partial<SceneNode>, 'styleRuns'> {
-  const styleRuns = node.styleRuns.map((run): StyleRun => {
-    const bound = runBindings(run)
-    let style = run.style
-    for (const field of NUMERIC_RUN_FIELDS) {
-      const variableId = bound[field]
-      if (!variableId) continue
-      const value = graph.resolveNumberVariableForNode(node.id, variableId)
-      if (value === undefined || !Number.isFinite(value)) continue
-      const next = boundNumberValue(field, value * runBindingScale(node, run, field))
-      if (isEqual(style[field], next)) continue
-      style = { ...style, [field]: next }
-    }
-    return style === run.style ? run : { ...run, style }
-  })
-  const changed = styleRuns.some((run, index) => run !== node.styleRuns[index])
-  return changed ? { styleRuns } : {}
 }
 
 export function resolvedTextStyleBindings(
@@ -387,7 +343,10 @@ function restyledValues(
   if (!style) {
     return undefined
   }
-  const styleValues = styleLengthsAtScale(pick(style, NUMERIC_RUN_FIELDS), node.componentScale)
+  const styleValues = scaledTextStyleLengths(
+    pick(style, NUMERIC_RUN_FIELDS),
+    liveOccurrenceScale(graph, node)
+  )
   return unboundStyleValues(styleValues, current, bound)
 }
 

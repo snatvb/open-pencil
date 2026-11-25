@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 
 import type { SceneNode, SharedStyleKind } from '@open-pencil/scene-graph'
+import { liveOccurrenceScale } from '@open-pencil/scene-graph/instances'
 import {
   getSharedStyles,
   sharedStyleDetachPatch,
@@ -51,7 +52,9 @@ export function useSharedStyleBinding(kind: SharedStyleKind) {
     const styleInfo = styles.value.find((style) => style.id === nextStyleId)
     const styleNode = styleInfo ? (store.graph.getNode(styleInfo.nodeId) ?? null) : null
     if (styleNode?.sharedStyleType !== sharedStyleTypeForKind(kind)) return
-    update(`Apply ${kind} style`, (node) => sharedStylePatch(kind, node, nextStyleId, styleNode))
+    update(`Apply ${kind} style`, (node) =>
+      sharedStylePatch(kind, node, nextStyleId, styleNode, liveOccurrenceScale(store.graph, node))
+    )
   }
 
   function unbind() {

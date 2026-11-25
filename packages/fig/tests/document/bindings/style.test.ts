@@ -109,7 +109,8 @@ function savedText(glyphSize: number, componentScale = 1) {
     boundVariables: { fontSize: bodySize.id }
   })
   body.source.id = 'style:body'
-  const label = graph.createNode('TEXT', page, {
+  const holder = graph.createNode(componentScale === 1 ? 'FRAME' : 'INSTANCE', page, {})
+  const label = graph.createNode('TEXT', holder.id, {
     text: 'A',
     fontSize: 14,
     textStyleId: 'style:body',

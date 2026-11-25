@@ -11,8 +11,9 @@ import {
   type Variable
 } from '@open-pencil/scene-graph'
 import { copyFills } from '@open-pencil/scene-graph/copy'
+import { liveOccurrenceScale } from '@open-pencil/scene-graph/instances'
+import { scaledTextStyleLengths } from '@open-pencil/scene-graph/scaling'
 import { findSharedStyle, SHARED_TEXT_STYLE_FIELDS } from '@open-pencil/scene-graph/shared-styles'
-import { styleLengthsAtScale } from '@open-pencil/scene-graph/text'
 import { boundNumberValue, textStyleBoundVariables } from '@open-pencil/scene-graph/variables'
 
 import { parseFigma } from '#core/figma-api/validation'
@@ -66,10 +67,13 @@ export function sharedStyleRangePatcher(
   }
   const bound = styleBoundVariables(graph, style)
   if (bound.length === 0) {
-    return (node) => ({ ...styleLengthsAtScale(textPatch, node.componentScale) })
+    return (node) => ({ ...scaledTextStyleLengths(textPatch, liveOccurrenceScale(graph, node)) })
   }
   return (node) =>
-    styleLengthsAtScale({ ...textPatch, ...boundValues(graph, node, bound) }, node.componentScale)
+    scaledTextStyleLengths(
+      { ...textPatch, ...boundValues(graph, node, bound) },
+      liveOccurrenceScale(graph, node)
+    )
 }
 
 function isTextBindableField(field: string): field is TextBindableField {
@@ -160,7 +164,12 @@ export function rangeBindingChanges(
 ): { styleRuns: StyleRun[]; paragraphValue: number | null } {
   const bound =
     variable === null ? null : boundVariable(graph, 'setRangeBoundVariable', field, variable)
-  const value = bound ? boundValue(graph, node, field, bound) : {}
+  const value = bound
+    ? scaledTextStyleLengths(
+        boundValue(graph, node, field, bound),
+        liveOccurrenceScale(graph, node)
+      )
+    : {}
   let styleRuns = node.styleRuns
   // Characters bound apart keep their other bindings.
   for (const segment of getStyledTextSegments(node, ['boundVariables'], start, end)) {
