@@ -342,3 +342,39 @@ describe('bound variable ranges', () => {
     )
   })
 })
+
+describe('style ranges with bound lengths', () => {
+  function boundStyle(api: FigmaAPI) {
+    const graph = graphOf(api)
+    const collection = graph.createCollection('Type scale')
+    const roomy = graph.createMode(collection.id, 'Roomy') ?? ''
+    const size = graph.createVariable('Body size', 'FLOAT', collection.id, 14)
+    size.valuesByMode[roomy] = 20
+    const leading = graph.createVariable('Body leading', 'FLOAT', collection.id, 18)
+    leading.valuesByMode[roomy] = 26
+    textStyle(api, '1:20', {
+      fontSize: 14,
+      lineHeight: { value: 18, unit: 'PIXELS' },
+      boundVariables: { fontSize: size.id, lineHeight: leading.id }
+    })
+    return { graph, collection, roomy, size, leading }
+  }
+
+  test('give a range the line height a style binds as a length', () => {
+    const { api, text } = styledText()
+    boundStyle(api)
+
+    text.setRangeTextStyleId(0, 5, '1:20')
+
+    expect(text.getRangeLineHeight(0, 5)).toEqual({ value: 18, unit: 'PIXELS' })
+  })
+
+  test('give a range the line height it binds itself as a length', () => {
+    const { api, text } = styledText()
+    const { leading } = boundStyle(api)
+
+    text.setRangeBoundVariable(0, 5, 'lineHeight', api.variables.getVariableById(leading.id))
+
+    expect(text.getRangeLineHeight(0, 5)).toEqual({ value: 18, unit: 'PIXELS' })
+  })
+})
