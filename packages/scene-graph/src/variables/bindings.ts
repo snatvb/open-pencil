@@ -11,7 +11,12 @@ import {
   isNumericVariableBindingField,
   type EffectBindingProperty
 } from './fields'
-import { boundNumberValue, overriddenInInstance, resolvedNumbers } from './numeric-bindings'
+import {
+  boundNumberValue,
+  inheritedBindingScale,
+  overriddenInInstance,
+  resolvedNumbers
+} from './numeric-bindings'
 import { refreshBoundPaints } from './paints'
 import { collectionsResolving } from './resolution'
 import {
@@ -112,6 +117,14 @@ export function resolvedValueBindings(graph: SceneGraph, node: SceneNode): Parti
 /** Fields of a range of characters a bound number gives its value; the rest need fonts loaded. */
 const NUMERIC_RUN_FIELDS = ['fontSize', 'fontWeight', 'letterSpacing', 'lineHeight'] as const
 
+function runBindingScale(
+  node: SceneNode,
+  run: StyleRun,
+  field: (typeof NUMERIC_RUN_FIELDS)[number]
+): number {
+  return run.style.boundVariables?.[field] === undefined ? inheritedBindingScale(node, field) : 1
+}
+
 /**
  * The runs a text's character bindings resolve to in its mode, when a bound number differs from
  * what its characters hold. Bound font families and styles are left as stored, as the text's own.
@@ -137,7 +150,7 @@ function resolvedRuns(
       if (!variableId) continue
       const value = graph.resolveNumberVariableForNode(node.id, variableId)
       if (value === undefined || !Number.isFinite(value)) continue
-      const next = boundNumberValue(field, value)
+      const next = boundNumberValue(field, value * runBindingScale(node, run, field))
       if (isEqual(style[field], next)) continue
       style = { ...style, [field]: next }
     }

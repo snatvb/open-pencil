@@ -189,3 +189,44 @@ describe('text style bindings', () => {
     expect(text.fontSize).toBe(14)
   })
 })
+
+describe('text style bindings in a scaled occurrence', () => {
+  test('a text takes the lengths its style binds at the scale of its occurrence', () => {
+    const { graph, text } = styledText()
+    graph.updateNode(text.id, { componentScale: 3 })
+
+    reconcileVariableBindings(graph, { subtrees: [text.id] })
+
+    expect([text.fontSize, text.lineHeight]).toEqual([60, px(78)])
+  })
+
+  test('a text binding the size itself keeps its own scaled variable over the style', () => {
+    const { graph, collection, roomy, text } = styledText()
+    const own = graph.createVariable('Caption size', 'FLOAT', collection.id, 11)
+    own.valuesByMode[roomy] = 12
+    graph.updateNode(text.id, {
+      componentScale: 3,
+      boundVariables: { fontSize: own.id },
+      variableBindingScales: { fontSize: 2 }
+    })
+
+    reconcileVariableBindings(graph, { subtrees: [text.id] })
+
+    expect([text.fontSize, text.lineHeight]).toEqual([24, px(78)])
+  })
+
+  test('characters using a style take its bound size at the scale of their occurrence', () => {
+    const { graph, frame } = styledText()
+    const text = graph.createNode('TEXT', frame.id, {
+      text: 'Hello world',
+      fontSize: 10,
+      componentScale: 2,
+      styleRuns: [{ start: 6, length: 5, style: { textStyleId: 'style:body', fontSize: 14 } }]
+    })
+
+    reconcileVariableBindings(graph, { subtrees: [text.id] })
+
+    expect(text.fontSize).toBe(10)
+    expect(text.styleRuns[0].style.fontSize).toBe(40)
+  })
+})
