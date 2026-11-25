@@ -12,6 +12,7 @@ import {
 } from '@open-pencil/scene-graph'
 import { copyFills } from '@open-pencil/scene-graph/copy'
 import { findSharedStyle, SHARED_TEXT_STYLE_FIELDS } from '@open-pencil/scene-graph/shared-styles'
+import { styleLengthsAtScale } from '@open-pencil/scene-graph/text'
 import { boundNumberValue, textStyleBoundVariables } from '@open-pencil/scene-graph/variables'
 
 import { parseFigma } from '#core/figma-api/validation'
@@ -65,9 +66,10 @@ export function sharedStyleRangePatcher(
   }
   const bound = styleBoundVariables(graph, style)
   if (bound.length === 0) {
-    return () => ({ ...textPatch })
+    return (node) => ({ ...styleLengthsAtScale(textPatch, node.componentScale) })
   }
-  return (node) => ({ ...textPatch, ...boundValues(graph, node, bound) })
+  return (node) =>
+    styleLengthsAtScale({ ...textPatch, ...boundValues(graph, node, bound) }, node.componentScale)
 }
 
 function isTextBindableField(field: string): field is TextBindableField {

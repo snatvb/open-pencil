@@ -1,7 +1,8 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 
-import { SceneGraph } from '@open-pencil/scene-graph'
+import { SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
 import { createDefaultSourceMetadata } from '@open-pencil/scene-graph/node-defaults'
+import { rescaleNodeTree } from '@open-pencil/scene-graph/scaling'
 import {
   collectionsBoundIn,
   createTextStyleLookup,
@@ -9,6 +10,7 @@ import {
   layersUsingVariables,
   reconcileVariableBindings
 } from '@open-pencil/scene-graph/variables'
+import { expectDefined } from '@open-pencil/test-support/assert'
 
 const px = (value: number) => ({ value, unit: 'PIXELS' }) as const
 
@@ -228,5 +230,111 @@ describe('text style bindings in a scaled occurrence', () => {
 
     expect(text.fontSize).toBe(10)
     expect(text.styleRuns[0].style.fontSize).toBe(40)
+  })
+})
+
+function scaledInstance() {
+  const graph = new SceneGraph()
+  const page = graph.getPages()[0].id
+  const collection = graph.createCollection('Scale')
+  const roomy = graph.createMode(collection.id, 'Roomy') ?? ''
+  const size = graph.createVariable('Size', 'FLOAT', collection.id, 10)
+  size.valuesByMode[roomy] = 20
+  const tracking = graph.createVariable('Tracking', 'FLOAT', collection.id, 1)
+  tracking.valuesByMode[roomy] = 2
+  const style = graph.createNodeWithId('style:body', 'TEXT', page, {
+    sharedStyleType: 'TEXT',
+    internalOnly: true,
+    fontSize: 10,
+    letterSpacing: px(1),
+    boundVariables: { fontSize: size.id, letterSpacing: tracking.id },
+    source: { ...createDefaultSourceMetadata(), id: 'style:body' }
+  })
+  const component = graph.createNode('COMPONENT', page, { width: 40, height: 20 })
+  const source = graph.createNode('TEXT', component.id, {
+    text: 'Hello world',
+    fontSize: 10,
+    letterSpacing: px(1),
+    textStyleId: 'style:body'
+  })
+  const frame = graph.createNode('FRAME', page, {})
+  const instance = expectDefined(graph.createInstance(component.id, frame.id), 'instance')
+  rescaleNodeTree(graph, instance.id, 3)
+  const text = (): SceneNode => graph.getChildren(instance.id)[0]
+  const toRoomy = () => {
+    graph.updateNode(frame.id, { variableModes: { [collection.id]: roomy } })
+    reconcileVariableBindings(graph, { subtrees: [frame.id] })
+  }
+  return { graph, collection, size, style, component, source, frame, text, toRoomy }
+}
+
+describe('text style bindings in a scaled instance', () => {
+  test('a mode change scales the letter spacing the style binds', () => {
+    const { text, toRoomy } = scaledInstance()
+
+    toRoomy()
+
+    expect([text().fontSize, text().letterSpacing]).toEqual([60, px(6)])
+  })
+
+  test('unbinding a variable from the style keeps the instance scale', () => {
+    const { graph, style, frame, text } = scaledInstance()
+    reconcileVariableBindings(graph, { subtrees: [frame.id] })
+
+    graph.unbindVariable(style.id, 'fontSize')
+    reconcileVariableBindings(graph, { subtrees: [style.id] })
+
+    expect(text().fontSize).toBe(30)
+  })
+
+  test('a component edit synced into a scaled instance keeps the mode and the scale', () => {
+    const { graph, component, source, text, toRoomy } = scaledInstance()
+    toRoomy()
+
+    graph.updateNode(source.id, { text: 'Changed' })
+    graph.syncInstances(component.id)
+
+    expect([text().text, text().fontSize]).toEqual(['Changed', 60])
+  })
+
+  test('a component edit synced into an unscaled instance keeps the mode', () => {
+    const { graph, component, source, frame, toRoomy } = scaledInstance()
+    const plain = expectDefined(graph.createInstance(component.id, frame.id), 'instance')
+    toRoomy()
+
+    graph.updateNode(source.id, { text: 'Changed' })
+    graph.syncInstances(component.id)
+
+    expect(graph.getChildren(plain.id)[0].fontSize).toBe(20)
+  })
+
+  test("characters binding a size themselves keep the variable's own value", () => {
+    const { graph, size, component, frame } = scaledInstance()
+    graph.createNode('TEXT', component.id, {
+      text: 'Hello world',
+      fontSize: 8,
+      styleRuns: [
+        { start: 6, length: 5, style: { fontSize: 10, boundVariables: { fontSize: size.id } } }
+      ]
+    })
+    graph.syncInstances(component.id)
+    const instance = expectDefined(graph.getChildren(frame.id)[0], 'instance')
+    const runs = (): SceneNode => graph.getChildren(instance.id)[1]
+
+    reconcileVariableBindings(graph, { subtrees: [frame.id] })
+
+    expect(runs().styleRuns[0].style.fontSize).toBe(10)
+  })
+})
+
+describe('the style index', () => {
+  test('follows a style whose ID changes after the index was built', () => {
+    const { graph, style } = styledText()
+    expect(graph.getSharedStyleNode('style:body', 'TEXT')).toBe(style)
+
+    graph.updateNode(style.id, { source: { ...style.source, id: 'style:renamed' } })
+
+    expect(graph.getSharedStyleNode('style:renamed', 'TEXT')).toBe(style)
+    expect(graph.getSharedStyleNode('style:body', 'TEXT')).toBeUndefined()
   })
 })

@@ -23,6 +23,7 @@ import {
   copyAppliedBoundPaints,
   keepCopyBoundPaints
 } from '../variables/paints'
+import { createTextStyleLookup, effectiveBoundVariables } from '../variables/style-bindings'
 import { scaleVariableBindingUnits } from '../variables/units'
 import { applyEnclosingAssignments, assignedFieldValues, propertyDrivenFields } from './assignments'
 import { keepOwnContentSize, remeasureChangedText, type SyncedPlacement } from './content-size'
@@ -227,12 +228,13 @@ function resolveBoundNumbersInPlace(
   updates: Partial<SceneNode>,
   kept: (field: string) => boolean
 ): void {
-  const bound = updates.boundVariables ?? target.boundVariables
+  const own = updates.boundVariables ?? target.boundVariables
   // The fields the sync writes, and the ones it binds anew, which keep an equal value only in
   // the component's mode.
   const rebound = updates.boundVariables
-    ? Object.keys(bound).filter((field) => bound[field] !== target.boundVariables[field])
+    ? Object.keys(own).filter((field) => own[field] !== target.boundVariables[field])
     : []
+  const bound = effectiveBoundVariables({ ...target, ...updates }, createTextStyleLookup(graph))
   const synced = uniq([...Object.keys(updates), ...rebound]).filter(
     (field) => isNumericVariableBindingField(field) && bound[field] && !kept(field)
   )

@@ -53,3 +53,42 @@ export function scaledTextLength(length: TextLength, factor: number): TextLength
 export function formatTextLength(length: TextLength): string {
   return length.unit === 'PIXELS' ? `${length.value}px` : `${length.value}%`
 }
+
+const STYLE_LENGTH_FIELDS: ReadonlySet<string> = new Set([
+  'fontSize',
+  'lineHeight',
+  'letterSpacing',
+  'paragraphSpacing',
+  'paragraphIndent',
+  'listSpacing'
+])
+
+/** Whether a text field a style gives is a length, which an occurrence's scale multiplies. */
+export function isStyleLengthField(field: string): boolean {
+  return STYLE_LENGTH_FIELDS.has(field)
+}
+
+function isTextLength(value: unknown): value is TextLength {
+  return typeof value === 'object' && value !== null && 'unit' in value && 'value' in value
+}
+
+function lengthAtScale(value: unknown, scale: number): unknown {
+  if (typeof value === 'number') {
+    return value * scale
+  }
+  return isTextLength(value) ? scaledTextLength(value, scale) : value
+}
+
+/** A text style's values as a layer shows them in an occurrence `scale` times its component. */
+export function styleLengthsAtScale<Values extends object>(values: Values, scale: number): Values {
+  if (scale === 1) {
+    return values
+  }
+  const scaled = { ...values }
+  for (const [field, value] of Object.entries(values)) {
+    if (isStyleLengthField(field)) {
+      Object.assign(scaled, { [field]: lengthAtScale(value, scale) })
+    }
+  }
+  return scaled
+}

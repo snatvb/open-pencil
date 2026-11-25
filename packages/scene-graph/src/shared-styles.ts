@@ -7,6 +7,7 @@ import { copyEffects, copyFills, copyLayoutGrids } from './copy'
 import type { SceneGraph } from './graph'
 import { newStrokeGeometry } from './node-defaults'
 import { STROKE_LINE_KEYS } from './strokes'
+import { styleLengthsAtScale } from './text/lengths'
 import { styleRunReferences } from './text/references'
 import type {
   CharacterStyleOverride,
@@ -226,7 +227,10 @@ export function sharedStylePatch(
   else if (kind === 'stroke') patch.strokes = strokesFromStyle(target, style)
   else if (kind === 'effect') patch.effects = copyEffects(style.effects)
   else if (kind === 'grid') patch.layoutGrids = copyLayoutGrids(style.layoutGrids)
-  else Object.assign(patch, structuredClone(pick(style, SHARED_STYLE_FIELDS.text)))
+  else {
+    const fields = structuredClone(pick(style, SHARED_STYLE_FIELDS.text))
+    Object.assign(patch, styleLengthsAtScale(fields, target.componentScale))
+  }
   return patch
 }
 

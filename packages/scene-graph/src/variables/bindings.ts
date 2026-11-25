@@ -1,9 +1,10 @@
 import { uniq } from 'es-toolkit/array'
-import { omit } from 'es-toolkit/object'
+import { omit, pick } from 'es-toolkit/object'
 import { isEmptyObject, isEqual } from 'es-toolkit/predicate'
 
 import type { SceneGraph } from '../graph'
 import type { Color } from '../primitives'
+import { styleLengthsAtScale } from '../text/lengths'
 import type { CharacterStyleOverride, Effect, SceneNode, StyleRun } from '../types'
 import {
   effectBindableProperties,
@@ -358,14 +359,14 @@ function withTextStyleConsumers(graph: SceneGraph, nodes: SceneNode[]): ScopedLa
 type NumericTextValues = Pick<CharacterStyleOverride, (typeof NUMERIC_RUN_FIELDS)[number]>
 
 function unboundStyleValues(
-  style: SceneNode,
+  styleValues: NumericTextValues,
   current: NumericTextValues,
   bound: VariableBindings
 ): NumericTextValues | undefined {
   let values: NumericTextValues | undefined
   for (const field of NUMERIC_RUN_FIELDS) {
-    if (!(field in bound) && !isEqual(current[field], style[field])) {
-      values = { ...values, [field]: style[field] }
+    if (!(field in bound) && !isEqual(current[field], styleValues[field])) {
+      values = { ...values, [field]: styleValues[field] }
     }
   }
   return values
@@ -373,6 +374,7 @@ function unboundStyleValues(
 
 function restyledValues(
   graph: SceneGraph,
+  node: SceneNode,
   styleId: string | null | undefined,
   current: NumericTextValues,
   bound: VariableBindings,
@@ -382,7 +384,11 @@ function restyledValues(
     return undefined
   }
   const style = graph.getSharedStyleNode(styleId, 'TEXT')
-  return style ? unboundStyleValues(style, current, bound) : undefined
+  if (!style) {
+    return undefined
+  }
+  const styleValues = styleLengthsAtScale(pick(style, NUMERIC_RUN_FIELDS), node.componentScale)
+  return unboundStyleValues(styleValues, current, bound)
 }
 
 function restyledRuns(
@@ -393,7 +399,7 @@ function restyledRuns(
 ): Pick<Partial<SceneNode>, 'styleRuns'> {
   const styleRuns = node.styleRuns.map((run): StyleRun => {
     const bound = effectiveRunBoundVariables(run, styles)
-    const values = restyledValues(graph, run.style.textStyleId, run.style, bound, restyled)
+    const values = restyledValues(graph, node, run.style.textStyleId, run.style, bound, restyled)
     return values ? { ...run, style: { ...run.style, ...values } } : run
   })
   const changed = styleRuns.some((run, index) => run !== node.styleRuns[index])
@@ -411,7 +417,7 @@ function styleOwnValues(
   }
   const bound = effectiveBoundVariables(node, styles)
   return {
-    ...restyledValues(graph, node.textStyleId, node, bound, restyled),
+    ...restyledValues(graph, node, node.textStyleId, node, bound, restyled),
     ...restyledRuns(graph, node, restyled, styles)
   }
 }

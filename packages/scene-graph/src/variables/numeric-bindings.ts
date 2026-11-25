@@ -2,7 +2,7 @@ import { isEqual } from 'es-toolkit/predicate'
 
 import type { SceneGraph } from '../graph'
 import { hasInstanceOverride } from '../instances/overrides'
-import { pixelLength } from '../text/lengths'
+import { isStyleLengthField, pixelLength } from '../text/lengths'
 import type { SceneNode, TextLength } from '../types'
 import { NUMERIC_FIELDS } from './fields'
 import {
@@ -21,10 +21,8 @@ export function overriddenInInstance(graph: SceneGraph, nodeId: string, field: s
   return !!instance && hasInstanceOverride(instance.instanceOverrides, instance.id, nodeId, field)
 }
 
-const SCALED_STYLE_FIELDS: ReadonlySet<string> = new Set(['fontSize', ...TEXT_LENGTH_FIELDS])
-
 export function inheritedBindingScale(node: SceneNode, field: string): number {
-  return SCALED_STYLE_FIELDS.has(field) ? node.componentScale : 1
+  return isStyleLengthField(field) ? node.componentScale : 1
 }
 
 function bindingScale(node: SceneNode, field: string): number {

@@ -186,6 +186,9 @@ const pair = guid(24)
 const doubledInPair = guid(25)
 const tripledPair = guid(26)
 const holder = guid(27)
+const tracking = guid(28)
+const caption = guid(29)
+const ownSized = guid(30)
 
 function alias(variableField: string, variable: GUID) {
   return {
@@ -232,6 +235,13 @@ function scaledRecords(): NodeChange[] {
       variableSetID: { guid: collection },
       variableDataValues: { entries: [floatIn(compact, 12), floatIn(roomy, 24)] }
     },
+    {
+      guid: tracking,
+      type: 'VARIABLE',
+      variableResolvedType: 'FLOAT',
+      variableSetID: { guid: collection },
+      variableDataValues: { entries: [floatIn(compact, 1), floatIn(roomy, 2)] }
+    },
     { guid: page, type: 'CANVAS' },
     {
       guid: style,
@@ -242,7 +252,11 @@ function scaledRecords(): NodeChange[] {
       fontSize: 10,
       lineHeight: { value: 12, units: 'PIXELS' },
       parameterConsumptionMap: {
-        entries: [alias('FONT_SIZE', size), alias('LINE_HEIGHT', leading)]
+        entries: [
+          alias('FONT_SIZE', size),
+          alias('LINE_HEIGHT', leading),
+          alias('LETTER_SPACING', tracking)
+        ]
       }
     },
     {
@@ -306,6 +320,7 @@ test('a text in a scaled instance takes its style bound size and leading at that
 
   expect(tripled.fontSize).toBe(30)
   expect(tripled.lineHeight).toEqual({ value: 36, unit: 'PIXELS' })
+  expect(tripled.letterSpacing).toEqual({ value: 3, unit: 'PIXELS' })
 })
 
 test('a text in an unscaled instance takes its style bound size and leading as they are', () => {
@@ -332,4 +347,31 @@ test('a text in a scaled instance keeps the scale when its mode changes', () => 
 
   expect(tripled.fontSize).toBe(60)
   expect(tripled.lineHeight).toEqual({ value: 72, unit: 'PIXELS' })
+})
+
+test('a loaded text binding its own size keeps it over the size its style binds', () => {
+  const { graph } = materializeDocument([
+    ...records(),
+    {
+      guid: caption,
+      type: 'VARIABLE',
+      variableResolvedType: 'FLOAT',
+      variableSetID: { guid: collection },
+      variableDataValues: { entries: [floatIn(compact, 11), floatIn(roomy, 12)] }
+    },
+    {
+      guid: ownSized,
+      type: 'TEXT',
+      name: 'Caption',
+      parentIndex: { guid: frame, position: '"' },
+      textData: { characters: 'Hi' },
+      fontSize: 11,
+      styleIdForText: { guid: style },
+      parameterConsumptionMap: {
+        entries: [alias('FONT_SIZE', caption)]
+      }
+    }
+  ] as NodeChange[])
+
+  expect(graph.getNode(guidToString(ownSized))?.fontSize).toBe(12)
 })
