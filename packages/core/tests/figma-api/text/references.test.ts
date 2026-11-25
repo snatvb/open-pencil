@@ -4,6 +4,7 @@ import { FigmaAPI } from '@open-pencil/core/figma-api'
 import { SceneGraph } from '@open-pencil/scene-graph'
 import type { Color } from '@open-pencil/scene-graph/primitives'
 import { reconcileVariableBindings } from '@open-pencil/scene-graph/variables'
+import { expectDefined } from '@open-pencil/test-support/assert'
 import { registerTestFont } from '@open-pencil/test-support/fonts/bundled'
 
 import { graphOf } from '#core/figma-api/graph'
@@ -376,5 +377,23 @@ describe('style ranges with bound lengths', () => {
     text.setRangeBoundVariable(0, 5, 'lineHeight', api.variables.getVariableById(leading.id))
 
     expect(text.getRangeLineHeight(0, 5)).toEqual({ value: 18, unit: 'PIXELS' })
+  })
+
+  test('a style made after the style index was built reaches the texts using it', () => {
+    const { api, text } = styledText()
+    const { graph, collection, roomy, size } = boundStyle(api)
+    text.textStyleId = api.createTextStyle().id
+    reconcileVariableBindings(graph)
+
+    const style = api.createTextStyle()
+    const styleNode = expectDefined(graph.getSharedStyleNode(style.id, 'TEXT'), 'style')
+    graph.bindVariable(styleNode.id, 'fontSize', size.id)
+    const later = api.createText()
+    later.characters = 'World'
+    later.textStyleId = style.id
+    graph.updateNode(later.id, { variableModes: { [collection.id]: roomy } })
+    reconcileVariableBindings(graph, { subtrees: [later.id] })
+
+    expect(later.fontSize).toBe(20)
   })
 })
