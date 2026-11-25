@@ -10,6 +10,7 @@ import { colorToCSS, colorToHex, colorToProfileCSS } from '@open-pencil/scene-gr
 import { CSS_BLEND_MODE } from '@open-pencil/scene-graph/css'
 import { blurSigma } from '@open-pencil/scene-graph/geometry'
 import { gradientPoint } from '@open-pencil/scene-graph/gradient'
+import { isDrawnPaint } from '@open-pencil/scene-graph/paints'
 import type { Color } from '@open-pencil/scene-graph/primitives'
 
 import type { DesignStyleDeclaration } from '../types'
@@ -54,7 +55,9 @@ export function strokeColorToCSS(
   stroke: Stroke | undefined,
   profile: ColorProfile
 ): string | undefined {
-  if (!stroke?.visible) return undefined
+  if (!stroke || !isDrawnPaint(stroke)) {
+    return undefined
+  }
   return cssColor({ ...stroke.color, a: stroke.opacity }, profile)
 }
 
