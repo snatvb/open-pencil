@@ -1,7 +1,6 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 
 import { SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
-import { liveOccurrenceScale } from '@open-pencil/scene-graph/instances'
 import { createDefaultSourceMetadata } from '@open-pencil/scene-graph/node-defaults'
 import { rescaleNodeTree } from '@open-pencil/scene-graph/scaling'
 import { sharedStylePatch } from '@open-pencil/scene-graph/shared-styles'
@@ -339,6 +338,7 @@ describe('text style values in a scaled instance', () => {
       lineHeight: px(9),
       letterSpacing: { value: 5, unit: 'PERCENT' },
       paragraphSpacing: 4,
+      listSpacing: 2,
       source: { ...createDefaultSourceMetadata(), id: 'style:plain' }
     })
   }
@@ -347,47 +347,50 @@ describe('text style values in a scaled instance', () => {
     const { graph, text } = scaledInstance()
     const style = plainStyle(graph)
 
-    const patch = sharedStylePatch(
-      'text',
-      text(),
-      'style:plain',
-      style,
-      liveOccurrenceScale(graph, text())
-    )
+    const patch = sharedStylePatch('text', text(), 'style:plain', style)
 
     expect(patch).toMatchObject({
       fontSize: 21,
       lineHeight: px(27),
       letterSpacing: { value: 5, unit: 'PERCENT' },
-      paragraphSpacing: 12
+      paragraphSpacing: 12,
+      listSpacing: 6
     })
   })
 
-  test('a style applied to a text of a detached instance gives its own lengths', () => {
+  test('a style applied to a text of a detached instance keeps the scale its layers recorded', () => {
     const { graph, text } = scaledInstance()
     const style = plainStyle(graph)
     const detached = text()
     graph.detachInstance(expectDefined(detached.parentId, 'instance'))
 
-    const patch = sharedStylePatch(
-      'text',
-      detached,
-      'style:plain',
-      style,
-      liveOccurrenceScale(graph, detached)
-    )
+    const patch = sharedStylePatch('text', detached, 'style:plain', style)
 
-    expect(patch).toMatchObject({ fontSize: 7, paragraphSpacing: 4 })
+    expect(patch).toMatchObject({ fontSize: 21, paragraphSpacing: 12 })
   })
 
-  test('a text of a detached instance takes what its style binds at its own size', () => {
+  test('a text of a detached instance takes what its style binds at the recorded scale', () => {
     const { graph, text, toRoomy } = scaledInstance()
     const detached = text()
     graph.detachInstance(expectDefined(detached.parentId, 'instance'))
 
     toRoomy()
 
-    expect(detached.fontSize).toBe(20)
+    expect(detached.fontSize).toBe(60)
+  })
+
+  test('a styled text of a detached instance stays at its scale through a resolve and a variable edit', () => {
+    const { graph, collection, size, text } = scaledInstance()
+    const detached = text()
+    reconcileVariableBindings(graph)
+    graph.detachInstance(expectDefined(detached.parentId, 'instance'))
+
+    reconcileVariableBindings(graph)
+    const resolved = detached.fontSize
+    size.valuesByMode[collection.modes[0].modeId] = 11
+    reconcileVariableBindings(graph, { variables: [size.id] })
+
+    expect([resolved, detached.fontSize]).toEqual([30, 33])
   })
 
   test('characters on a style keep the mode and the scale through a sync', () => {
@@ -419,6 +422,33 @@ describe('text style values in a scaled instance', () => {
     graph.syncInstances(component.id)
 
     expect(graph.getChildren(instance.id)[1].fontSize).toBe(60)
+  })
+})
+
+describe('characters synced into a nested scaled instance', () => {
+  test('take the scale the sync gives the copy', () => {
+    const { graph, collection } = styledText()
+    const page = graph.getPages()[0].id
+    const inner = graph.createNode('COMPONENT', page, { width: 40, height: 20 })
+    graph.createNode('TEXT', inner.id, {
+      text: 'Hello world',
+      fontSize: 14,
+      styleRuns: [{ start: 0, length: 5, style: { textStyleId: 'style:body', fontSize: 14 } }]
+    })
+    const outer = graph.createNode('COMPONENT', page, { width: 80, height: 40 })
+    const nested = expectDefined(graph.createInstance(inner.id, outer.id), 'nested')
+    rescaleNodeTree(graph, nested.id, 2)
+    const frame = graph.createNode('FRAME', page, {
+      variableModes: { [collection.id]: collection.modes[0].modeId }
+    })
+    const placed = expectDefined(graph.createInstance(outer.id, frame.id), 'placed')
+    rescaleNodeTree(graph, placed.id, 3)
+    const text = (): SceneNode => graph.getChildren(graph.getChildren(placed.id)[0].id)[0]
+
+    rescaleNodeTree(graph, nested.id, 0.5)
+    graph.syncInstances(outer.id)
+
+    expect([text().componentScale, text().styleRuns[0].style.fontSize]).toEqual([3, 42])
   })
 })
 

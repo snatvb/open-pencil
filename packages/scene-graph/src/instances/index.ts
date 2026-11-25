@@ -53,7 +53,7 @@ export {
   updateNodeOrKept,
   type KeptCopy
 } from './kept-copies'
-export { findInstanceAncestor, instanceMainComponent, liveOccurrenceScale } from './main-component'
+export { findInstanceAncestor, instanceMainComponent } from './main-component'
 export {
   INSTANCE_FOLLOWED_FIELDS,
   INSTANCE_OVERRIDE_FIELDS,

@@ -401,6 +401,24 @@ describe('style ranges with bound lengths', () => {
     expect(text.getRangeLineHeight(0, 5)).toEqual({ value: 54, unit: 'PIXELS' })
   })
 
+  test('give a range in a scaled instance the size it binds itself at the instance scale', () => {
+    const { api } = styledText()
+    const { graph, size } = boundStyle(api)
+    const page = graph.getPages()[0]
+    const component = graph.createNode('COMPONENT', page.id, { width: 40, height: 20 })
+    graph.createNode('TEXT', component.id, { text: 'Hello world', fontSize: 14 })
+    const instance = expectDefined(graph.createInstance(component.id, page.id), 'instance')
+    rescaleNodeTree(graph, instance.id, 3)
+    const text = api.getNodeById(graph.getChildren(instance.id)[0].id)
+    if (text?.type !== 'TEXT') {
+      throw new Error('Expected the instance to hold a text')
+    }
+
+    text.setRangeBoundVariable(0, 5, 'fontSize', api.variables.getVariableById(size.id))
+
+    expect(text.getRangeFontSize(0, 5)).toBe(42)
+  })
+
   test('give a range in a scaled instance a style binding nothing at the instance scale', () => {
     const { api } = styledText()
     const graph = graphOf(api)

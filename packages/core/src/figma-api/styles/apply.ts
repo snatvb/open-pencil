@@ -7,7 +7,7 @@ import type {
   SharedStyleKind,
   SharedStyleType
 } from '@open-pencil/scene-graph'
-import { findInstanceAncestor, liveOccurrenceScale } from '@open-pencil/scene-graph/instances'
+import { findInstanceAncestor } from '@open-pencil/scene-graph/instances'
 import {
   findSharedStyle,
   sharedStyleDetachPatch,
@@ -65,7 +65,7 @@ export function styleChanges(
   }
   const style = findSharedStyle(graph, styleId, sharedStyleTypeForKind(kind))
   if (!style) return null
-  const patch = sharedStylePatch(kind, node, styleId, style, liveOccurrenceScale(graph, node))
+  const patch = sharedStylePatch(kind, node, styleId, style)
   return wholeText ? layerTextStyleChanges(node, patch) : patch
 }
 
@@ -206,7 +206,7 @@ export function restyleUsers(graph: SceneGraph, style: SceneNode, update: LayerU
     style,
     update,
     // A layer's own fields only: its ranges keep the values they set themselves.
-    (node, kind) => sharedStylePatch(kind, node, id, style, liveOccurrenceScale(graph, node)),
+    (node, kind) => sharedStylePatch(kind, node, id, style),
     rangePatch,
     (node, kind) => bindStyleVariables(graph, node, kind, id)
   )

@@ -219,8 +219,7 @@ export function sharedStylePatch(
   kind: SharedStyleKind,
   target: SceneNode,
   styleId: string,
-  style: SceneNode | null,
-  occurrenceScale = 1
+  style: SceneNode | null
 ): Partial<SceneNode> {
   const patch: Partial<SceneNode> = { [STYLE_REF_KEYS[kind]]: styleId }
   if (!style) return patch
@@ -230,7 +229,7 @@ export function sharedStylePatch(
   else if (kind === 'grid') patch.layoutGrids = copyLayoutGrids(style.layoutGrids)
   else {
     const fields = structuredClone(pick(style, SHARED_STYLE_FIELDS.text))
-    Object.assign(patch, scaledTextStyleLengths(fields, occurrenceScale))
+    Object.assign(patch, scaledTextStyleLengths(fields, target.componentScale))
   }
   return patch
 }

@@ -247,7 +247,7 @@ function resolveBoundNumbersInPlace(
   const synced = uniq([...Object.keys(updates), ...rebound]).filter(
     (field) => isNumericVariableBindingField(field) && bound[field] && !kept(field)
   )
-  resolveSyncedRunsInPlace(graph, target, updates, kept, styles)
+  resolveSyncedRunsInPlace(graph, target, updates, styles)
   if (synced.length === 0) return
   applySyncedModes(graph, target, updates)
   const resolved = resolvedNumericBindings(graph, { ...target, ...updates }, styles)
@@ -258,10 +258,9 @@ function resolveSyncedRunsInPlace(
   graph: SceneGraph,
   target: SceneNode,
   updates: Partial<SceneNode>,
-  kept: (field: string) => boolean,
   styles: TextStyleLookup
 ): void {
-  if (!updates.styleRuns || kept('styleRuns')) {
+  if (!updates.styleRuns) {
     return
   }
   applySyncedModes(graph, target, updates)

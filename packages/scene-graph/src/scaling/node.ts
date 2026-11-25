@@ -89,9 +89,6 @@ export function scaledTextStyleLengths<Values extends object>(
   values: Values,
   scale: number
 ): Values {
-  if (scale === 1) {
-    return values
-  }
   const scaled = { ...values }
   for (const [field, value] of Object.entries(values)) {
     if (isTextStyleLength(field)) {

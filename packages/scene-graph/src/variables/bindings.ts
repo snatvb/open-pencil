@@ -3,7 +3,6 @@ import { omit, pick } from 'es-toolkit/object'
 import { isEmptyObject, isEqual } from 'es-toolkit/predicate'
 
 import type { SceneGraph } from '../graph'
-import { liveOccurrenceScale } from '../instances/main-component'
 import type { Color } from '../primitives'
 import { scaledTextStyleLengths } from '../scaling/node'
 import type { CharacterStyleOverride, Effect, SceneNode, StyleRun } from '../types'
@@ -343,10 +342,7 @@ function restyledValues(
   if (!style) {
     return undefined
   }
-  const styleValues = scaledTextStyleLengths(
-    pick(style, NUMERIC_RUN_FIELDS),
-    liveOccurrenceScale(graph, node)
-  )
+  const styleValues = scaledTextStyleLengths(pick(style, NUMERIC_RUN_FIELDS), node.componentScale)
   return unboundStyleValues(styleValues, current, bound)
 }
 

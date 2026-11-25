@@ -2,7 +2,6 @@ import { isEqual } from 'es-toolkit/predicate'
 
 import type { SceneGraph } from '../graph'
 import { hasInstanceOverride } from '../instances/overrides'
-import { liveOccurrenceScale } from '../instances/main-component'
 import { isTextStyleLength } from '../scaling/node'
 import { pixelLength } from '../text/lengths'
 import type { SceneNode, StyleRun, TextLength } from '../types'
@@ -24,15 +23,15 @@ export function overriddenInInstance(graph: SceneGraph, nodeId: string, field: s
   return !!instance && hasInstanceOverride(instance.instanceOverrides, instance.id, nodeId, field)
 }
 
-function lengthScale(field: string, occurrenceScale: number): number {
-  return isTextStyleLength(field) ? occurrenceScale : 1
+function lengthScale(field: string, componentScale: number): number {
+  return isTextStyleLength(field) ? componentScale : 1
 }
 
-function bindingScale(node: SceneNode, field: string, occurrenceScale: number): number {
+function bindingScale(node: SceneNode, field: string): number {
   if (field in node.boundVariables) {
     return node.variableBindingScales[field] ?? 1
   }
-  return lengthScale(field, occurrenceScale)
+  return lengthScale(field, node.componentScale)
 }
 
 /** A bound number as the field stores it. */
@@ -58,14 +57,13 @@ export function resolvedNumbers(
   bindings: VariableBindings
 ): Partial<SceneNode> {
   const updates: Partial<SceneNode> = {}
-  const occurrenceScale = liveOccurrenceScale(graph, node)
   for (const [field, variableId] of Object.entries(bindings)) {
     if (!NUMERIC_FIELDS.has(field)) continue
     if ((field === 'width' || field === 'height') && overriddenInInstance(graph, node.id, field))
       continue
     const value = graph.resolveNumberVariableForNode(node.id, variableId)
     if (value === undefined || !Number.isFinite(value)) continue
-    const effective = value * bindingScale(node, field, occurrenceScale)
+    const effective = value * bindingScale(node, field)
     if (!Number.isFinite(effective)) continue
     const next = boundNumberValue(
       field,
@@ -98,7 +96,6 @@ export function resolvedRuns(
   node: RunHolder,
   runBindings: (run: StyleRun) => VariableBindings
 ): Pick<Partial<SceneNode>, 'styleRuns'> {
-  const occurrenceScale = liveOccurrenceScale(graph, node)
   const styleRuns = node.styleRuns.map((run): StyleRun => {
     const bound = runBindings(run)
     let style = run.style
@@ -107,7 +104,7 @@ export function resolvedRuns(
       if (!variableId) continue
       const value = graph.resolveNumberVariableForNode(node.id, variableId)
       if (value === undefined || !Number.isFinite(value)) continue
-      const next = boundNumberValue(field, value * lengthScale(field, occurrenceScale))
+      const next = boundNumberValue(field, value * lengthScale(field, node.componentScale))
       if (isEqual(style[field], next)) continue
       style = { ...style, [field]: next }
     }

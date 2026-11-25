@@ -11,7 +11,6 @@ import {
   type Variable
 } from '@open-pencil/scene-graph'
 import { copyFills } from '@open-pencil/scene-graph/copy'
-import { liveOccurrenceScale } from '@open-pencil/scene-graph/instances'
 import { scaledTextStyleLengths } from '@open-pencil/scene-graph/scaling'
 import { findSharedStyle, SHARED_TEXT_STYLE_FIELDS } from '@open-pencil/scene-graph/shared-styles'
 import { boundNumberValue, textStyleBoundVariables } from '@open-pencil/scene-graph/variables'
@@ -67,12 +66,12 @@ export function sharedStyleRangePatcher(
   }
   const bound = styleBoundVariables(graph, style)
   if (bound.length === 0) {
-    return (node) => ({ ...scaledTextStyleLengths(textPatch, liveOccurrenceScale(graph, node)) })
+    return (node) => ({ ...scaledTextStyleLengths(textPatch, node.componentScale) })
   }
   return (node) =>
     scaledTextStyleLengths(
       { ...textPatch, ...boundValues(graph, node, bound) },
-      liveOccurrenceScale(graph, node)
+      node.componentScale
     )
 }
 
@@ -165,10 +164,7 @@ export function rangeBindingChanges(
   const bound =
     variable === null ? null : boundVariable(graph, 'setRangeBoundVariable', field, variable)
   const value = bound
-    ? scaledTextStyleLengths(
-        boundValue(graph, node, field, bound),
-        liveOccurrenceScale(graph, node)
-      )
+    ? scaledTextStyleLengths(boundValue(graph, node, field, bound), node.componentScale)
     : {}
   let styleRuns = node.styleRuns
   // Characters bound apart keep their other bindings.
