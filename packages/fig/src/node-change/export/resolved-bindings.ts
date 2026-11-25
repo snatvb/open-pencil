@@ -28,16 +28,16 @@ export function nodeWithResolvedBindings(
   return Object.keys(changes).length > 0 ? { ...node, ...changes } : node
 }
 
-/**
- * `nodeWithResolvedBindings` once per node for one export. Bindings do not change while a document
- * is written, and an instance's overrides claim the same layers once per overridden field.
- */
 interface ExportedNodes {
   graph: SceneGraph
   resolvedNodes?: WeakMap<SceneNode, SceneNode>
   textStyles?: TextStyleLookup
 }
 
+/**
+ * `nodeWithResolvedBindings` once per node for one export. Bindings do not change while a document
+ * is written, and an instance's overrides claim the same layers once per overridden field.
+ */
 export function exportedNode(context: ExportedNodes, node: SceneNode): SceneNode {
   context.resolvedNodes ??= new WeakMap()
   let resolved = context.resolvedNodes.get(node)

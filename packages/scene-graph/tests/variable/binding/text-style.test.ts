@@ -425,6 +425,25 @@ describe('text style values in a scaled instance', () => {
   })
 })
 
+describe('a text duplicated out of a scaled instance', () => {
+  test('takes what its style binds at the scale its own binding keeps', () => {
+    const { graph, collection, size, component, frame, text } = scaledInstance()
+    const own = graph.createNode('TEXT', component.id, { text: 'Own', fontSize: 10 })
+    graph.bindVariable(own.id, 'fontSize', size.id)
+    graph.syncInstances(component.id)
+    const instance = expectDefined(graph.getChildren(frame.id)[0], 'instance')
+    reconcileVariableBindings(graph)
+    const page = graph.getPages()[0].id
+    const styled = expectDefined(graph.cloneTree(text().id, page), 'styled copy')
+    const bound = expectDefined(graph.cloneTree(graph.getChildren(instance.id)[1].id, page), 'copy')
+
+    size.valuesByMode[collection.modes[0].modeId] = 11
+    reconcileVariableBindings(graph, { variables: [size.id] })
+
+    expect([styled.fontSize, bound.fontSize]).toEqual([33, 33])
+  })
+})
+
 describe('characters synced into a nested scaled instance', () => {
   test('take the scale the sync gives the copy', () => {
     const { graph, collection } = styledText()

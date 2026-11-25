@@ -123,7 +123,7 @@ function layoutModeClaim(
 }
 
 /** Layout distances are placed-space lengths; claims are written in the owner's pre-scale space. */
-function layoutDistanceClaim(
+function componentLengthClaim(
   raw: string,
   value: unknown,
   instance: SceneNode
@@ -195,7 +195,9 @@ function rawClaim(
       return claimed === undefined ? undefined : { [raw]: claimed }
     }
     case 'scalar':
-      return { [raw]: definition.length ? nodeFields()[raw] : target[field] }
+      return definition.length
+        ? componentLengthClaim(raw, target[field], instance)
+        : { [raw]: target[field] }
     case 'visible':
       return { visible: target.visible }
     case 'text': {
@@ -216,7 +218,7 @@ function rawClaim(
     case 'size':
       return { size: unscaledRootSize(instance, target) }
     case 'layout-distance':
-      return layoutDistanceClaim(raw, target[field], instance)
+      return componentLengthClaim(raw, target[field], instance)
     case 'layout-mode':
       return layoutModeClaim(raw, target[field], context.graph, target)
     case 'variable-modes': {
