@@ -41,9 +41,15 @@ function canMakeTextSourcePath(node: SceneNode): boolean {
   return getTextOutlineSupport(node).supported
 }
 
+function hasBooleanSourceGeometry(node: SceneNode): boolean {
+  if (node.type === 'TEXT') {
+    return canMakeTextSourcePath(node)
+  }
+  return node.type !== 'SECTION' && node.type !== 'COMPONENT_SET'
+}
+
 export function canMakeBooleanSourcePath(node: SceneNode): boolean {
-  if (node.type === 'TEXT') return canMakeTextSourcePath(node) && !hasVisibleImageFill(node)
-  return node.type !== 'SECTION' && node.type !== 'COMPONENT_SET' && !hasVisibleImageFill(node)
+  return hasBooleanSourceGeometry(node) && !hasVisibleImageFill(node)
 }
 
 export function canMakeBooleanSourceNode(node: SceneNode, graph: SceneGraph): boolean {
@@ -327,7 +333,9 @@ export function makeBooleanSourcePath(
   graph: SceneGraph
 ): Path | null {
   if (node.type === 'BOOLEAN_OPERATION') return makeBooleanOperationPath(r, node, graph)
-  if (!canMakeBooleanSourcePath(node)) return null
+  if (!hasBooleanSourceGeometry(node)) {
+    return null
+  }
   if (canContainFlattenableChildren(node)) return containerSourcePath(r, node, graph)
   if (node.type === 'LINE') return baseShapePath(r, node)
 
@@ -363,7 +371,9 @@ export function flattenSourcePath(
   graph: SceneGraph
 ): Path | null {
   if (node.type === 'BOOLEAN_OPERATION') return makeBooleanOperationPath(r, node, graph)
-  if (!canMakeBooleanSourcePath(node)) return null
+  if (!hasBooleanSourceGeometry(node)) {
+    return null
+  }
   if (node.type === 'LINE') return makeLineSegmentPath(r, node)
   return strokeSourcePath(r, node)
 }

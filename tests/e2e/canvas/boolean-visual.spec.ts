@@ -67,6 +67,59 @@ test('boolean operations', async () => {
   await expectCanvas('boolean-operations')
 })
 
+test('an operand with an image fill still shapes the boolean', async () => {
+  await editor.page.evaluate(() => {
+    const store = window.openPencil?.getStore?.()
+    if (!store) {
+      throw new Error('OpenPencil store not initialized')
+    }
+    const pageId = store.state.currentPageId
+    const red = {
+      type: 'SOLID' as const,
+      color: { r: 0.9, g: 0.2, b: 0.2, a: 1 },
+      visible: true,
+      opacity: 1
+    }
+    const ring = store.graph.createNode('BOOLEAN_OPERATION', pageId, {
+      name: 'Image operand ring',
+      x: 120,
+      y: 80,
+      width: 160,
+      height: 160,
+      booleanOperation: 'SUBTRACT',
+      fills: [red]
+    })
+    store.graph.createNode('ELLIPSE', ring.id, {
+      name: 'Image outer',
+      width: 160,
+      height: 160,
+      fills: [
+        red,
+        {
+          type: 'IMAGE',
+          imageHash: 'missing',
+          imageScaleMode: 'FILL',
+          color: { r: 0, g: 0, b: 0, a: 0 },
+          visible: true,
+          opacity: 1
+        }
+      ]
+    })
+    store.graph.createNode('ELLIPSE', ring.id, {
+      name: 'Inner',
+      x: 20,
+      y: 20,
+      width: 120,
+      height: 120,
+      fills: [red]
+    })
+    store.clearSelection()
+    store.requestRender()
+  })
+  await editor.canvas.waitForRender()
+  await expectCanvas('boolean-image-operand')
+})
+
 test('boolean operation strokes keep their alignment and corner radius', async () => {
   await strokeAlignment.show()
   await editor.canvas.waitForRender()
