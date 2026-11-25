@@ -6,7 +6,7 @@ import { isStyleLengthField, pixelLength } from '../text/lengths'
 import type { SceneNode, TextLength } from '../types'
 import { NUMERIC_FIELDS } from './fields'
 import {
-  createTextStyleLookup,
+  createStyleBindingLookup,
   effectiveBoundVariables,
   type TextStyleLookup,
   type VariableBindings
@@ -44,7 +44,7 @@ export function boundNumberValue(field: string, value: number): number | TextLen
 export function resolvedNumericBindings(
   graph: SceneGraph,
   node: SceneNode,
-  styles: TextStyleLookup = createTextStyleLookup(graph)
+  styles: TextStyleLookup = createStyleBindingLookup(graph)
 ): Partial<SceneNode> {
   return resolvedNumbers(graph, node, effectiveBoundVariables(node, styles))
 }

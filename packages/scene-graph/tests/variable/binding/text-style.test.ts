@@ -5,7 +5,7 @@ import { createDefaultSourceMetadata } from '@open-pencil/scene-graph/node-defau
 import { rescaleNodeTree } from '@open-pencil/scene-graph/scaling'
 import {
   collectionsBoundIn,
-  createTextStyleLookup,
+  createStyleBindingLookup,
   effectiveBoundVariables,
   layersUsingVariables,
   reconcileVariableBindings
@@ -63,7 +63,7 @@ describe('text style bindings', () => {
     reconcileVariableBindings(graph, { subtrees: [text.id] })
 
     expect([text.fontSize, text.lineHeight]).toEqual([12, px(26)])
-    expect(effectiveBoundVariables(text, createTextStyleLookup(graph)).fontSize).toBe(own.id)
+    expect(effectiveBoundVariables(text, createStyleBindingLookup(graph)).fontSize).toBe(own.id)
   })
 
   test('resolving what a style binds keeps the text on the style without recording an edit', () => {

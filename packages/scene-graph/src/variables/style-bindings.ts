@@ -23,7 +23,7 @@ export function textStyleBoundVariables(style: SceneNode): VariableBindings {
   return bound ?? NO_BINDINGS
 }
 
-export function createTextStyleLookup(graph: SceneGraph): TextStyleLookup {
+export function createStyleBindingLookup(graph: SceneGraph): TextStyleLookup {
   const boundByStyle = new Map<string, VariableBindings>()
   return (styleId) => {
     let bound = boundByStyle.get(styleId)

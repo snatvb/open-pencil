@@ -1,6 +1,6 @@
 import type { SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 import {
-  createTextStyleLookup,
+  createStyleBindingLookup,
   resolvedEffectBindings,
   resolvedNumericBindings,
   resolvedRunBindings,
@@ -43,7 +43,7 @@ export function exportedNode(
   context.resolvedNodes ??= new WeakMap()
   let resolved = context.resolvedNodes.get(node)
   if (!resolved) {
-    context.textStyles ??= createTextStyleLookup(context.graph)
+    context.textStyles ??= createStyleBindingLookup(context.graph)
     resolved = nodeWithResolvedBindings(context.graph, node, context.textStyles)
     context.resolvedNodes.set(node, resolved)
   }

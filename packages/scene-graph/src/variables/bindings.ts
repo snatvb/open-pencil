@@ -21,7 +21,7 @@ import {
 import { refreshBoundPaints } from './paints'
 import { collectionsResolving } from './resolution'
 import {
-  createTextStyleLookup,
+  createStyleBindingLookup,
   effectiveBoundVariables,
   effectiveRunBoundVariables,
   inheritedRunStyleBindings,
@@ -133,7 +133,7 @@ function runBindingScale(
 export function resolvedRunBindings(
   graph: SceneGraph,
   node: SceneNode,
-  styles: TextStyleLookup = createTextStyleLookup(graph)
+  styles: TextStyleLookup = createStyleBindingLookup(graph)
 ): Pick<Partial<SceneNode>, 'styleRuns'> {
   return resolvedRuns(graph, node, (run) => effectiveRunBoundVariables(run, styles))
 }
@@ -274,7 +274,7 @@ export function variablesResolvingThrough(graph: SceneGraph, ids: Iterable<strin
  * those the bound variables alias, so a mode set on the subtrees can change what they show.
  */
 export function collectionsBoundIn(graph: SceneGraph, roots: Iterable<string>): Set<string> {
-  const styles = createTextStyleLookup(graph)
+  const styles = createStyleBindingLookup(graph)
   return collectionsResolving(
     graph,
     subtreeNodes(graph, roots).flatMap((node) => boundVariableIds(node, styles))
@@ -288,7 +288,7 @@ export function collectionsBoundIn(graph: SceneGraph, roots: Iterable<string>): 
 export function layersUsingVariables(
   graph: SceneGraph,
   ids: Iterable<string>,
-  styles: TextStyleLookup = createTextStyleLookup(graph)
+  styles: TextStyleLookup = createStyleBindingLookup(graph)
 ): SceneNode[] {
   const variables = variablesResolvingThrough(graph, ids)
   return [...graph.getAllNodes()].filter((node) =>
@@ -312,7 +312,7 @@ export function layersResolvingCollections(
     graph,
     inCollections.map((variable) => variable.id)
   )
-  const styles = createTextStyleLookup(graph)
+  const styles = createStyleBindingLookup(graph)
   return subtreeNodes(graph, roots).filter((node) =>
     boundVariableIds(node, styles).some((id) => variables.has(id))
   )
@@ -518,7 +518,7 @@ export function reconcileVariableBindingUpdates(
 ): Map<string, Partial<SceneNode>> {
   const updates = new Map<string, Partial<SceneNode>>()
   const changed: string[] = []
-  const styles = createTextStyleLookup(graph)
+  const styles = createStyleBindingLookup(graph)
   const { nodes, restyled } = scopedLayers(graph, scope, styles)
   walkBoundVariants(
     graph,

@@ -23,7 +23,7 @@ import {
   copyAppliedBoundPaints,
   keepCopyBoundPaints
 } from '../variables/paints'
-import { createTextStyleLookup, effectiveBoundVariables } from '../variables/style-bindings'
+import { createStyleBindingLookup, effectiveBoundVariables } from '../variables/style-bindings'
 import { scaleVariableBindingUnits } from '../variables/units'
 import { applyEnclosingAssignments, assignedFieldValues, propertyDrivenFields } from './assignments'
 import { keepOwnContentSize, remeasureChangedText, type SyncedPlacement } from './content-size'
@@ -234,7 +234,7 @@ function resolveBoundNumbersInPlace(
   const rebound = updates.boundVariables
     ? Object.keys(own).filter((field) => own[field] !== target.boundVariables[field])
     : []
-  const bound = effectiveBoundVariables({ ...target, ...updates }, createTextStyleLookup(graph))
+  const bound = effectiveBoundVariables({ ...target, ...updates }, createStyleBindingLookup(graph))
   const synced = uniq([...Object.keys(updates), ...rebound]).filter(
     (field) => isNumericVariableBindingField(field) && bound[field] && !kept(field)
   )
