@@ -3,6 +3,7 @@ import type { SceneNode, SceneGraph, Fill, Stroke } from '@open-pencil/scene-gra
 import { invertGradientTransform } from '@open-pencil/scene-graph/gradient'
 import { drawnImageHash, imageFillMatrix } from '@open-pencil/scene-graph/images'
 import Matrix from '@open-pencil/scene-graph/matrix'
+import { isFigmaShaderPaint } from '@open-pencil/scene-graph/paints'
 import { fillGeometryMatchesRegions, hasRegionFills } from '@open-pencil/scene-graph/vector-network'
 
 import { setPaintBlendMode } from '#core/canvas/blend/modes'
@@ -118,7 +119,9 @@ export function applyFill(
     return true
   }
 
-  if (fill.type === 'PATTERN' || fill.type === 'NOISE' || fill.type === 'CUSTOM') {
+  if (isFigmaShaderPaint(fill)) return false
+
+  if (fill.type === 'PATTERN' || fill.type === 'NOISE') {
     const c = drawnColor(fill.color, graph)
     r.fillPaint.setColorComponents(c.r, c.g, c.b, c.a)
     return true
