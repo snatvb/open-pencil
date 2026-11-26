@@ -3,6 +3,7 @@ import { clearPatternTiles } from '#core/canvas/patterns/tiles'
 import type { SkiaRenderer } from '#core/canvas/renderer/skia'
 import { fontManager } from '#core/text/font/manager'
 
+import { releaseDocumentSurface } from './document-surface'
 import { releaseCompiledShaders } from './shaders'
 import { clearNodePictures } from './state'
 
@@ -39,6 +40,7 @@ export function destroyRenderer(r: SkiaRenderer): void {
   r.images.previews.destroy()
   r.images.cache.clear()
   releaseLiveImages(r)
+  releaseDocumentSurface(r)
   disposePathCaches(r)
   r.renderedBounds.dispose()
   r.fillPaint.delete()

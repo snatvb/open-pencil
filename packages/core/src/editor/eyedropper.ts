@@ -2,10 +2,12 @@ import { isEqual } from 'es-toolkit'
 
 import type { CanvasKit } from '@open-pencil/canvaskit'
 import type { Fill, SceneGraph, SceneNode, Stroke } from '@open-pencil/scene-graph'
+import { toExtendedSRGB } from '@open-pencil/scene-graph/color'
 import { newStrokeGeometry } from '@open-pencil/scene-graph/node-defaults'
 import type { Color } from '@open-pencil/scene-graph/primitives'
 import type { UndoManager } from '@open-pencil/scene-graph/undo'
 
+import { documentImageInfo } from '#core/canvas/renderer/colors'
 import type { SkiaRenderer } from '#core/canvas/renderer/skia'
 import { getPageColor } from '#core/figma-api/page-backgrounds'
 
@@ -16,7 +18,8 @@ type SampleRenderer = Pick<
   SkiaRenderer,
   | 'worldViewport'
   | 'viewportImageRendering'
-  | 'presentationColorSpace'
+  | 'documentColorSpace'
+  | 'useDocumentColorSpace'
   | 'renderNode'
   | 'images'
   | 'dpr'
@@ -35,8 +38,8 @@ export interface ScenePixels {
  *
  * Renders only what intersects the square into a raster surface, so selection chrome, rulers and
  * the screen's colour profile never leak into the result, unlike `window.EyeDropper`, which
- * samples the screen. Components come back in the document's own colour space: the renderer
- * presents in that space and the surface is not converted.
+ * samples the screen. Components come back in the document's own colour space: the surface is in
+ * that space, as the canvas draws the document, and is read in it.
  */
 export function sampleScenePixels(
   ck: CanvasKit,
@@ -52,15 +55,20 @@ export function sampleScenePixels(
   if (!Number.isInteger(size) || size < 1 || size % 2 === 0 || !(scale > 0)) return null
   const page = graph.getNode(pageId)
   if (!page) return null
-  const surface = ck.MakeSurface(size, size)
+  const info = documentImageInfo(ck, graph.documentColorSpace, size, size)
+  const { colorSpace } = info
+  // `MakeSurface` is always sRGB; a raster surface makes others, apart from itself.
+  const base = ck.MakeSurface(1, 1)
+  const surface = base?.makeSurface(info)
+  base?.dispose()
   if (!surface) return null
   const previousViewport = renderer.worldViewport
   const previousImageRendering = renderer.viewportImageRendering
-  const previousColorSpace = renderer.presentationColorSpace
+  const previousColorSpace = renderer.documentColorSpace
   const previousDetail = renderer.images.detailScale
   try {
     const canvas = surface.getCanvas()
-    const background = getPageColor(page)
+    const background = toExtendedSRGB(getPageColor(page), graph.documentColorSpace)
     canvas.clear(ck.Color4f(background.r, background.g, background.b, 1))
     // Pixel (i, j) covers [i, i + 1); put the sampled point at the centre pixel's centre.
     const half = (size - 1) / 2
@@ -70,7 +78,7 @@ export function sampleScenePixels(
     const reach = (half + 1) / scale
     renderer.worldViewport = { x: x - reach, y: y - reach, w: reach * 2, h: reach * 2 }
     renderer.viewportImageRendering = false
-    renderer.presentationColorSpace = graph.documentColorSpace
+    renderer.useDocumentColorSpace(graph.documentColorSpace)
     renderer.images.detailScale = scale * renderer.dpr
     for (const childId of page.childIds) renderer.renderNode(canvas, graph, childId, {})
     surface.flush()
@@ -79,14 +87,14 @@ export function sampleScenePixels(
       height: size,
       alphaType: ck.AlphaType.Unpremul,
       colorType: ck.ColorType.RGBA_8888,
-      colorSpace: ck.ColorSpace.SRGB
+      colorSpace
     })
     if (!(data instanceof Uint8Array) || data.length < size * size * 4) return null
     return { size, data }
   } finally {
     renderer.worldViewport = previousViewport
     renderer.viewportImageRendering = previousImageRendering
-    renderer.presentationColorSpace = previousColorSpace
+    renderer.useDocumentColorSpace(previousColorSpace)
     renderer.images.detailScale = previousDetail
     surface.dispose()
   }

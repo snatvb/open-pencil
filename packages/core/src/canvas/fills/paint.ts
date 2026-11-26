@@ -12,29 +12,22 @@ import { sampledOncePerOutputPixel } from '#core/canvas/images/output-grid'
 import { previewEdge } from '#core/canvas/images/previews'
 import { imageSampling, makeImageShader } from '#core/canvas/images/sampling'
 import { applyPatternFill } from '#core/canvas/patterns/fill'
-import { resolveGradientStopColor } from '#core/canvas/renderer/colors'
+import { drawnColor } from '#core/canvas/renderer/colors'
 import type { SkiaRenderer } from '#core/canvas/renderer/skia'
 import { drawOutline, withNodeOutline } from '#core/canvas/shapes'
 
 import { makeDiamondGradient } from './gradients/diamond'
-
-interface PaintFillsOptions {
-  readonly bindToNodeFills?: boolean
-}
 
 export function paintFills(
   r: SkiaRenderer,
   fills: readonly Fill[],
   node: SceneNode,
   graph: SceneGraph,
-  draw: (fill: Fill) => void,
-  options: PaintFillsOptions = {}
+  draw: (fill: Fill) => void
 ): void {
-  for (let index = 0; index < fills.length; index++) {
-    const fill = fills[index]
+  for (const fill of fills) {
     if (!fill.visible) continue
-    const fillIndex = options.bindToNodeFills === false ? -1 : index
-    if (!r.applyFill(fill, node, graph, fillIndex)) {
+    if (!r.applyFill(fill, node, graph)) {
       continue
     }
     r.fillPaint.setAlphaf(fill.opacity)
@@ -62,14 +55,7 @@ export function drawVectorMultiStyleFills(
 
   for (const [index, region] of regions.entries()) {
     const path = paths[index]
-    paintFills(
-      r,
-      region.fills ?? node.fills,
-      node,
-      graph,
-      () => canvas.drawPath(path, r.fillPaint),
-      { bindToNodeFills: !region.fills }
-    )
+    paintFills(r, region.fills ?? node.fills, node, graph, () => canvas.drawPath(path, r.fillPaint))
   }
   return true
 }
@@ -110,13 +96,12 @@ export function applyFill(
   r: SkiaRenderer,
   fill: Fill,
   node: SceneNode,
-  graph: SceneGraph,
-  fillIndex = 0
+  graph: SceneGraph
 ): boolean {
   clearFillShader(r)
 
   if (fill.type === 'SOLID') {
-    const c = r.resolveFillColor(fill, fillIndex, node, graph)
+    const c = drawnColor(fill.color, graph)
     r.fillPaint.setColorComponents(c.r, c.g, c.b, c.a)
     return true
   }
@@ -134,7 +119,7 @@ export function applyFill(
   }
 
   if (fill.type === 'PATTERN' || fill.type === 'NOISE' || fill.type === 'CUSTOM') {
-    const c = r.resolveFillColor(fill, fillIndex, node, graph)
+    const c = drawnColor(fill.color, graph)
     r.fillPaint.setColorComponents(c.r, c.g, c.b, c.a)
     return true
   }
@@ -172,7 +157,7 @@ export function applyGradientFill(
   const t = fill.gradientTransform
   if (!stops || !t) return false
   const colors = stops.map((s) => {
-    const c = resolveGradientStopColor(s.color, graph, r.presentationColorSpace)
+    const c = drawnColor(s.color, graph)
     return r.ck.Color4f(c.r, c.g, c.b, c.a)
   })
   const positions = stops.map((s) => s.position)

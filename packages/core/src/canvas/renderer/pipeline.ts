@@ -12,6 +12,7 @@ import { resolveEditorProfile } from '#core/editor/views/profile'
 import type { EditorProfile } from '#core/editor/views/types'
 import { emitNavigationTrace } from '#core/profiler'
 
+import { documentSurfaceFor, presentDocumentSurface } from './document-surface'
 import { drawChromePass, drawLabelPass, drawOverlayPass } from './overlay-pass'
 import { recordPicture } from './picture'
 import { hasTransientPreviews, renderPageWithPreviews } from './transient-previews'
@@ -27,6 +28,8 @@ export function renderSceneToCanvas(
     | 'nodePaths'
     | 'editingTextId'
     | 'invalidateNodePicture'
+    | 'documentColorSpace'
+    | 'useDocumentColorSpace'
   >,
   canvas: Canvas,
   graph: SceneGraph,
@@ -37,6 +40,8 @@ export function renderSceneToCanvas(
   const previewMode = r.viewportImageRendering
   const editing = r.editingTextId
   const halfFloatLayers = r.halfFloatLayers
+  const colorSpace = r.documentColorSpace
+  r.useDocumentColorSpace(graph.documentColorSpace)
   r.viewportImageRendering = false
   // Skia's CPU raster rounds each faded 8-bit layer, and nested faded groups add that up to a level.
   r.halfFloatLayers = true
@@ -56,6 +61,7 @@ export function renderSceneToCanvas(
     r.halfFloatLayers = halfFloatLayers
     r.editingTextId = editing
     if (editing) r.invalidateNodePicture(editing)
+    r.useDocumentColorSpace(colorSpace)
   }
 }
 
@@ -78,6 +84,8 @@ export function renderFromEditorState(
   layer: RenderLayer = 'full',
   interactive = false
 ): void {
+  r.useDocumentColorSpace(graph.documentColorSpace)
+  r.recordPicturesIn(graph.documentColorSpace)
   const previewMode = r.images.previews.enabled && needsImagePreviews(graph)
   if (
     r.images.memoryGraph !== graph ||
@@ -291,6 +299,9 @@ export function render(
   layer: RenderLayer = 'full',
   interactive = false
 ): void {
+  // Every entry point draws in the profile of the graph it is given.
+  r.useDocumentColorSpace(graph.documentColorSpace)
+  r.recordPicturesIn(graph.documentColorSpace)
   r.editingTextId = overlays.editingTextId ?? null
   emitNavigationTrace('render:start', {
     layer,
@@ -312,10 +323,13 @@ export function render(
   graph.clearAbsPosCache()
 
   const canvas = r.surface.getCanvas()
+  // The scene draws in the document's color space, on the screen or on a surface shown on it.
+  const documentSurface = layer === 'overlays' ? null : documentSurfaceFor(r)
+  const sceneCanvas = documentSurface?.getCanvas() ?? canvas
   if (layer === 'overlays') {
     canvas.clear(r.ck.Color4f(0, 0, 0, 0))
   } else {
-    paintPageBackground(r, canvas, { x: r.panX * r.dpr, y: r.panY * r.dpr }, r.zoom * r.dpr)
+    paintPageBackground(r, sceneCanvas, { x: r.panX * r.dpr, y: r.panY * r.dpr }, r.zoom * r.dpr)
   }
 
   r.worldViewport = {
@@ -341,23 +355,29 @@ export function render(
       r.tiledScenePending = false
       r.tiledSceneCovered = true
     }
-    canvas.save()
-    canvas.scale(r.dpr, r.dpr)
+    sceneCanvas.save()
+    sceneCanvas.scale(r.dpr, r.dpr)
 
     p.beginPhase('render:scene')
     if (layer === 'scene' && !requiresUncachedSceneRender) {
       // The scene layer is tiles, idle or moving; the whole-scene picture serves one canvas.
-      const tiled = r.tiledScene.renderFrame(r, canvas, graph, sceneVersion, r.navigationGeneration)
+      const tiled = r.tiledScene.renderFrame(
+        r,
+        sceneCanvas,
+        graph,
+        sceneVersion,
+        r.navigationGeneration
+      )
       r.tiledScenePending = tiled.pending
       r.tiledSceneBackgroundPending = tiled.backgroundPending
       r.tiledSceneCovered = tiled.covered
       p.setScenePictureMode('hit', tiled.covered ? 'tiled' : 'tiled-fallback')
     } else {
-      canvas.translate(r.panX, r.panY)
-      canvas.scale(r.zoom, r.zoom)
+      sceneCanvas.translate(r.panX, r.panY)
+      sceneCanvas.scale(r.zoom, r.zoom)
       renderSceneContent(
         r,
-        canvas,
+        sceneCanvas,
         graph,
         overlays,
         sceneVersion,
@@ -368,7 +388,8 @@ export function render(
     }
     p.endPhase('render:scene')
 
-    canvas.restore()
+    sceneCanvas.restore()
+    if (documentSurface) presentDocumentSurface(canvas, documentSurface)
   }
 
   if (layer !== 'scene') drawAboveScene(r, canvas, graph, selectedIds, overlays, sceneVersion)

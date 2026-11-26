@@ -39,6 +39,7 @@ import { flushPendingComponentSync } from './pending-sync'
 import { installPluginDataMethods } from './plugin-data'
 import { nodeProxyToJSON } from './serialization'
 import { installShapeWithTextAccessors } from './shape-with-text'
+import { installSlideNodeProxyAccessors } from './slides'
 import { installSlotAccessors, prepareSlotMove, prepareSlotRemoval } from './slots'
 import * as TextProxy from './text'
 import { containerTransform, setContainerTransform } from './transform'
@@ -399,6 +400,7 @@ const proxyInternals = {
 
 installStrokeNodeProxyAccessors(FigmaNodeProxy.prototype, proxyInternals)
 installStickyNodeProxyAccessors(FigmaNodeProxy.prototype, proxyInternals)
+installSlideNodeProxyAccessors(FigmaNodeProxy.prototype, proxyInternals)
 installConnectorNodeProxyAccessors(FigmaNodeProxy.prototype, proxyInternals)
 installTextNodeProxyAccessors(FigmaNodeProxy.prototype, proxyInternals, MIXED)
 installTextRangeMethods(FigmaNodeProxy.prototype, proxyInternals, MIXED)

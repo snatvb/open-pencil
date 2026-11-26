@@ -1,7 +1,5 @@
 import { params } from '@nanostores/i18n'
 
-import { i18n } from '#vue/i18n/create'
-
 export const filesMessageDefaults = {
   importLabel: 'Import',
   importHTMLCSS: 'Import HTML/CSS',
@@ -36,6 +34,10 @@ export const filesMessageDefaults = {
   openURLInvalid: 'Enter a web address, such as https://example.com.',
   openURLBlocked:
     'The site does not let other sites read it, so the browser cannot open it. The desktop app can.',
+  openURLRefused:
+    'The site refused the app’s request for this page. The desktop app may open it by loading the page with its scripts running.',
+  openURLRenderRefused:
+    'The site refused the app’s request for this page, and loading it in the app’s browser failed too.',
   openURLPDF: 'This address holds a PDF, which OpenPencil cannot open yet.',
   openURLUnsupported: 'This address holds a file OpenPencil cannot open.',
   newTab: 'New tab',
@@ -66,12 +68,14 @@ export const filesMessageDefaults = {
   noRecentFilesDescription: 'Files you open in the desktop app will appear here.',
   noRecentDesigns: 'No recent designs',
   noRecentBoards: 'No recent boards',
+  noRecentSlides: 'No recent slides',
   searchFiles: 'Search files…',
   searchRecentAndStorageFiles: 'Search recent and storage files…',
   newDesign: 'New design',
   newFile: 'New file',
   createDesign: 'Design',
   createBoard: 'Board',
+  createSlides: 'Slides',
   allFiles: 'All files',
   fileKind: 'File type',
   createIn: params('Creates it in {place}'),
@@ -87,5 +91,3 @@ export const filesMessageDefaults = {
   browserFileAPINotSupported:
     "Your browser doesn't support the local file API. Files will be downloaded instead of saved in place."
 } as const
-
-export const filesMessages = i18n('files', filesMessageDefaults)

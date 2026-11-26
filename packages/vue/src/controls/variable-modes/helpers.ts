@@ -16,7 +16,7 @@ import {
   collectionLabels,
   type NumberedCollectionFormat
 } from '#vue/controls/variable-modes/labels'
-import { variablesMessages } from '#vue/i18n/messages'
+import { messageStores } from '#vue/i18n/messages'
 
 /** A mode as the control lists it. */
 export type VariableModeOption = Pick<VariableCollectionMode, 'modeId' | 'name'>
@@ -80,27 +80,30 @@ function shared<T>(values: readonly T[]): MixedValue<T> {
  * The collections a mode can be set for on `targets`: every collection with more than one mode for
  * pages and layers that hold others, such as a frame's theme for what goes in it before anything
  * binds its variables, and for other layers those whose variables they use, as Figma does, or
- * that they set a mode in, so it can be cleared.
+ * that they set a mode in, so it can be cleared. A deleted collection is offered only where its
+ * variables are still bound or a mode is set in it.
  * `numbered` names same-named collections; reactive callers pass their locale's.
  */
 export function variableModeChoices(
   editor: Editor,
   targets: SceneNode[],
-  numbered: NumberedCollectionFormat = variablesMessages.get().numberedCollection
+  numbered: NumberedCollectionFormat = messageStores['variables/panel'].get().numberedCollection
 ): VariableModeChoice[] {
   if (targets.length === 0) return []
   const { graph } = editor
   const holders = targets.every((target) => target.type === 'CANVAS' || isLayerContainer(target))
-  const used = holders
-    ? null
-    : collectionsBoundIn(
-        graph,
-        targets.map((target) => target.id)
-      )
+  let used: Set<string> | undefined
+  const bound = (id: string) =>
+    (used ??= collectionsBoundIn(
+      graph,
+      targets.map((target) => target.id)
+    )).has(id)
+  const offered = (collection: VariableCollection) =>
+    (holders && !collection.deleted) || bound(collection.id) || setsModeIn(targets, collection)
   const listed = [...graph.variableCollections.values()].filter(
     (collection) =>
       collection.modes.length > 1 &&
-      (!used || used.has(collection.id) || setsModeIn(targets, collection)) &&
+      offered(collection) &&
       !isUnusedLibraryCopy(collection, targets)
   )
   const labels = collectionLabels(

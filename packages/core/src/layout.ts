@@ -34,6 +34,7 @@ export {
 } from './layout/spacing-marks'
 export {
   estimateTextSize,
+  autoLineHeight,
   getTextMeasurer,
   installTextMeasurer,
   setTextMeasurer,
