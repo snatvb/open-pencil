@@ -208,6 +208,15 @@ function styleConsumers(graph: SceneGraph, style: SceneNode, kind: PlannedStyle[
   )
 }
 
+function tokenWritesLiteral(style: PlannedStyle, field: string): boolean {
+  if (Object.hasOwn(style.bindings, field)) {
+    return false
+  }
+  return style.kind === 'EFFECT'
+    ? effectBindingTarget(field) !== null
+    : Object.hasOwn(style.fields, field)
+}
+
 function applyStyles(
   target: TokenImportTarget,
   plan: TokenImportPlan,
@@ -218,9 +227,9 @@ function applyStyles(
     const node = existing ?? target.addStyle(style, { ...style.fields, name: style.name })
     const own = existing && changedFields(existing, style.fields)
     if (own) target.updateNode(node.id, own)
-    if (existing && style.kind === 'EFFECT') {
+    if (existing) {
       for (const field of Object.keys(node.boundVariables)) {
-        if (effectBindingTarget(field) && !Object.hasOwn(style.bindings, field)) {
+        if (tokenWritesLiteral(style, field)) {
           target.unbindVariable(node.id, field)
         }
       }
