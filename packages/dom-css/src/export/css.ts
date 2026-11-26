@@ -7,6 +7,7 @@ import type {
   TextLength
 } from '@open-pencil/scene-graph'
 import { colorToCSS, colorToHex, colorToProfileCSS } from '@open-pencil/scene-graph/color'
+import { CSS_BLEND_MODE } from '@open-pencil/scene-graph/css'
 import { blurSigma } from '@open-pencil/scene-graph/geometry'
 import { gradientPoint } from '@open-pencil/scene-graph/gradient'
 import type { Color } from '@open-pencil/scene-graph/primitives'
@@ -132,6 +133,31 @@ function addBlurs(
   }
 }
 
+// `box-shadow` cannot carry a blend mode, so a blended drop shadow needs an element of its own.
+function dropShadowBlendMode(effect: Effect): string | null {
+  if (effect.type !== 'DROP_SHADOW' || !effect.blendMode) {
+    return null
+  }
+  const blend = CSS_BLEND_MODE[effect.blendMode]
+  return blend && blend !== 'normal' ? blend : null
+}
+
+export interface BlendedShadowCSS {
+  boxShadow: string
+  blend: string
+}
+
+export function blendedShadowsToCSS(
+  effects: Effect[],
+  css: EffectFieldCSS,
+  profile: ColorProfile
+): BlendedShadowCSS[] {
+  return visibleEffects(effects).flatMap(([index, effect]) => {
+    const blend = dropShadowBlendMode(effect)
+    return blend ? [{ boxShadow: shadowToCSS(effect, index, css, profile), blend }] : []
+  })
+}
+
 /**
  * Every visible shadow, in order, plus layer and background blur. `css` names the variable a
  * bound field, such as `effects/0/radius`, draws from.
@@ -139,15 +165,19 @@ function addBlurs(
 export function effectsToCSS(
   effects: Effect[],
   css: EffectFieldCSS,
-  profile: ColorProfile
+  profile: ColorProfile,
+  withoutBlendedDropShadows = false
 ): DesignStyleDeclaration {
   const style: DesignStyleDeclaration = {}
   const visible = visibleEffects(effects)
-  const shadows = visible.filter(([, effect]) => isShadow(effect))
-  if (shadows.length > 0)
+  const shadows = visible.filter(
+    ([, effect]) => isShadow(effect) && !(withoutBlendedDropShadows && dropShadowBlendMode(effect))
+  )
+  if (shadows.length > 0) {
     style['box-shadow'] = shadows
       .map(([index, effect]) => shadowToCSS(effect, index, css, profile))
       .join(', ')
+  }
   addBlurs(style, visible, css)
   return style
 }

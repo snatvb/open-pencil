@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
+import type { DesignElement } from '@open-pencil/dom-css'
 import { sceneNodeToDesignDocument } from '@open-pencil/dom-css/export'
 import { SceneGraph, type Effect, type SceneNode } from '@open-pencil/scene-graph'
 
@@ -96,5 +97,118 @@ describe('effects in HTML export', () => {
     expect(text?.filter).toBe('blur(4.3px)')
     expect(text?.['backdrop-filter']).toBe('blur(8.6px)')
     expect(text?.['box-shadow']).toBeUndefined()
+  })
+})
+
+function exported(effects: Effect[], props: Partial<SceneNode> = {}) {
+  const graph = new SceneGraph()
+  const node = graph.createNode('RECTANGLE', graph.getPages()[0].id, {
+    width: 40,
+    height: 20,
+    effects,
+    ...props
+  })
+  const [element] = sceneNodeToDesignDocument(graph, node.id).children
+  if (element?.type !== 'element') throw new Error('Expected an element')
+  return element
+}
+
+function carriers(element: DesignElement) {
+  return element.children.filter(
+    (child): child is DesignElement => child.type === 'element' && !child.sourceSceneNodeId
+  )
+}
+
+describe('blended shadows in HTML export', () => {
+  test('carry a blended drop shadow on a layer of its own that blends with the backdrop', () => {
+    const element = exported([effect('DROP_SHADOW', 10, { blendMode: 'MULTIPLY' })])
+    expect(element.inlineStyle?.['box-shadow']).toBeUndefined()
+    expect(element.inlineStyle?.position).toBe('relative')
+    expect(carriers(element).map((carrier) => carrier.inlineStyle)).toEqual([
+      {
+        position: 'absolute',
+        top: '0px',
+        right: '0px',
+        bottom: '0px',
+        left: '0px',
+        'border-radius': 'inherit',
+        'box-shadow': '0px 0px 8.6px 0px rgba(0, 0, 0, 0.5)',
+        'mix-blend-mode': 'multiply',
+        'pointer-events': 'none'
+      }
+    ])
+  })
+
+  test('keep a normal shadow on the element itself, as before', () => {
+    const element = exported([effect('DROP_SHADOW', 10, { offset: { x: 1, y: 2 } })], {
+      cornerRadius: 4
+    })
+    expect(element.inlineStyle).toEqual({
+      width: '40px',
+      height: '20px',
+      'box-shadow': '1px 2px 8.6px 0px rgba(0, 0, 0, 0.5)',
+      'border-radius': '4px'
+    })
+    expect(element.children).toEqual([])
+  })
+
+  test('split normal and blended shadows, each blend on its own carrier', () => {
+    const element = exported([
+      effect('DROP_SHADOW', 10),
+      effect('DROP_SHADOW', 20, { blendMode: 'SOFT_LIGHT', offset: { x: 0, y: 4 } })
+    ])
+    expect(element.inlineStyle?.['box-shadow']).toBe('0px 0px 8.6px 0px rgba(0, 0, 0, 0.5)')
+    expect(
+      carriers(element).map((carrier) => [
+        carrier.inlineStyle?.['box-shadow'],
+        carrier.inlineStyle?.['mix-blend-mode']
+      ])
+    ).toEqual([['0px 4px 17.2px 0px rgba(0, 0, 0, 0.5)', 'soft-light']])
+  })
+
+  test('blend the shadow by its own mode whatever the layer blends by', () => {
+    const element = exported([effect('DROP_SHADOW', 10, { blendMode: 'MULTIPLY' })], {
+      blendMode: 'SCREEN'
+    })
+    expect(element.inlineStyle?.['mix-blend-mode']).toBeUndefined()
+    expect(carriers(element).map((carrier) => carrier.inlineStyle?.['mix-blend-mode'])).toEqual([
+      'multiply'
+    ])
+  })
+
+  test('cover the border box, where the element’s own shadow would start', () => {
+    const element = exported([effect('DROP_SHADOW', 10, { blendMode: 'MULTIPLY' })], {
+      strokes: [
+        {
+          type: 'SOLID',
+          color: { r: 0, g: 0, b: 0, a: 1 },
+          weight: 2,
+          opacity: 1,
+          visible: true,
+          align: 'INSIDE'
+        }
+      ]
+    })
+    const [carrier] = carriers(element)
+    expect([
+      carrier?.inlineStyle?.top,
+      carrier?.inlineStyle?.right,
+      carrier?.inlineStyle?.bottom,
+      carrier?.inlineStyle?.left
+    ]).toEqual(['-2px', '-2px', '-2px', '-2px'])
+  })
+
+  test('keep the shadow on a clipping element, whose overflow would hide a carrier', () => {
+    const element = exported([effect('DROP_SHADOW', 10, { blendMode: 'MULTIPLY' })], {
+      clipsContent: true
+    })
+    expect(element.inlineStyle?.['box-shadow']).toBe('0px 0px 8.6px 0px rgba(0, 0, 0, 0.5)')
+    expect(carriers(element)).toEqual([])
+  })
+
+  test('keep blended inner shadows on the element, under its children', () => {
+    const element = exported([effect('INNER_SHADOW', 10, { blendMode: 'MULTIPLY' })])
+    expect(element.inlineStyle?.['box-shadow']).toBe('inset 0px 0px 8.6px 0px rgba(0, 0, 0, 0.5)')
+    expect(carriers(element)).toEqual([])
   })
 })

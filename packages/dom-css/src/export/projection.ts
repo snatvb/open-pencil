@@ -22,6 +22,7 @@ import {
 import { addGridContainer, addGridPlacement } from './grid'
 import { addBackground, addImageStyle, addStroke, type FieldCSS } from './paint-style'
 import { addPositioning, constraintSizes, placement } from './position'
+import { blendedShadowCarriers } from './shadows'
 import { addFlexGap, addPadding } from './spacing'
 import { textCaseToCSS, textElementContent, uniformLetterSpacing } from './text'
 
@@ -186,9 +187,15 @@ export function isPositioned(position: unknown): boolean {
   return typeof position === 'string' && POSITIONED.has(position)
 }
 
+function becomeContainingBlock(style: DesignStyleDeclaration): void {
+  if (!isPositioned(style.position)) {
+    style.position = 'relative'
+  }
+}
+
 /** A shader layer contains what plays behind its content, beneath everything it holds. */
 function addShaderLayerStyle(style: DesignStyleDeclaration): void {
-  if (!isPositioned(style.position)) style.position = 'relative'
+  becomeContainingBlock(style)
   style.isolation = 'isolate'
 }
 
@@ -248,7 +255,8 @@ function styleFromSceneNode(
   parent: SceneNode | undefined,
   css: FieldCSS,
   profile: ColorProfile,
-  metrics: CanvasMetrics | undefined
+  metrics: CanvasMetrics | undefined,
+  withoutBlendedDropShadows = false
 ): DesignStyleDeclaration {
   const style: DesignStyleDeclaration = {}
   addSize(style, node, parent, css)
@@ -257,7 +265,7 @@ function styleFromSceneNode(
   addBackground(style, node, css, profile)
   addImageStyle(style, node)
   addStroke(style, node, css, profile)
-  Object.assign(style, effectsToCSS(node.effects, css, profile))
+  Object.assign(style, effectsToCSS(node.effects, css, profile, withoutBlendedDropShadows))
   if (node.opacity < 1) style.opacity = css('opacity', String(node.opacity))
   addCornerRadii(style, node, css)
   if (node.clipsContent) style.overflow = 'hidden'
@@ -455,17 +463,23 @@ function sceneNodeToDesignNode(
     }
   }
 
-  const style = styleFromSceneNode(node, parent, css, profile, metrics)
   const shader = layerShader(graph, node)
+  const tagName = tagNameForNode(node)
+  const carriesBlendedShadows = !node.clipsContent && !shader && tagName !== 'img'
+  const style = styleFromSceneNode(node, parent, css, profile, metrics, carriesBlendedShadows)
   if (shader) addShaderLayerStyle(style)
+  const shadowCarriers = carriesBlendedShadows ? blendedShadowCarriers(node, css, profile) : []
+  if (shadowCarriers.length > 0) {
+    becomeContainingBlock(style)
+  }
   return {
     type: 'element',
-    tagName: tagNameForNode(node),
+    tagName,
     attrs,
     inlineStyle: style,
     sourceSceneNodeId: node.id,
     sourceSceneNode: node,
-    children,
+    children: [...shadowCarriers, ...children],
     shader
   }
 }

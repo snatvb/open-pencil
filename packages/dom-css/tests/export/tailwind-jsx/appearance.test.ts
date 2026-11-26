@@ -240,3 +240,31 @@ describe('Tailwind JSX appearance classes', () => {
     expect(jsx).not.toContain('#')
   })
 })
+
+describe('Tailwind JSX blended shadows', () => {
+  test('carry a blended drop shadow on its own element with the blend class', () => {
+    const graph = makeSceneGraph('Page 1')
+    const node = graph.createNode('RECTANGLE', firstPageId(graph), {
+      width: 40,
+      height: 20,
+      effects: [
+        {
+          type: 'DROP_SHADOW',
+          radius: 10,
+          spread: 0,
+          offset: { x: 0, y: 0 },
+          color: { r: 0, g: 0, b: 0, a: 0.5 },
+          visible: true,
+          blendMode: 'MULTIPLY'
+        }
+      ]
+    })
+    expect(tw(graph, node.id)).toBe(
+      [
+        '<div data-name="Rectangle" className="relative w-10 h-5">',
+        '  <div aria-hidden="true" className="absolute inset-0 shadow-[0px_0px_8.6px_0px_rgba(0,_0,_0,_0.5)] mix-blend-multiply pointer-events-none rounded-[inherit]" />',
+        '</div>'
+      ].join('\n')
+    )
+  })
+})
