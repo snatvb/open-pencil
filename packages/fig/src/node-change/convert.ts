@@ -140,6 +140,7 @@ const NODE_TYPE_MAP: Record<string, NodeType | 'DOCUMENT' | 'VARIABLE'> = {
   SLIDE: 'SLIDE',
   SLIDE_ROW: 'SLIDE_ROW',
   SLIDE_GRID: 'SLIDE_GRID',
+  CODE_COMPONENT: 'CODE_COMPONENT',
   // Map to TEXT while retaining a format-neutral text path for rendering/editing.
   TEXT_PATH: 'TEXT'
 }
@@ -1354,6 +1355,8 @@ export const FIGMA_RAW_NODE_FIELD_KEYS = [
   'slideThemeMap',
   'objectAnimations',
   'slideSpeakerNotes',
+  'codeObjectType',
+  'customToolArtifactRef',
   'isSoftDeleted',
   'brushType',
   'scatterStrokeSettings',
