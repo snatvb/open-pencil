@@ -9,7 +9,7 @@ import { getTextOutlineSupport } from '#core/text/outlines'
 import { isOpenVectorNetwork } from '#core/vector/connectivity'
 
 import { renderLeafWithEffects } from './effects'
-import { clearFillShader } from './fills/paint'
+import { paintFills } from './fills/paint'
 import { sharedPath } from './paths/shared'
 import { curvePathData } from './paths/svg-data'
 import { unitedPath } from './paths/union'
@@ -512,15 +512,7 @@ export function paintBooleanOperation(
   if (!path) return
 
   try {
-    for (const fill of node.fills) {
-      if (!fill.visible || !r.applyFill(fill, node, graph)) continue
-      r.fillPaint.setAlphaf(fill.opacity)
-      try {
-        canvas.drawPath(path, r.fillPaint)
-      } finally {
-        clearFillShader(r)
-      }
-    }
+    paintFills(r, node.fills, node, graph, () => canvas.drawPath(path, r.fillPaint))
     between?.()
 
     // Each stroke resolves its own binding and shader, with its cap, join, and dash, as a shape's.

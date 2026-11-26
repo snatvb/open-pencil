@@ -1,8 +1,8 @@
 import { expect, test, useEditorSetupWithClear } from '#tests/e2e/fixtures'
-import { booleanStrokeAlignmentDriver } from '#tests/helpers/canvas/boolean/driver'
+import { booleanScenesDriver } from '#tests/helpers/canvas/boolean/driver'
 
 const editor = useEditorSetupWithClear('/?test&no-chrome&no-rulers')
-const strokeAlignment = booleanStrokeAlignmentDriver(() => editor.page)
+const scenes = booleanScenesDriver(() => editor.page)
 
 async function expectCanvas(name: string) {
   editor.canvas.assertNoErrors()
@@ -121,7 +121,13 @@ test('an operand with an image fill still shapes the boolean', async () => {
 })
 
 test('boolean operation strokes keep their alignment and corner radius', async () => {
-  await strokeAlignment.show()
+  await scenes.showStrokeAlignment()
   await editor.canvas.waitForRender()
   await expectCanvas('boolean-stroke-alignment')
+})
+
+test('boolean operation fills blend as the same fills on an ellipse', async () => {
+  await scenes.showFillBlends()
+  await editor.canvas.waitForRender()
+  await expectCanvas('boolean-fill-blends')
 })

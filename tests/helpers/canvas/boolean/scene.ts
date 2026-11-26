@@ -1,6 +1,6 @@
 import type { SceneGraph } from '@open-pencil/scene-graph'
 
-import { solid } from '../paints'
+import { linearGradient, solid } from '../paints'
 
 const STROKE_VARIANTS = [
   { align: 'INSIDE', cornerRadius: 0 },
@@ -44,6 +44,45 @@ export function createBooleanStrokeAlignmentScene(graph: SceneGraph, pageId: str
       y: 0,
       width: 82,
       height: 104
+    })
+  }
+}
+
+const FILL_BLEND_MODES = ['NORMAL', 'OVERLAY', 'MULTIPLY', 'SCREEN'] as const
+
+const GREY_RAMP = [
+  { r: 0.2, g: 0.2, b: 0.2, a: 1 },
+  { r: 0.9, g: 0.9, b: 0.9, a: 1 }
+]
+
+export function createBooleanFillBlendScene(graph: SceneGraph, pageId: string): void {
+  for (const [index, blendMode] of FILL_BLEND_MODES.entries()) {
+    const fills = [solid(0.9, 0.1, 0.1), { ...linearGradient(GREY_RAMP), opacity: 0.5, blendMode }]
+    const x = 72 + index * 152
+    graph.createNode('ELLIPSE', pageId, {
+      name: `${blendMode} ellipse`,
+      x,
+      y: 32,
+      width: 112,
+      height: 112,
+      fills
+    })
+    const ring = graph.createNode('BOOLEAN_OPERATION', pageId, {
+      name: `${blendMode} ring`,
+      x,
+      y: 168,
+      width: 112,
+      height: 112,
+      booleanOperation: 'SUBTRACT',
+      fills
+    })
+    graph.createNode('ELLIPSE', ring.id, { name: `${blendMode} outer`, width: 112, height: 112 })
+    graph.createNode('ELLIPSE', ring.id, {
+      name: `${blendMode} hole`,
+      x: 32,
+      y: 32,
+      width: 48,
+      height: 48
     })
   }
 }
