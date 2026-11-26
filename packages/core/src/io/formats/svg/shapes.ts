@@ -15,14 +15,13 @@ import { svg, type SVGNode } from './node'
 import {
   arcPath,
   boxOutlinePath,
-  geometryBlobToSVGPath,
   makePolygonPoints,
   round,
   roundedPolygonPath,
   shapeWithTextOutlinePath
 } from './paths'
 import { fillOutlines, outlineElements } from './regions'
-import { shapeWithTextDetailElements } from './strokes'
+import { shapeWithTextDetailElements, strokeGeometryElements } from './strokes'
 
 /**
  * A vector network's paths: its regions as they are traced, and its open segments as the canvas
@@ -59,21 +58,7 @@ export function vectorShapeElements(
   // Traced regions leave the open segments, which the canvas strokes, to add here.
   else if (network && filled?.traced && looseSegments(network).length > 0)
     appendAll(elements, openPathElements(node, network, common, looseSegments))
-  if (stroked) {
-    for (const geo of node.strokeGeometry) {
-      const d = geometryBlobToSVGPath(geo.commandsBlob)
-      if (d) {
-        elements.push(
-          svg('path', {
-            d,
-            fill: strokeAttrs.stroke,
-            'fill-opacity': strokeAttrs['stroke-opacity'],
-            stroke: 'none'
-          })
-        )
-      }
-    }
-  }
+  if (stroked) appendAll(elements, strokeGeometryElements(node, strokeAttrs))
   if (node.vectorNetwork)
     appendAll(elements, vectorArrowHeads(node, node.vectorNetwork, strokeAttrs))
   return elements.length > 0

@@ -8,6 +8,7 @@ import {
 import { CSS_BLEND_MODE } from '@open-pencil/scene-graph/css'
 import Matrix from '@open-pencil/scene-graph/matrix'
 
+import { isPathTextWithStrokeGeometry } from '#core/canvas/strokes/dispatch'
 import { exportBounds } from '#core/io/formats/raster'
 
 import {
@@ -34,7 +35,12 @@ import { renderMaskedChildren } from './masks'
 import { svg, svgElement, renderSVGNode } from './node'
 import type { SVGNode } from './node'
 import { boxOutlineElement, nodeShapeElements, vectorShapeElements } from './shapes'
-import { alignedStroke, alignedStrokeElement, shapeWithTextDetailElements } from './strokes'
+import {
+  alignedStroke,
+  alignedStrokeElement,
+  shapeWithTextDetailElements,
+  textStrokeElements
+} from './strokes'
 import { renderTextNode } from './text/export'
 import type { SVGTextLayout } from './text/lines'
 
@@ -205,15 +211,18 @@ function drawNode(node: SceneNode, ctx: SVGExportContext): SVGNode | null {
   const effects = layerEffects(node, ctx)
   const { attrs: groupAttrs, clipId } = buildGroupAttrs(node, ctx)
 
+  const visibleStrokes = node.strokes.filter(isDrawnPaint)
+
   if (node.type === 'TEXT') {
     const drawnFill = node.fills.find(isDrawnPaint)
     const fill = exportedFill(drawnFill, node, ctx)
     const text = renderTextNode(node, drawnFill ? fill.color : 'none', ctx, fill.opacity)
-    return svgElement('g', groupAttrs, withLayerEffects([text], effects, groupAttrs))
+    const strokes = textStrokeElements(node, visibleStrokes, ctx)
+    const drawn = isPathTextWithStrokeGeometry(node) ? [...strokes, text] : [text, ...strokes]
+    return svgElement('g', groupAttrs, withLayerEffects(drawn, effects, groupAttrs))
   }
 
   const visibleFills = node.fills.filter((f) => f.visible)
-  const visibleStrokes = node.strokes.filter(isDrawnPaint)
   const tint = ctx.tint?.(node) ?? []
   const ownFill = visibleFills.length > 0 && !hasPathLevelFills(node) ? visibleFills[0] : undefined
   const fill = exportedFill(ownFill, node, ctx)
@@ -223,11 +232,12 @@ function drawNode(node: SceneNode, ctx: SVGExportContext): SVGNode | null {
   // tint throws away, so a tinted solid keeps `fill-opacity` in every color space.
   const fillOpacity =
     ownFill && tintedFill ? paintFillOpacity(ownFill, ctx.colors, true) : fill.opacity
-  const ownStrokes = svgStrokeAttrs(visibleStrokes, ctx.colors, node.strokeCap)
+  const ownStrokes = svgStrokeAttrs(visibleStrokes, node, ctx)
   const strokeAttrs =
     ownStrokes.stroke && tint.includes('stroke')
       ? { ...ownStrokes, stroke: CURRENT_COLOR }
       : ownStrokes
+  const drawnStrokes = ownStrokes.stroke ? visibleStrokes : []
 
   const children: (SVGNode | null)[] = buildShapeChildren(
     node,
@@ -235,7 +245,7 @@ function drawNode(node: SceneNode, ctx: SVGExportContext): SVGNode | null {
     fillAttr,
     fillOpacity,
     strokeAttrs,
-    visibleStrokes,
+    drawnStrokes,
     ctx
   )
 
