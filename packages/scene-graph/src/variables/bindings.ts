@@ -22,6 +22,7 @@ import {
 import { refreshBoundPaints } from './paints'
 import { collectionsResolving } from './resolution'
 import {
+  bindingsNotTakenOver,
   createStyleBindingLookup,
   effectiveBoundVariables,
   effectiveRunBoundVariables,
@@ -124,8 +125,9 @@ export function resolvedTextStyleBindings(
   if (node.type !== 'TEXT') {
     return {}
   }
+  const styleBound = inheritedTextStyleBindings(node, styles)
   return {
-    ...resolvedNumbers(graph, node, inheritedTextStyleBindings(node, styles)),
+    ...resolvedNumbers(graph, node, styleBound, styleBound),
     ...resolvedRuns(graph, node, (run) => inheritedRunStyleBindings(run, styles))
   }
 }
@@ -404,10 +406,12 @@ function readsVariables(node: SceneNode): boolean {
 function resolvedOwnBindings(
   graph: SceneGraph,
   node: SceneNode,
+  styleBound: VariableBindings,
   styles: TextStyleLookup
 ): Partial<SceneNode> {
+  const own = bindingsNotTakenOver(node.boundVariables, styleBound)
   return {
-    ...resolvedNumbers(graph, node, node.boundVariables),
+    ...resolvedNumbers(graph, node, own, styleBound),
     ...resolvedValueBindings(graph, node),
     ...resolvedRunBindings(graph, node, styles)
   }
@@ -428,9 +432,10 @@ function applyResolvedBindings(
   if (!isEmptyObject(unbound)) {
     graph.updateNode(node.id, unbound)
   }
+  const styleBound = inheritedTextStyleBindings(node, styles)
   const resolved = {
-    ...resolvedNumbers(graph, node, inheritedTextStyleBindings(node, styles)),
-    ...resolvedOwnBindings(graph, node, styles)
+    ...resolvedNumbers(graph, node, styleBound, styleBound),
+    ...resolvedOwnBindings(graph, node, styleBound, styles)
   }
   const effects = resolvedEffectBindings(graph, node)
   if (!isEmptyObject(effects)) {

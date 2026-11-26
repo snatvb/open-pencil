@@ -10,6 +10,7 @@ import {
   createStyleBindingLookup,
   effectiveBoundVariables,
   effectiveRunBoundVariables,
+  inheritedTextStyleBindings,
   type TextStyleLookup,
   type VariableBindings
 } from './style-bindings'
@@ -27,11 +28,12 @@ function lengthScale(field: string, componentScale: number): number {
   return isTextStyleLength(field) ? componentScale : 1
 }
 
-function bindingScale(node: SceneNode, field: string): number {
-  if (field in node.boundVariables) {
-    return node.variableBindingScales[field] ?? 1
+/** A style's lengths take the occurrence's scale; the layer's own keep the scale they recorded. */
+function bindingScale(node: SceneNode, field: string, styleBound: VariableBindings): number {
+  if (field in styleBound) {
+    return lengthScale(field, node.componentScale)
   }
-  return lengthScale(field, node.componentScale)
+  return node.variableBindingScales[field] ?? 1
 }
 
 /** A bound number as the field stores it. */
@@ -48,13 +50,15 @@ export function resolvedNumericBindings(
   node: SceneNode,
   styles: TextStyleLookup = createStyleBindingLookup(graph)
 ): Partial<SceneNode> {
-  return resolvedNumbers(graph, node, effectiveBoundVariables(node, styles))
+  const styleBound = inheritedTextStyleBindings(node, styles)
+  return resolvedNumbers(graph, node, effectiveBoundVariables(node, styles), styleBound)
 }
 
 export function resolvedNumbers(
   graph: SceneGraph,
   node: SceneNode,
-  bindings: VariableBindings
+  bindings: VariableBindings,
+  styleBound: VariableBindings
 ): Partial<SceneNode> {
   const updates: Partial<SceneNode> = {}
   for (const [field, variableId] of Object.entries(bindings)) {
@@ -63,7 +67,7 @@ export function resolvedNumbers(
       continue
     const value = graph.resolveNumberVariableForNode(node.id, variableId)
     if (value === undefined || !Number.isFinite(value)) continue
-    const effective = value * bindingScale(node, field)
+    const effective = value * bindingScale(node, field, styleBound)
     if (!Number.isFinite(effective)) continue
     const next = boundNumberValue(
       field,
