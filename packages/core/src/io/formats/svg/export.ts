@@ -17,6 +17,7 @@ import {
   resolveFill,
   paintFillOpacity,
   svgStrokeAttrs,
+  withDrawnStrokes,
   type SVGExportContext
 } from './defs'
 import { layerEffects, withLayerEffects, type ExportEffectWarning } from './effects'
@@ -207,7 +208,8 @@ function layerId(name: string, ids: NonNullable<SVGExportContext['layerIds']>): 
   return id
 }
 
-function drawNode(node: SceneNode, ctx: SVGExportContext): SVGNode | null {
+function drawNode(layer: SceneNode, ctx: SVGExportContext): SVGNode | null {
+  const node = withDrawnStrokes(layer, ctx.graph)
   const effects = layerEffects(node, ctx)
   const { attrs: groupAttrs, clipId } = buildGroupAttrs(node, ctx)
 
@@ -237,7 +239,6 @@ function drawNode(node: SceneNode, ctx: SVGExportContext): SVGNode | null {
     ownStrokes.stroke && tint.includes('stroke')
       ? { ...ownStrokes, stroke: CURRENT_COLOR }
       : ownStrokes
-  const drawnStrokes = ownStrokes.stroke ? visibleStrokes : []
 
   const children: (SVGNode | null)[] = buildShapeChildren(
     node,
@@ -245,7 +246,7 @@ function drawNode(node: SceneNode, ctx: SVGExportContext): SVGNode | null {
     fillAttr,
     fillOpacity,
     strokeAttrs,
-    drawnStrokes,
+    visibleStrokes,
     ctx
   )
 

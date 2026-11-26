@@ -58,7 +58,9 @@ export function vectorShapeElements(
   // Traced regions leave the open segments, which the canvas strokes, to add here.
   else if (network && filled?.traced && looseSegments(network).length > 0)
     appendAll(elements, openPathElements(node, network, common, looseSegments))
-  if (stroked) appendAll(elements, strokeGeometryElements(node, strokeAttrs))
+  if (stroked) {
+    appendAll(elements, strokeGeometryElements(node, strokeAttrs))
+  }
   if (node.vectorNetwork)
     appendAll(elements, vectorArrowHeads(node, node.vectorNetwork, strokeAttrs))
   return elements.length > 0
