@@ -1,5 +1,5 @@
 import { expect, setDefaultTimeout, test } from 'bun:test'
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -13,7 +13,7 @@ import { FIXTURES } from '@open-pencil/test-support/paths'
 import { firstPageId, makeSceneGraph } from '@open-pencil/test-support/scene'
 
 import { systemFontFolders } from '#cli/fonts/folders'
-import { FontDirError, takeFontDirs } from '#cli/fonts/install'
+import { FontDirError, NO_SYSTEM_FONTS_ENV, takeFontArgs } from '#cli/fonts/install'
 
 requireBuiltWorkspacePackages()
 setDefaultTimeout(60_000)
@@ -37,15 +37,37 @@ async function fixtures(): Promise<{ document: string; fontDir: string }> {
   return { document, fontDir }
 }
 
+function isFaithful(stdout: string): boolean {
+  const status: DocumentFontStatus = JSON.parse(stdout)
+  return status.faithful
+}
+
 test('takes every --font-dir out of the arguments a command parses', () => {
   expect(
-    takeFontDirs(['export', '--font-dir', 'a', 'file.fig', '--font-dir=b', '--', '--font-dir', 'c'])
-  ).toEqual({ fontDirs: ['a', 'b'], args: ['export', 'file.fig', '--', '--font-dir', 'c'] })
+    takeFontArgs(
+      ['export', '--font-dir', 'a', 'file.fig', '--font-dir=b', '--', '--font-dir', 'c'],
+      {}
+    )
+  ).toEqual({
+    fontDirs: ['a', 'b'],
+    systemFonts: true,
+    args: ['export', 'file.fig', '--', '--font-dir', 'c']
+  })
+})
+
+test('turns the system font folders off by flag or environment, keeping --font-dir', () => {
+  expect(takeFontArgs(['fonts', '--no-system-fonts', '--font-dir', 'a'], {})).toEqual({
+    fontDirs: ['a'],
+    systemFonts: false,
+    args: ['fonts']
+  })
+  expect(takeFontArgs(['fonts'], { [NO_SYSTEM_FONTS_ENV]: '1' }).systemFonts).toBe(false)
+  expect(takeFontArgs(['fonts'], { [NO_SYSTEM_FONTS_ENV]: '0' }).systemFonts).toBe(true)
 })
 
 test('refuses a --font-dir without a folder', () => {
   for (const argv of [['--font-dir='], ['export', '--font-dir'], ['--font-dir', '--json']]) {
-    expect(() => takeFontDirs(argv)).toThrow(FontDirError)
+    expect(() => takeFontArgs(argv)).toThrow(FontDirError)
   }
 })
 
@@ -92,6 +114,30 @@ test('reports a font in a --font-dir folder as loaded, and as missing without it
   const missing = await runCLI(['fonts', document, '--json'])
   const missingStatus: DocumentFontStatus = JSON.parse(missing.stdout)
   expect(missingStatus.faithful).toBe(false)
+})
+
+test('finds a font in the user font folder unless system fonts are turned off', async () => {
+  const { document, fontDir } = await fixtures()
+  const home = await mkdtemp(join(tmpdir(), 'open-pencil-cli-home-'))
+  const host = { platform: process.platform, home, env: { LOCALAPPDATA: home } }
+  const userFolder = systemFontFolders(host).find((folder) => folder.startsWith(home))
+  if (!userFolder) {
+    throw new Error('Expected a user font folder under the home folder')
+  }
+  await cp(fontDir, userFolder, { recursive: true })
+  const env = { LOCALAPPDATA: home, HOME: home }
+  const found = await runCLI(['fonts', document, '--json'], {
+    env: { ...env, [NO_SYSTEM_FONTS_ENV]: '0' }
+  })
+  const skipped = await runCLI(['fonts', document, '--json'], { env })
+  const flagged = await runCLI(['fonts', document, '--json', '--no-system-fonts'], {
+    env: { ...env, [NO_SYSTEM_FONTS_ENV]: '0' }
+  })
+  expect([found, skipped, flagged].map(({ stdout }) => isFaithful(stdout))).toEqual([
+    true,
+    false,
+    false
+  ])
 })
 
 test('exports without substitution when the font is in a --font-dir folder', async () => {

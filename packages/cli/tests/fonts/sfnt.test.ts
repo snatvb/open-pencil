@@ -197,3 +197,40 @@ test('marks a face whose outlines are only in hvgl as one the renderer cannot dr
   expect(hvglOnly[0].drawable).toBe(false)
   expect(withGlyf[0].drawable).toBe(true)
 })
+
+function craftedCollection(faces: number, size: number): Uint8Array {
+  const bytes = new Uint8Array(size).fill(0xff)
+  const view = new DataView(bytes.buffer)
+  bytes.set(new TextEncoder().encode('ttcf'))
+  view.setUint32(4, 0x00010000)
+  view.setUint32(8, faces)
+  for (let face = 0; face < faces; face++) {
+    view.setUint32(12 + face * 4, 12 + faces * 4 + face * 16)
+  }
+  return bytes
+}
+
+test('reads a crafted collection of many faces with many tables in bounded time', async () => {
+  const cases = {
+    'many-tables.ttc': craftedCollection(3000, 1_060_000),
+    'many-faces.ttc': craftedCollection(50_000, 1_000_000)
+  }
+  for (const [name, data] of Object.entries(cases)) {
+    const path = await fontFile(name, data)
+    const started = performance.now()
+    expect(await readFontFileFaces(path)).toEqual([])
+    expect(performance.now() - started).toBeLessThan(1000)
+  }
+})
+
+test('skips a face whose name table is larger than any real one', async () => {
+  const padding = new Uint8Array(1_100_000)
+  const font = sfnt([
+    { tag: 'OS/2', data: os2Table(400, false) },
+    { tag: 'name', data: nameRecordTable([{ ...WINDOWS_ENGLISH, id: 1, text: 'Acme Sans' }]) },
+    { tag: 'zzzz', data: padding }
+  ])
+  const bloated = withUint32(font, NAME_RECORD + 12, (1 << 20) + 1)
+  expect(await readFontFileFaces(await fontFile('bloated.ttf', bloated))).toEqual([])
+  expect(await readFontFileFaces(await fontFile('plain.ttf', font))).toHaveLength(1)
+})

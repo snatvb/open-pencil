@@ -17,6 +17,8 @@ const COLLECTION_HEADER_SIZE = 12
 const COLLECTION_TAG = 'ttcf'
 const NAMING_TABLES = ['name', 'OS/2', 'fvar']
 const NAMING_TABLE_LIMIT = 1 << 20
+const COLLECTION_FACE_LIMIT = 1024
+const FACE_TABLE_LIMIT = 512
 const OUTLINE_TABLES = ['glyf', 'CFF ', 'CFF2']
 const UNSUPPORTED_OUTLINE_TABLE = 'hvgl'
 const OS2_WEIGHT_CLASS = 4
@@ -93,7 +95,7 @@ async function faceDirectoryOffsets(file: FontFile): Promise<number[]> {
   if (tagAt(header, 0) !== COLLECTION_TAG) {
     return [0]
   }
-  const count = header.getUint32(8)
+  const count = Math.min(header.getUint32(8), COLLECTION_FACE_LIMIT)
   const offsets = await readAt(file, COLLECTION_HEADER_SIZE, count * 4)
   return uniq(Array.from({ length: count }, (_, index) => offsets.getUint32(index * 4)))
 }
@@ -101,6 +103,9 @@ async function faceDirectoryOffsets(file: FontFile): Promise<number[]> {
 async function tableRecords(file: FontFile, directoryOffset: number): Promise<TableRecord[]> {
   const header = await readAt(file, directoryOffset, OFFSET_TABLE_SIZE)
   const count = header.getUint16(4)
+  if (count > FACE_TABLE_LIMIT) {
+    throw new RangeError(`A font face lists ${count} tables`)
+  }
   const records = await readAt(file, directoryOffset + OFFSET_TABLE_SIZE, count * TABLE_RECORD_SIZE)
   return Array.from({ length: count }, (_, index) => {
     const record = index * TABLE_RECORD_SIZE

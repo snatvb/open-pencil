@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { defineCommand, runMain } from 'citty'
 
-import { fontDirOptions, takeFontDirs, useInstalledFonts } from '#cli/fonts/install'
+import { fontDirOptions, takeFontArgs, useInstalledFonts } from '#cli/fonts/install'
 import { printError } from '#cli/format'
 
 import { COMMANDS } from './commands'
@@ -21,8 +21,8 @@ const main = defineCommand({
 
 function cliArgs(): string[] | null {
   try {
-    const { fontDirs, args } = takeFontDirs(process.argv.slice(2))
-    useInstalledFonts(fontDirs)
+    const { args, ...sources } = takeFontArgs(process.argv.slice(2))
+    useInstalledFonts(sources)
     return args
   } catch (error) {
     printError(error)

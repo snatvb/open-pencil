@@ -1,5 +1,7 @@
 import { CLI_ENTRY } from '#cli-tests/helpers/paths'
 
+import { NO_SYSTEM_FONTS_ENV } from '#cli/fonts/install'
+
 export interface CLIResult {
   stdout: string
   stderr: string
@@ -25,7 +27,7 @@ export async function runCLI(args: string[], options: CLIRunOptions = {}): Promi
     stdout: 'pipe',
     stderr: 'pipe',
     stdin: options.stdin === undefined ? undefined : Buffer.from(options.stdin),
-    env: options.env ? { ...process.env, ...options.env } : undefined,
+    env: { ...process.env, [NO_SYSTEM_FONTS_ENV]: '1', ...options.env },
     cwd: options.cwd
   })
   const [stdout, stderr] = await Promise.all([

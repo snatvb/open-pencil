@@ -41,6 +41,8 @@ File mode checks all document pages using the CLI host's available fonts without
 openpencil fonts design.fig --font-dir ./fonts
 ```
 
+`--no-system-fonts`, or `OPENPENCIL_NO_SYSTEM_FONTS=1`, leaves the system font folders out, so only bundled fonts and `--font-dir` folders count.
+
 Live mode reports the targeted app document/page, whose loaded fonts may differ from the CLI host. Faces are reported as `available`, `substituted`, or `unresolved`; JSON output includes `faithful`, `faces`, and `issues`.
 
 Use [export font policies](./exporting#font-substitution-policy) to warn about or reject substitutions during file-backed raster and PDF exports.

@@ -144,7 +144,7 @@ function weightOf(data: ArrayBuffer | null): number | undefined {
 
 test('scans nothing for a document without text', async () => {
   let scans = 0
-  useInstalledFonts([], fontManager, () => {
+  useInstalledFonts({ fontDirs: [], systemFonts: true }, fontManager, () => {
     scans++
     return []
   })
@@ -159,10 +159,26 @@ test('scans nothing for a document without text', async () => {
   }
 })
 
+test('leaves the system folders unread when system fonts are turned off', async () => {
+  const fontDir = await fontFolder({ 'a.ttf': namedFont({ 1: 'Acme Sans', 2: 'Regular' }) })
+  let systemReads = 0
+  const fonts = useInstalledFonts(
+    { fontDirs: [fontDir], systemFonts: false },
+    new FontManager(),
+    () => {
+      systemReads++
+      return []
+    }
+  )
+  expect(await fonts.load('Acme Sans', 'Regular')).not.toBeNull()
+  expect(await fonts.load('Nowhere Sans', 'Regular')).toBeNull()
+  expect(systemReads).toBe(0)
+})
+
 test('draws a bundled family in its installed font, as the app does', async () => {
   const folder = await fontFolder({ 'inter.ttf': namedFont({ 1: 'Inter', 2: 'Regular' }, 450) })
   const manager = new FontManager()
-  useInstalledFonts([folder], manager, () => [])
+  useInstalledFonts({ fontDirs: [folder], systemFonts: true }, manager, () => [])
   expect(weightOf(await manager.loadLocalFont('Inter', 'Regular'))).toBe(450)
 })
 
@@ -170,7 +186,7 @@ test('searches --font-dir folders before the system ones', async () => {
   const fontDir = await fontFolder({ 'a.ttf': namedFont({ 1: 'Acme Sans', 2: 'Regular' }, 400) })
   const system = await fontFolder({ 'b.ttf': namedFont({ 1: 'Acme Sans', 2: 'Regular' }, 450) })
   const manager = new FontManager()
-  useInstalledFonts([fontDir], manager, () => [system])
+  useInstalledFonts({ fontDirs: [fontDir], systemFonts: true }, manager, () => [system])
   expect(weightOf(await manager.loadLocalFont('Acme Sans', 'Regular'))).toBe(400)
 })
 
@@ -215,4 +231,14 @@ test('lists the installed families on request, before any face misses', async ()
   const fonts = new InstalledFonts({ folders: () => [folder] })
   const families = await fonts.families()
   expect(families.map(({ family }) => family)).toEqual(['Acme Sans'])
+})
+
+test('keeps families hidden by a leading dot out of loading and listing', async () => {
+  const folder = await fontFolder({
+    'hidden.ttf': namedFont({ 1: '.Acme Sans', 2: 'Regular' }),
+    'shown.ttf': namedFont({ 1: 'Acme Serif', 2: 'Regular' })
+  })
+  const fonts = new InstalledFonts({ folders: () => [folder] })
+  expect(await fonts.load('.Acme Sans', 'Regular')).toBeNull()
+  expect((await fonts.families()).map(({ family }) => family)).toEqual(['Acme Serif'])
 })
