@@ -16,7 +16,12 @@ const ck = await getCanvasKit()
 const renderer = new SkiaRenderer(ck, expectDefined(ck.MakeSurface(WIDTH, SIZE), 'surface'))
 afterAll(() => renderer.destroy())
 
-const RED: Fill = { type: 'SOLID', color: { r: 0.9, g: 0.1, b: 0.1, a: 1 }, opacity: 1, visible: true }
+const RED: Fill = {
+  type: 'SOLID',
+  color: { r: 0.9, g: 0.1, b: 0.1, a: 1 },
+  opacity: 1,
+  visible: true
+}
 
 function greyRamp(blendMode: BlendMode): Fill {
   return {
