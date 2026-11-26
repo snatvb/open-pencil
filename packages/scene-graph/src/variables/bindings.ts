@@ -22,12 +22,12 @@ import {
 import { refreshBoundPaints } from './paints'
 import { collectionsResolving } from './resolution'
 import {
-  bindingsNotTakenOver,
   createStyleBindingLookup,
   effectiveBoundVariables,
   effectiveRunBoundVariables,
   inheritedRunStyleBindings,
   inheritedTextStyleBindings,
+  layerBindingsInEffect,
   textStyleConsumers,
   type TextStyleLookup,
   type VariableBindings
@@ -400,7 +400,7 @@ function resolvedOwnBindings(
   styleBound: VariableBindings,
   styles: TextStyleLookup
 ): Partial<SceneNode> {
-  const own = bindingsNotTakenOver(node.boundVariables, styleBound)
+  const own = layerBindingsInEffect(node, styles)
   return {
     ...resolvedNumbers(graph, node, own, styleBound),
     ...resolvedValueBindings(graph, node),
