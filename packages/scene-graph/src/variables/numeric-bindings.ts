@@ -62,7 +62,7 @@ export function resolvedNumbers(
 ): Partial<SceneNode> {
   const updates: Partial<SceneNode> = {}
   for (const [field, variableId] of Object.entries(bindings)) {
-    if (!NUMERIC_FIELDS.has(field)) continue
+    if (!resolvesToNumber(field)) continue
     if ((field === 'width' || field === 'height') && overriddenInInstance(graph, node.id, field))
       continue
     const value = graph.resolveNumberVariableForNode(node.id, variableId)
@@ -80,6 +80,11 @@ export function resolvedNumbers(
 
 /** Fields of a range of characters a bound number gives its value; the rest need fonts loaded. */
 export const NUMERIC_RUN_FIELDS = ['fontSize', 'fontWeight', 'letterSpacing', 'lineHeight'] as const
+const NUMERIC_TEXT_FIELDS: ReadonlySet<string> = new Set(NUMERIC_RUN_FIELDS)
+
+export function resolvesToNumber(field: string): boolean {
+  return NUMERIC_FIELDS.has(field) || NUMERIC_TEXT_FIELDS.has(field)
+}
 
 type RunHolder = Pick<SceneNode, 'id' | 'styleRuns' | 'componentScale'>
 
