@@ -18,6 +18,7 @@ import { setPaintBlendMode } from '#core/canvas/blend/modes'
 import {
   applyGradientFill,
   applyImageFill,
+  applyPatternStroke,
   clearFillShader,
   clearStrokeShader
 } from '#core/canvas/fills/paint'
@@ -248,7 +249,8 @@ function fillHead(
 }
 
 /**
- * A gradient or image stroke paints through a shader, the way the same paint does as a fill.
+ * A gradient, image or pattern stroke paints through a shader, the way the same paint does as a
+ * fill.
  * Both paints get it: a vector stroke's outline and an arrowhead are filled shapes drawn with
  * `fillPaint`, so the shader has to be on whichever paint the draw helper reaches for.
  * Returns whether the stroke draws: a solid one paints through the paint's color, while a gradient
@@ -276,6 +278,9 @@ export function applyStrokeShader(
       applied = applyImageFill(r, stroke, node, graph, paint, stroke) && applied
     }
     return applied
+  }
+  if (stroke.type === 'PATTERN') {
+    applyPatternStroke(r, stroke, node, graph)
   }
   return !isFigmaShaderPaint(stroke)
 }

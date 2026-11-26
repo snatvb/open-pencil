@@ -1,4 +1,4 @@
-import type { Canvas, Shader } from '@open-pencil/canvaskit'
+import type { Canvas, Paint, Shader } from '@open-pencil/canvaskit'
 import type { Fill, SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 import {
   createPatternSourceLookup,
@@ -7,6 +7,7 @@ import {
 } from '@open-pencil/scene-graph/paints'
 import { regionFills } from '@open-pencil/scene-graph/vector-network'
 
+import { markShaded } from '#core/canvas/fills/shaded'
 import { drawingPictureRasterizedByExport } from '#core/canvas/images/exporting'
 import { drawLaidOutByShader } from '#core/canvas/images/sampling'
 import { withWorldViewport } from '#core/canvas/renderer/picture'
@@ -112,12 +113,20 @@ function recordWithoutReentry(
   }
 }
 
+function setShaderOn(r: SkiaRenderer, paints: readonly Paint[], shader: Shader): void {
+  for (const paint of paints) {
+    paint.setShader(shader)
+    markShaded(r, paint)
+  }
+}
+
 export function applyPatternFill(
   r: SkiaRenderer,
   fill: Fill,
   node: SceneNode,
   graph: SceneGraph,
-  drawSourceFills: DrawSourceFills
+  drawSourceFills: DrawSourceFills,
+  paints: readonly Paint[] = [r.fillPaint]
 ): boolean {
   const sourceId = fill.sourceNodeId
   if (!sourceId || sourceId === node.id || sourceId === node.source.id) {
@@ -133,8 +142,7 @@ export function applyPatternFill(
   const cached = nested ? undefined : tiles.shaders.get(key)
   if (cached) {
     tiles.addTarget(cached.sourceId, node.id)
-    r.fillPaint.setShader(cached.shader)
-    r.fillPaintShaded = true
+    setShaderOn(r, paints, cached.shader)
     return true
   }
   const source = drawableSource(tiles, graph, sourceId)
@@ -143,8 +151,7 @@ export function applyPatternFill(
   }
   const dependsOnRenderState = nested || r.viewportImageRendering || r.images.exporting !== null
   const shader = recordWithoutReentry(r, tiles, source, fill, graph, drawSourceFills)
-  r.fillPaint.setShader(shader)
-  r.fillPaintShaded = true
+  setShaderOn(r, paints, shader)
   tiles.addTarget(source.id, node.id)
   if (dependsOnRenderState || !tiles.shaders.set(key, { shader, sourceId: source.id })) {
     shader.delete()

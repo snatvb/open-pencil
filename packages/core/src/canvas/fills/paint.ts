@@ -17,6 +17,7 @@ import type { SkiaRenderer } from '#core/canvas/renderer/skia'
 import { drawOutline, withNodeOutline } from '#core/canvas/shapes'
 
 import { makeDiamondGradient } from './gradients/diamond'
+import { markShaded } from './shaded'
 
 export function paintFills(
   r: SkiaRenderer,
@@ -73,12 +74,6 @@ export function clearStrokeShader(r: SkiaRenderer): void {
   r.strokePaintShaded = false
 }
 
-/** Records that `paint`, when it is a shared one, now carries a shader. */
-function markShaded(r: SkiaRenderer, paint: Paint): void {
-  if (paint === r.fillPaint) r.fillPaintShaded = true
-  else if (paint === r.strokePaint) r.strokePaintShaded = true
-}
-
 export function drawNodeFill(r: SkiaRenderer, canvas: Canvas, node: SceneNode, fill?: Fill): void {
   if (node.type === 'TEXT') r.renderText(canvas, node, fill)
   else if (node.type !== 'LINE') {
@@ -90,6 +85,15 @@ function drawSourceFills(r: SkiaRenderer, canvas: Canvas, source: SceneNode, gra
   if (!drawVectorMultiStyleFills(r, canvas, source, graph)) {
     paintFills(r, source.fills, source, graph, (fill) => drawNodeFill(r, canvas, source, fill))
   }
+}
+
+export function applyPatternStroke(
+  r: SkiaRenderer,
+  stroke: Fill,
+  node: SceneNode,
+  graph: SceneGraph
+): boolean {
+  return applyPatternFill(r, stroke, node, graph, drawSourceFills, [r.strokePaint, r.fillPaint])
 }
 
 export function applyFill(
