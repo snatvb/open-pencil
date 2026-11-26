@@ -60,31 +60,53 @@ function fixed(view: DataView, offset: number): number {
   return view.getInt32(offset) / 65536
 }
 
+const UNICODE_PLATFORM = 0
+const MAC_ENGLISH = 0
+
+function nameRank(platform: number, language: number): number {
+  if (platform === WINDOWS_PLATFORM && language === ENGLISH_US) {
+    return 0
+  }
+  if (platform === MAC_PLATFORM && language === MAC_ENGLISH) {
+    return 1
+  }
+  return 2
+}
+
+function nameText(platform: number, encoding: number, bytes: Uint8Array): string | null {
+  if (platform === WINDOWS_PLATFORM || platform === UNICODE_PLATFORM) {
+    return WINDOWS_NAMES.decode(bytes)
+  }
+  if (platform === MAC_PLATFORM && encoding === MAC_ROMAN) {
+    return MAC_ROMAN_NAMES.decode(bytes)
+  }
+  return null
+}
+
 function fontName(view: DataView, name: TableRange, nameId: number): string | null {
   const end = name.offset + name.length
   if (name.length < NAME_HEADER_SIZE) return null
   const count = view.getUint16(name.offset + 2)
   const strings = name.offset + view.getUint16(name.offset + 4)
   if (name.offset + NAME_HEADER_SIZE + count * NAME_RECORD_SIZE > end) return null
-  let fallback: string | null = null
+  let best: { rank: number; text: string } | null = null
   for (let i = 0; i < count; i++) {
     const record = name.offset + NAME_HEADER_SIZE + i * NAME_RECORD_SIZE
-    if (view.getUint16(record + 6) !== nameId) continue
     const platform = view.getUint16(record)
-    const language = view.getUint16(record + 4)
+    const rank = nameRank(platform, view.getUint16(record + 4))
     const length = view.getUint16(record + 8)
     const start = strings + view.getUint16(record + 10)
-    if (start + length > end) continue
+    const outranked = best !== null && best.rank <= rank
+    if (view.getUint16(record + 6) !== nameId || outranked || start + length > end) {
+      continue
+    }
     const bytes = new Uint8Array(view.buffer, view.byteOffset + start, length)
-    if (platform === WINDOWS_PLATFORM) {
-      const value = WINDOWS_NAMES.decode(bytes)
-      if (language === ENGLISH_US) return value
-      fallback ??= value
-    } else if (platform === MAC_PLATFORM && view.getUint16(record + 2) === MAC_ROMAN) {
-      fallback ??= MAC_ROMAN_NAMES.decode(bytes)
+    const text = nameText(platform, view.getUint16(record + 2), bytes)?.trim()
+    if (text) {
+      best = { rank, text }
     }
   }
-  return fallback
+  return best?.text ?? null
 }
 
 const FAMILY_NAME = 1
@@ -104,6 +126,12 @@ export function fontFaceName(data: ArrayBuffer): FontFamilyStyle | null {
   const style =
     fontName(view, name, TYPOGRAPHIC_SUBFAMILY_NAME) ?? fontName(view, name, SUBFAMILY_NAME)
   return family ? { family, style: style ?? 'Regular' } : null
+}
+
+export function fontLegacyFamilyName(data: ArrayBuffer): string | null {
+  const view = new DataView(data)
+  const name = sfntTable(view, 'name')
+  return name && fontName(view, name, FAMILY_NAME)
 }
 
 /** A variation axis of a font: its tag, its range and default, and the name the font gives it. */
