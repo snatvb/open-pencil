@@ -73,6 +73,46 @@ function shadowUnderLaterSibling(): { graph: SceneGraph; frameId: string } {
   return { graph, frameId: frame.id }
 }
 
+function shadowUnderCousin(): { graph: SceneGraph; frameId: string } {
+  const graph = new SceneGraph()
+  const column = graph.createNode('FRAME', graph.getPages()[0].id, {
+    width: 120,
+    height: 100,
+    layoutMode: 'VERTICAL',
+    paddingLeft: 10,
+    paddingTop: 10,
+    fills: [{ type: 'SOLID', color: BACKDROP, opacity: 1, visible: true }]
+  })
+  const row = graph.createNode('FRAME', column.id, {
+    width: 100,
+    height: 20,
+    layoutMode: 'HORIZONTAL',
+    fills: []
+  })
+  graph.createNode('RECTANGLE', row.id, {
+    width: 40,
+    height: 20,
+    fills: [{ type: 'SOLID', color: { r: 1, g: 1, b: 1, a: 1 }, opacity: 1, visible: true }],
+    effects: [
+      {
+        type: 'DROP_SHADOW',
+        radius: 0,
+        spread: 0,
+        offset: { x: 60, y: 20 },
+        color: SHADOW,
+        visible: true,
+        blendMode: 'MULTIPLY'
+      }
+    ]
+  })
+  graph.createNode('RECTANGLE', column.id, {
+    width: 100,
+    height: 40,
+    fills: [{ type: 'SOLID', color: NEIGHBOUR, opacity: 1, visible: true }]
+  })
+  return { graph, frameId: column.id }
+}
+
 async function pixelOf(
   page: Page,
   { graph, frameId }: { graph: SceneGraph; frameId: string }
@@ -115,6 +155,13 @@ test.describe('blended shadows in DOM/CSS export, as the canvas blends them', ()
   test('a normal shadow still covers the backdrop', async ({ page }) => {
     const pixel = await pixelOf(page, sharpShadowOver('NORMAL'))
     expect(pixel).toEqual([byte(SHADOW.r), byte(SHADOW.g), byte(SHADOW.b)])
+  })
+
+  test('a layer further out, after the frame holding the shadow, paints over it', async ({
+    page
+  }) => {
+    const pixel = await pixelOf(page, shadowUnderCousin())
+    expect(pixel).toEqual([byte(NEIGHBOUR.r), byte(NEIGHBOUR.g), byte(NEIGHBOUR.b)])
   })
 
   test('a later sibling paints over the blended shadow', async ({ page }) => {

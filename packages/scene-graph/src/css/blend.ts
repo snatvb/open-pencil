@@ -29,7 +29,6 @@ const CSS_BLEND_MODE_NAMES = [
 export const CSS_BLEND_MODE: Partial<Record<BlendMode, string>> =
   Object.fromEntries(CSS_BLEND_MODE_NAMES)
 
-/** The blend mode a CSS blend mode name stands for. */
 export function blendModeFromCSS(name: string): BlendMode | undefined {
   return CSS_BLEND_MODE_NAMES.find(([, css]) => css === name)?.[0]
 }

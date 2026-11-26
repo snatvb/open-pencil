@@ -146,6 +146,24 @@ function dropShadowBlendMode(effect: Effect): string | null {
   return blend && BROWSER_BLEND_MODES.has(blend) ? blend : null
 }
 
+export function hasBlendedDropShadow(effects: readonly Effect[]): boolean {
+  return effects.some((effect) => effect.visible && dropShadowBlendMode(effect) !== null)
+}
+
+export function unblendedShadowsToCSS(
+  effects: Effect[],
+  css: EffectFieldCSS,
+  profile: ColorProfile
+): string | undefined {
+  const shadows = visibleEffects(effects).filter(
+    ([, effect]) => isShadow(effect) && dropShadowBlendMode(effect) === null
+  )
+  if (shadows.length === 0) {
+    return undefined
+  }
+  return shadows.map(([index, effect]) => shadowToCSS(effect, index, css, profile)).join(', ')
+}
+
 export interface BlendedShadowCSS {
   boxShadow: string
   blend: string
@@ -169,14 +187,11 @@ export function blendedShadowsToCSS(
 export function effectsToCSS(
   effects: Effect[],
   css: EffectFieldCSS,
-  profile: ColorProfile,
-  withoutBlendedDropShadows = false
+  profile: ColorProfile
 ): DesignStyleDeclaration {
   const style: DesignStyleDeclaration = {}
   const visible = visibleEffects(effects)
-  const shadows = visible.filter(
-    ([, effect]) => isShadow(effect) && !(withoutBlendedDropShadows && dropShadowBlendMode(effect))
-  )
+  const shadows = visible.filter(([, effect]) => isShadow(effect))
   if (shadows.length > 0) {
     style['box-shadow'] = shadows
       .map(([index, effect]) => shadowToCSS(effect, index, css, profile))

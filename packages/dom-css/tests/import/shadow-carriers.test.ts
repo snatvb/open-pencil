@@ -42,4 +42,29 @@ describe('shadow carriers in imported HTML', () => {
       [10, 'SOFT_LIGHT']
     ])
   })
+
+  test('keep an element marked with another value, or holding content, as a layer', () => {
+    const marked = (value: string, text: string) => ({
+      type: 'element' as const,
+      tagName: 'div',
+      attrs: { [SHADOW_CARRIER_ATTRIBUTE]: value },
+      computedStyle: { 'box-shadow': '0px 2px 4px 0px rgba(0, 0, 0, 0.5)' },
+      children: text ? [{ type: 'text' as const, text }] : []
+    })
+    const graph = designDocumentToSceneGraph({
+      type: 'document',
+      children: [
+        {
+          type: 'element',
+          tagName: 'div',
+          attrs: {},
+          computedStyle: { width: '100px', height: '60px' },
+          children: [marked('drop', 'Hello'), marked('', '')]
+        }
+      ]
+    })
+    const layer = firstLayer(graph)
+    expect(layer?.effects).toEqual([])
+    expect(graph.getChildren(layer?.id ?? '')).toHaveLength(2)
+  })
 })

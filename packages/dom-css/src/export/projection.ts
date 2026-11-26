@@ -13,6 +13,8 @@ import type { DesignDocument, DesignElement, DesignNode, DesignStyleDeclaration 
 import {
   cssColor,
   effectsToCSS,
+  hasBlendedDropShadow,
+  unblendedShadowsToCSS,
   fillToCSS,
   letterSpacingRoomCSS,
   letterSpacingToCSS,
@@ -247,8 +249,7 @@ function styleFromSceneNode(
   parent: SceneNode | undefined,
   css: FieldCSS,
   profile: ColorProfile,
-  metrics: CanvasMetrics | undefined,
-  withoutBlendedDropShadows = false
+  metrics: CanvasMetrics | undefined
 ): DesignStyleDeclaration {
   const style: DesignStyleDeclaration = {}
   addSize(style, node, parent, css)
@@ -257,7 +258,7 @@ function styleFromSceneNode(
   addBackground(style, node, css, profile)
   addImageStyle(style, node)
   addStroke(style, node, css, profile)
-  Object.assign(style, effectsToCSS(node.effects, css, profile, withoutBlendedDropShadows))
+  Object.assign(style, effectsToCSS(node.effects, css, profile))
   if (node.opacity < 1) style.opacity = css('opacity', String(node.opacity))
   addCornerRadii(style, node, css)
   if (node.clipsContent) style.overflow = 'hidden'
@@ -372,6 +373,36 @@ interface ProjectionContext {
   canvasMetrics: CanvasMetrics | undefined
   shown: ReadonlySet<string> | undefined
   blendedShadows: 'carriers' | 'inline'
+  carrierHolders: WeakSet<DesignNode>
+  holdsCarrier: (node: DesignNode) => boolean
+}
+
+function paintAboveCarriers(
+  context: ProjectionContext,
+  element: DesignElement,
+  children: readonly DesignNode[],
+  hostCarries: boolean
+): DesignElement {
+  if (paintAboveShadowCarriers(children, hostCarries, context.holdsCarrier)) {
+    context.carrierHolders.add(element)
+  }
+  return element
+}
+
+function carryBlendedShadows(
+  node: SceneNode,
+  style: DesignStyleDeclaration,
+  css: FieldCSS,
+  profile: ColorProfile
+): DesignElement[] {
+  const unblended = unblendedShadowsToCSS(node.effects, css, profile)
+  if (unblended === undefined) {
+    delete style['box-shadow']
+  } else {
+    style['box-shadow'] = unblended
+  }
+  becomeContainingBlock(style)
+  return blendedShadowCarriers(node, css, profile)
 }
 
 /**
@@ -462,7 +493,7 @@ function sceneNodeToDesignNode(
     .filter((child): child is DesignNode => child !== null)
 
   if (node.type === 'CANVAS') {
-    return {
+    const page: DesignElement = {
       type: 'element',
       tagName: 'main',
       attrs,
@@ -470,28 +501,27 @@ function sceneNodeToDesignNode(
       sourceSceneNode: node,
       children
     }
+    return paintAboveCarriers(context, page, children, false)
   }
 
   const shader = layerShader(graph, node)
   const tagName = tagNameForNode(node)
-  const carriesBlendedShadows = blendsShadowsWithPage(context, node, tagName, shader)
-  const style = styleFromSceneNode(node, parent, css, profile, metrics, carriesBlendedShadows)
+  const carriesBlendedShadows =
+    hasBlendedDropShadow(node.effects) && blendsShadowsWithPage(context, node, tagName, shader)
+  const style = styleFromSceneNode(node, parent, css, profile, metrics)
   if (shader) addShaderLayerStyle(style)
-  const shadowCarriers = carriesBlendedShadows ? blendedShadowCarriers(node, css, profile) : []
-  if (shadowCarriers.length > 0) {
-    becomeContainingBlock(style)
-  }
-  paintAboveShadowCarriers(children, shadowCarriers.length > 0)
-  return {
+  const shadowCarriers = carriesBlendedShadows ? carryBlendedShadows(node, style, css, profile) : []
+  const element: DesignElement = {
     type: 'element',
     tagName,
     attrs,
     inlineStyle: style,
     sourceSceneNodeId: node.id,
     sourceSceneNode: node,
-    children: [...shadowCarriers, ...children],
+    children: carriesBlendedShadows ? [...shadowCarriers, ...children] : children,
     shader
   }
+  return paintAboveCarriers(context, element, children, carriesBlendedShadows)
 }
 
 function projectionContext(
@@ -505,6 +535,7 @@ function projectionContext(
     blendedShadows = 'carriers'
   }: SceneGraphToDesignOptions
 ): ProjectionContext {
+  const carrierHolders = new WeakSet<DesignNode>()
   return {
     graph,
     includeSourceIds,
@@ -512,7 +543,9 @@ function projectionContext(
     vectorElement,
     canvasMetrics,
     shown,
-    blendedShadows
+    blendedShadows,
+    carrierHolders,
+    holdsCarrier: (node) => carrierHolders.has(node)
   }
 }
 
@@ -528,7 +561,7 @@ export function sceneGraphToDesignDocument(
         .map((child) => sceneNodeToDesignNode(context, child, modes, true))
         .filter((child): child is DesignNode => child !== null)
     : []
-  paintAboveShadowCarriers(children, false)
+  paintAboveShadowCarriers(children, false, context.holdsCarrier)
   return { type: 'document', sourceGraph: graph, tokens: context.tokens, children }
 }
 
@@ -557,7 +590,7 @@ export function sceneNodesToDesignDocument(
     const projected = node ? sceneNodeToDesignNode(context, node, modes, true) : null
     return projected ? [projected] : []
   })
-  paintAboveShadowCarriers(children, false)
+  paintAboveShadowCarriers(children, false, context.holdsCarrier)
   return { type: 'document', sourceGraph: graph, tokens: context.tokens, children }
 }
 

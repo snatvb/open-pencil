@@ -11,11 +11,18 @@ import { becomeContainingBlock } from './position'
 
 export const SHADOW_CARRIER_ATTRIBUTE = 'data-open-pencil-shadow'
 
+const CARRIER_KIND = 'drop'
+
 export function isShadowCarrier(node: {
   type: string
   attrs?: Readonly<Record<string, string>>
+  children?: readonly unknown[]
 }): boolean {
-  return node.type === 'element' && node.attrs?.[SHADOW_CARRIER_ATTRIBUTE] !== undefined
+  return (
+    node.type === 'element' &&
+    node.attrs?.[SHADOW_CARRIER_ATTRIBUTE] === CARRIER_KIND &&
+    node.children?.length === 0
+  )
 }
 
 const outset = (width: number) => (width === 0 ? '0px' : `-${width}px`)
@@ -25,7 +32,7 @@ function shadowCarrier(node: SceneNode, shadow: BlendedShadowCSS): DesignElement
   return {
     type: 'element',
     tagName: 'div',
-    attrs: { 'aria-hidden': 'true', [SHADOW_CARRIER_ATTRIBUTE]: 'drop' },
+    attrs: { 'aria-hidden': 'true', [SHADOW_CARRIER_ATTRIBUTE]: CARRIER_KIND },
     children: [],
     inlineStyle: {
       position: 'absolute',
@@ -52,10 +59,6 @@ export function blendedShadowCarriers(
   )
 }
 
-function hasShadowCarrier(node: DesignNode): boolean {
-  return node.type === 'element' && node.children.some(isShadowCarrier)
-}
-
 function paintInTreeOrder(node: DesignNode): void {
   if (node.type === 'element') {
     node.inlineStyle ??= {}
@@ -63,14 +66,17 @@ function paintInTreeOrder(node: DesignNode): void {
   }
 }
 
-// CSS paints positioned boxes over static ones, so what the canvas draws over a shadow is positioned too.
+// CSS paints positioned boxes over static ones: what the canvas draws over a shadow is positioned.
 export function paintAboveShadowCarriers(
   children: readonly DesignNode[],
-  hostCarries: boolean
-): void {
-  const firstHost = children.findIndex(hasShadowCarrier)
-  const above = hostCarries ? children : children.slice(firstHost + 1)
-  if (hostCarries || firstHost !== -1) {
-    above.forEach(paintInTreeOrder)
+  hostCarries: boolean,
+  holdsCarrier: (node: DesignNode) => boolean
+): boolean {
+  const firstHolder = children.findIndex(holdsCarrier)
+  if (!hostCarries && firstHolder === -1) {
+    return false
   }
+  const above = hostCarries ? children : children.slice(firstHolder + 1)
+  above.forEach(paintInTreeOrder)
+  return true
 }

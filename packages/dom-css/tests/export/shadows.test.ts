@@ -234,4 +234,23 @@ describe('paint order around a blended drop shadow', () => {
     const { position, before } = row()
     expect(position(before.id)).toBeUndefined()
   })
+
+  test('what follows a frame holding the shadow, further out, paints over it too', () => {
+    const graph = new SceneGraph()
+    const column = graph.createNode('FRAME', graph.getPages()[0].id, {
+      width: 200,
+      height: 100,
+      layoutMode: 'VERTICAL'
+    })
+    const row = graph.createNode('FRAME', column.id, {
+      width: 200,
+      height: 40,
+      layoutMode: 'HORIZONTAL'
+    })
+    graph.createNode('RECTANGLE', row.id, { width: 40, height: 40, effects: [multiply()] })
+    graph.createNode('RECTANGLE', column.id, { width: 200, height: 20 })
+    const [holder, below] = exportedNode(graph, column.id).children.map(element)
+    expect(holder?.inlineStyle?.position).toBeUndefined()
+    expect(below?.inlineStyle?.position).toBe('relative')
+  })
 })
