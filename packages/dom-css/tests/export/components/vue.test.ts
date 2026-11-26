@@ -26,7 +26,7 @@ import {
   toggleGroupComponent
 } from '#dom-css-tests/behaviours/fixtures/groups'
 import { plainBadgeSet } from '#dom-css-tests/behaviours/fixtures/plain'
-import { componentSet } from '#dom-css-tests/behaviours/fixtures/sets'
+import { componentSet, withBlendedShadow } from '#dom-css-tests/behaviours/fixtures/sets'
 import { shaderBackdropSet, shaderHeroSet } from '#dom-css-tests/export/components/shader-fixtures'
 import type { ComponentStyling } from '#dom-css/export'
 import { exportStorybook } from '#dom-css/index'
@@ -477,6 +477,26 @@ describe('generated Vue form controls', () => {
     // An `aria-invalid` the caller sets reaches the input too, not just the root it falls to.
     const passed = await render(component, { 'aria-invalid': 'true' })
     expect(passed).toMatch(/<input[^>]*aria-invalid="true"/)
+  })
+})
+
+describe('generated Vue components with a blended shadow on a part', () => {
+  test('tabs still pair triggers and panels by their labels', async () => {
+    for (const part of ['List', 'Panels']) {
+      const { component } = await generate(withBlendedShadow(tabsComponent(), part))
+      const second = await render(component, { value: 'password' })
+      expect(second).toContain('Password settings')
+      expect(second).not.toContain('Account settings')
+      expect(second).toContain('data-open-pencil-shadow')
+    }
+  })
+
+  test('a slot keeps its shadow when the caller fills it', async () => {
+    const { component } = await generate(withBlendedShadow(plainBadgeSet(), 'Extra'))
+    const filled = await renderToString(
+      createSSRApp({ render: () => h(component, {}, { extra: () => h('b', 'Custom') }) })
+    )
+    expect(filled).toMatch(/data-open-pencil-shadow[\s\S]*<b>Custom<\/b>/)
   })
 })
 

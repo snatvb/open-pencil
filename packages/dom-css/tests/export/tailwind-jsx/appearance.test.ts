@@ -262,7 +262,7 @@ describe('Tailwind JSX blended shadows', () => {
     expect(tw(graph, node.id)).toBe(
       [
         '<div data-name="Rectangle" className="relative w-10 h-5">',
-        '  <div aria-hidden="true" className="absolute inset-0 shadow-[0px_0px_8.6px_0px_rgba(0,_0,_0,_0.5)] mix-blend-multiply pointer-events-none rounded-[inherit]" />',
+        '  <div aria-hidden="true" data-open-pencil-shadow="drop" className="absolute inset-0 shadow-[0px_0px_8.6px_0px_rgba(0,_0,_0,_0.5)] mix-blend-multiply pointer-events-none rounded-[inherit]" />',
         '</div>'
       ].join('\n')
     )

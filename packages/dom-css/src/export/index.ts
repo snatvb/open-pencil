@@ -14,6 +14,7 @@ export {
   type TailwindJSXWithLayers
 } from './tailwind-jsx'
 export { serializeHTML, serializeNode } from './html'
+export { isShadowCarrier, SHADOW_CARRIER_ATTRIBUTE } from './shadows'
 export {
   LAYER_COMPONENT_FRAMEWORKS,
   layerComponents,

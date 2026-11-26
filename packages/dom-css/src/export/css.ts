@@ -133,13 +133,17 @@ function addBlurs(
   }
 }
 
-// `box-shadow` cannot carry a blend mode, so a blended drop shadow needs an element of its own.
+// Chromium and Firefox have no `plus-darker`, so a linear burn shadow stays a plain one.
+const BROWSER_BLEND_MODES = new Set(
+  Object.values(CSS_BLEND_MODE).filter((blend) => blend !== 'normal' && blend !== 'plus-darker')
+)
+
 function dropShadowBlendMode(effect: Effect): string | null {
   if (effect.type !== 'DROP_SHADOW' || !effect.blendMode) {
     return null
   }
   const blend = CSS_BLEND_MODE[effect.blendMode]
-  return blend && blend !== 'normal' ? blend : null
+  return blend && BROWSER_BLEND_MODES.has(blend) ? blend : null
 }
 
 export interface BlendedShadowCSS {

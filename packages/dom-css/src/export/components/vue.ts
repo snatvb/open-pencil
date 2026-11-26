@@ -1,13 +1,14 @@
 import { HEADING_RESET } from '#dom-css/behaviours/reset'
 import { stateStylesToCSS } from '#dom-css/behaviours/states/css'
 import dedent from 'dedent'
-import { compact } from 'es-toolkit/array'
+import { compact, partition } from 'es-toolkit/array'
 import { omit } from 'es-toolkit/object'
 import { camelCase, kebabCase, upperFirst } from 'es-toolkit/string'
 
 import { es, vue } from '@open-pencil/emit'
 import type { ShaderComponent } from '@open-pencil/scene-graph/shaders'
 
+import { isShadowCarrier } from '../shadows'
 import { claimName } from '../storybook/names'
 import { progressWidth } from './fields'
 import {
@@ -304,19 +305,22 @@ function designElement(node: ComponentElement, uses: TemplateUses): vue.VueEleme
   if (reka) uses.reka.add(reka)
   const native = node.part === 'root' && !reka
   const button = native && uses.kind === 'button'
-  const content = node.children.map((child) => templateNode(child, uses))
-  const children = node.shader ? [shaderCanvas(node.shader, uses), ...content] : content
+  const [carriers, layers] = partition(node.children, isShadowCarrier)
+  const drawnCarriers = carriers.map((child) => templateNode(child, uses))
+  const content = layers.map((child) => templateNode(child, uses))
+  const shader = node.shader ? [shaderCanvas(node.shader, uses)] : []
   const element = drawing(
     vue.element(
       reka ?? (button ? 'button' : node.tag),
       elementAttributes(node, uses, { native, button }),
       // A slot frame shows what the caller passes, or the design's content.
-      node.slot
-        ? [
-            ...(node.shader ? [shaderCanvas(node.shader, uses)] : []),
-            vue.element('slot', [vue.attribute('name', node.slot)], content)
-          ]
-        : children
+      [
+        ...shader,
+        ...drawnCarriers,
+        ...(node.slot
+          ? [vue.element('slot', [vue.attribute('name', node.slot)], content)]
+          : content)
+      ]
     ),
     node.layerId,
     uses

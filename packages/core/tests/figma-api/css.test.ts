@@ -39,6 +39,25 @@ describe('getCSSAsync', () => {
     })
   })
 
+  test('keeps a blended drop shadow on the layer’s own box-shadow, without its blend', async () => {
+    const figma = createAPI()
+    const rect = figma.createRectangle()
+    rect.effects = [
+      {
+        type: 'DROP_SHADOW',
+        radius: 10,
+        spread: 0,
+        offset: { x: 0, y: 4 },
+        color: { r: 0, g: 0, b: 0, a: 0.5 },
+        visible: true,
+        blendMode: 'MULTIPLY'
+      }
+    ]
+    const css = await rect.getCSSAsync()
+    expect(css['box-shadow']).toBe('0px 4px 8.6px 0px rgba(0, 0, 0, 0.5)')
+    expect(css.position).toBeUndefined()
+  })
+
   test('gives a hidden layer the CSS it would have shown', async () => {
     const figma = createAPI()
     const rect = figma.createRectangle()

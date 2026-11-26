@@ -4,6 +4,7 @@ import type { SceneGraph, SceneNode } from '@open-pencil/scene-graph'
 import { behaviourOwner, findLayerByPath } from '@open-pencil/scene-graph/behaviours'
 import { instanceMainComponent } from '@open-pencil/scene-graph/instances'
 
+import { isShadowCarrier } from '../shadows'
 import type { ComponentModel } from './model'
 import { placementOnly, referenceValues, shownText, type UsedLayer } from './references'
 import { slugValues, textOf, type ChoiceModel } from './repeats'
@@ -35,7 +36,7 @@ export function groupItems(
   build: ItemBuilder
 ): { item: ComponentModel; used: Map<StateElement, UsedLayer>; choice: ChoiceModel } | null {
   const elements = (itemsElement?.children ?? []).filter(
-    (child): child is StateElement => child.type === 'element'
+    (child): child is StateElement => child.type === 'element' && !isShadowCarrier(child)
   )
   const instances = elements.map((element) => {
     const path = element.key.split('\0')[0] ?? ''

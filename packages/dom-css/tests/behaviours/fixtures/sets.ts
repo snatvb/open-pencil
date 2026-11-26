@@ -90,3 +90,27 @@ export function withTextProperty(
   })
   return { graph, set: graph.getNode(set.id) ?? set }
 }
+
+/** Gives every layer named `name` a drop shadow that multiplies with what lies below it. */
+export function withBlendedShadow<T extends { graph: SceneGraph }>(fixture: T, name: string): T {
+  const layers = [...fixture.graph.getAllNodes()].filter((node) => node.name === name)
+  if (layers.length === 0) {
+    throw new Error(`Expected a layer named ${name}`)
+  }
+  for (const layer of layers) {
+    fixture.graph.updateNode(layer.id, {
+      effects: [
+        {
+          type: 'DROP_SHADOW',
+          radius: 4,
+          spread: 0,
+          offset: { x: 0, y: 2 },
+          color: { r: 0, g: 0, b: 0, a: 0.3 },
+          visible: true,
+          blendMode: 'MULTIPLY'
+        }
+      ]
+    })
+  }
+  return fixture
+}

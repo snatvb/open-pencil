@@ -2,6 +2,7 @@ import {
   sceneNodeToDesignDocument,
   type SceneGraphToDesignOptions
 } from '#dom-css/export/projection'
+import { isShadowCarrier } from '#dom-css/export/shadows'
 import type { DesignElement, DesignNode, DesignText } from '#dom-css/types'
 import { omit } from 'es-toolkit/object'
 
@@ -51,16 +52,36 @@ export function layerKind(graph: SceneGraph, node: SceneNode | undefined): strin
   return icon ? `icon ${icon.name}` : undefined
 }
 
+function placesAmongTheirKind(children: readonly DesignNode[]): [DesignNode, string][] {
+  let layers = 0
+  let shadows = 0
+  return children.map((child) => [
+    child,
+    isShadowCarrier(child) ? `shadow${shadows++}` : String(layers++)
+  ])
+}
+
+function variantLayers(
+  graph: SceneGraph,
+  variant: SceneNode,
+  element: DesignElement,
+  key: string
+): Array<VariantLayer | DesignText> {
+  return placesAmongTheirKind(element.children).map(([child, place]) =>
+    variantLayer(graph, variant, child, key, place)
+  )
+}
+
 function variantLayer(
   graph: SceneGraph,
   variant: SceneNode,
   node: DesignNode,
   parentKey: string,
-  index: number
+  place: string
 ): VariantLayer | DesignText {
   if (node.type === 'text') return node
   const source = node.sourceSceneNodeId
-  const path = source ? layerPath(graph, variant.id, source) : `${parentKey}/~${index}`
+  const path = source ? layerPath(graph, variant.id, source) : `${parentKey}/~${place}`
   const text = textContent(node)
   const kind = layerKind(graph, node.sourceSceneNode)
   // A label that reads differently in a variant is a different layer, shown by its state, and
@@ -72,7 +93,7 @@ function variantLayer(
     kind,
     name: node.sourceSceneNode?.name ?? node.tagName,
     element: node,
-    children: node.children.map((child, i) => variantLayer(graph, variant, child, key, i))
+    children: variantLayers(graph, variant, node, key)
   }
 }
 
@@ -132,7 +153,7 @@ export function projectVariant(
     kind: undefined,
     name: variant.name,
     element: root,
-    children: root.children.map((child, i) => variantLayer(graph, variant, child, '', i))
+    children: variantLayers(graph, variant, root, '')
   }
 }
 

@@ -27,6 +27,7 @@ import {
   toggleGroupComponent
 } from '#dom-css-tests/behaviours/fixtures/groups'
 import { plainBadgeSet } from '#dom-css-tests/behaviours/fixtures/plain'
+import { withBlendedShadow } from '#dom-css-tests/behaviours/fixtures/sets'
 import { shaderBackdropSet, shaderHeroSet } from '#dom-css-tests/export/components/shader-fixtures'
 import type { ComponentStyling } from '#dom-css/export'
 import { exportStorybook } from '#dom-css/index'
@@ -430,6 +431,39 @@ describe('generated React components', () => {
     const large = render(component, { size: 'Large' })
     expect(large).toMatch(/^<button[^>]*type="button"/)
     expect(large).toContain('data-size="Large"')
+  })
+})
+
+describe('generated React components with a blended shadow on a part', () => {
+  test('tabs still pair triggers and panels by their labels', async () => {
+    for (const part of ['List', 'Panels']) {
+      const { component } = await generate(withBlendedShadow(tabsComponent(), part))
+      expect(render(component)).toContain('Account settings')
+      const second = render(component, { defaultValue: 'password' })
+      expect(second).toContain('Password settings')
+      expect(second).not.toContain('Account settings')
+      expect(second).toContain('data-open-pencil-shadow')
+    }
+  })
+
+  test('a radio group and an accordion still choose among their own items', async () => {
+    const radios = await generate(withBlendedShadow(radioGroupComponent(), 'Items'))
+    const checked = [...render(radios.component).matchAll(/role="radio"[^>]*>/g)].map((tag) =>
+      tag[0].includes('aria-checked="true"')
+    )
+    expect(checked).toEqual([false, true, false])
+    const accordion = await generate(withBlendedShadow(accordionComponent(), 'Items'))
+    const expanded = render(accordion.component, { defaultValue: 'usage' }).match(
+      /aria-expanded="(true|false)"/g
+    )
+    expect(expanded).toEqual(['aria-expanded="false"', 'aria-expanded="true"'])
+  })
+
+  test('a slot keeps its shadow when the caller fills it', async () => {
+    const { component } = await generate(withBlendedShadow(plainBadgeSet(), 'Extra'))
+    const filled = render(component, { extra: createElement('b', null, 'Custom') })
+    expect(filled).toMatch(/data-open-pencil-shadow[\s\S]*<b>Custom<\/b>/)
+    expect(filled).not.toContain('Note')
   })
 })
 

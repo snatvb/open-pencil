@@ -9,7 +9,7 @@ import {
   type ShaderPreset
 } from '@open-pencil/scene-graph/shaders'
 
-import { isPositioned } from '../projection'
+import { isPositioned } from '../position'
 import type { ComponentElement, ComponentNode } from './model'
 
 /** A shader a layer fills with, drawn by the `shaders` library behind the layer's content. */

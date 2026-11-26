@@ -1,8 +1,7 @@
 import { pick } from 'es-toolkit'
 
-import { SceneGraph, type Effect, type SceneNode } from '@open-pencil/scene-graph'
-import { parseCSSAlignSelf, parseCSSNumber, parseCSSShadows } from '@open-pencil/scene-graph/css'
-import { blurRadiusForSigma } from '@open-pencil/scene-graph/geometry'
+import { SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
+import { parseCSSAlignSelf, parseCSSNumber } from '@open-pencil/scene-graph/css'
 import { maxOf } from '@open-pencil/std/arrays'
 
 import type { DesignDocument, DesignElement, DesignNode, DesignStyleDeclaration } from '../types'
@@ -51,6 +50,7 @@ import {
   type CapturedBox,
   type CapturedBoxes
 } from './placement'
+import { cssShadows, foldShadowCarriers, type CarriedShadows } from './shadow-carriers'
 import { stackingOf, type Stackings } from './stacking'
 import { applySVGSize, isInlineSVG } from './svg'
 import {
@@ -78,18 +78,6 @@ import { cssTransform, type CSSTransforms } from './transform'
 
 export interface DesignDocumentToSceneGraphOptions {
   pageName?: string
-}
-
-/**
- * CSS shadows as the layer's effects, each blurred as the browser blurs it: CSS blurs a shadow
- * by half its blur length, which the canvas draws from the radius that gives that sigma.
- */
-function cssShadows(value: string | undefined): Effect[] {
-  // Imported HTML is read as sRGB, as its colors are written for the web.
-  return parseCSSShadows(value, 'srgb').map((effect) => ({
-    ...effect,
-    radius: blurRadiusForSigma(effect.radius / 2)
-  }))
 }
 
 function textContent(node: DesignNode): string {
@@ -288,6 +276,7 @@ interface Recorded {
   stackings: Stackings
   /** Background pictures to place once laid out, by `placeBackgroundPictures`. */
   backgroundPictures: BackgroundPicture[]
+  carriedShadows: CarriedShadows
 }
 
 /** Remembers where the layer's element was laid out, and how many lines its text took. */
@@ -348,6 +337,7 @@ function createElementNode(
     clipsContent: false
   })
   applyElementStyle(graph, node, element, style, recorded.backgroundPictures)
+  node.effects = [...node.effects, ...(recorded.carriedShadows.get(element) ?? [])]
   applyCollapsedBorders(node, element, style, display)
   recordElement(graph, recorded, node, element, style)
   // A box without content keeps its own size, as an image does, unless it declares a layout.
@@ -554,9 +544,10 @@ export interface DesignLayers {
  * it has laid the layers out.
  */
 export function designDocumentToLayers(
-  document: DesignDocument,
+  styled: DesignDocument,
   options: DesignDocumentToSceneGraphOptions = {}
 ): DesignLayers {
+  const { document, carried } = foldShadowCarriers(styled)
   const graph = new SceneGraph()
   const page = graph.getPages().find((node) => node.type === 'CANVAS') ?? graph.addPage('DesignDOM')
   const recorded: Recorded = {
@@ -565,7 +556,8 @@ export function designDocumentToLayers(
     svgs: new Map(),
     collapsedCells: [],
     stackings: [],
-    backgroundPictures: []
+    backgroundPictures: [],
+    carriedShadows: carried
   }
 
   page.name = options.pageName ?? 'DesignDOM'

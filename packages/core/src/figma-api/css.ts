@@ -21,7 +21,8 @@ export function installCSSAccessors(target: object, internals: NodeProxyInternal
       flushPendingLayout(scene)
       const element = sceneNodeToDesignDocument(scene, node.id, {
         vectorElement,
-        shown: new Set([node.id])
+        shown: new Set([node.id]),
+        blendedShadows: 'inline'
       }).children.at(0)
       return element?.type === 'element' ? { ...element.inlineStyle } : {}
     }

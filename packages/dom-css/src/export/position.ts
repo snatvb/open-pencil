@@ -10,6 +10,19 @@ const AXES = {
 
 type Axis = keyof typeof AXES
 
+const POSITIONED = new Set(['relative', 'absolute', 'fixed', 'sticky'])
+
+/** Whether a `position` value makes an element the containing block of what it places. */
+export function isPositioned(position: unknown): boolean {
+  return typeof position === 'string' && POSITIONED.has(position)
+}
+
+export function becomeContainingBlock(style: DesignStyleDeclaration): void {
+  if (!isPositioned(style.position)) {
+    style.position = 'relative'
+  }
+}
+
 const length = (value: number) => `${Number(value.toFixed(3))}px`
 const percent = (value: number) => `${Number((value * 100).toFixed(4))}%`
 

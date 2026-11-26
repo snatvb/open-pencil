@@ -21,8 +21,8 @@ import {
 } from './css'
 import { addGridContainer, addGridPlacement } from './grid'
 import { addBackground, addImageStyle, addStroke, type FieldCSS } from './paint-style'
-import { addPositioning, constraintSizes, placement } from './position'
-import { blendedShadowCarriers } from './shadows'
+import { addPositioning, becomeContainingBlock, constraintSizes, placement } from './position'
+import { blendedShadowCarriers, paintAboveShadowCarriers } from './shadows'
 import { addFlexGap, addPadding } from './spacing'
 import { textCaseToCSS, textElementContent, uniformLetterSpacing } from './text'
 
@@ -46,6 +46,11 @@ export interface SceneGraphToDesignOptions {
   canvasMetrics?: CanvasMetrics
   /** Hidden layers to project as shown, such as the tab panels a component reveals itself. */
   shown?: ReadonlySet<string>
+  /**
+   * Where a drop shadow with a blend mode goes: on an element of its own that blends with the
+   * page, or on the layer's `box-shadow` without its blend, as one layer's own CSS has it.
+   */
+  blendedShadows?: 'carriers' | 'inline'
 }
 
 /** What the canvas measures and CSS would work out differently. */
@@ -178,19 +183,6 @@ function layerShader(graph: SceneGraph, node: SceneNode): DesignElement['shader'
   const bytes = graph.images.get(shader.image)
   const frame = bytes ? imageDataURL(bytes) : undefined
   return { preset: shader.preset, frame }
-}
-
-const POSITIONED = new Set(['relative', 'absolute', 'fixed', 'sticky'])
-
-/** Whether a `position` value makes an element the containing block of what it places. */
-export function isPositioned(position: unknown): boolean {
-  return typeof position === 'string' && POSITIONED.has(position)
-}
-
-function becomeContainingBlock(style: DesignStyleDeclaration): void {
-  if (!isPositioned(style.position)) {
-    style.position = 'relative'
-  }
 }
 
 /** A shader layer contains what plays behind its content, beneath everything it holds. */
@@ -379,6 +371,7 @@ interface ProjectionContext {
   vectorElement: VectorElementRenderer | undefined
   canvasMetrics: CanvasMetrics | undefined
   shown: ReadonlySet<string> | undefined
+  blendedShadows: 'carriers' | 'inline'
 }
 
 /**
@@ -403,6 +396,22 @@ function vectorDesignNode(
     sourceSceneNodeId: node.id,
     sourceSceneNode: node
   }
+}
+
+// Clipping hides a carrier; a transform's or shader's stacking context keeps its blend inside.
+function blendsShadowsWithPage(
+  context: ProjectionContext,
+  node: SceneNode,
+  tagName: string,
+  shader: DesignElement['shader']
+): boolean {
+  return (
+    context.blendedShadows === 'carriers' &&
+    !node.clipsContent &&
+    node.rotation === 0 &&
+    !shader &&
+    tagName !== 'img'
+  )
 }
 
 function sceneNodeToDesignNode(
@@ -465,13 +474,14 @@ function sceneNodeToDesignNode(
 
   const shader = layerShader(graph, node)
   const tagName = tagNameForNode(node)
-  const carriesBlendedShadows = !node.clipsContent && !shader && tagName !== 'img'
+  const carriesBlendedShadows = blendsShadowsWithPage(context, node, tagName, shader)
   const style = styleFromSceneNode(node, parent, css, profile, metrics, carriesBlendedShadows)
   if (shader) addShaderLayerStyle(style)
   const shadowCarriers = carriesBlendedShadows ? blendedShadowCarriers(node, css, profile) : []
   if (shadowCarriers.length > 0) {
     becomeContainingBlock(style)
   }
+  paintAboveShadowCarriers(children, shadowCarriers.length > 0)
   return {
     type: 'element',
     tagName,
@@ -491,7 +501,8 @@ function projectionContext(
     tokens = true,
     vectorElement,
     canvasMetrics,
-    shown
+    shown,
+    blendedShadows = 'carriers'
   }: SceneGraphToDesignOptions
 ): ProjectionContext {
   return {
@@ -500,7 +511,8 @@ function projectionContext(
     tokens: tokens ? new DesignTokens(graph) : undefined,
     vectorElement,
     canvasMetrics,
-    shown
+    shown,
+    blendedShadows
   }
 }
 
@@ -516,7 +528,7 @@ export function sceneGraphToDesignDocument(
         .map((child) => sceneNodeToDesignNode(context, child, modes, true))
         .filter((child): child is DesignNode => child !== null)
     : []
-
+  paintAboveShadowCarriers(children, false)
   return { type: 'document', sourceGraph: graph, tokens: context.tokens, children }
 }
 
@@ -545,6 +557,7 @@ export function sceneNodesToDesignDocument(
     const projected = node ? sceneNodeToDesignNode(context, node, modes, true) : null
     return projected ? [projected] : []
   })
+  paintAboveShadowCarriers(children, false)
   return { type: 'document', sourceGraph: graph, tokens: context.tokens, children }
 }
 

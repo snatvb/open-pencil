@@ -1,7 +1,8 @@
 import { HEADING_RESET } from '#dom-css/behaviours/reset'
 import { stateStylesToCSS } from '#dom-css/behaviours/states/css'
+import { isShadowCarrier } from '#dom-css/export/shadows'
 import dedent from 'dedent'
-import { compact } from 'es-toolkit/array'
+import { compact, partition } from 'es-toolkit/array'
 import { omit } from 'es-toolkit/object'
 import { camelCase } from 'es-toolkit/string'
 
@@ -250,13 +251,19 @@ function designElement(node: ComponentElement, uses: MarkupUses, depth: number):
   // Radix puts an accordion item's trigger in a header, which carries the heading level.
   const header = kind === 'accordionItem' && node.part === 'trigger'
   const childDepth = depth + (header ? 2 : 1)
-  const content = node.children.map((child) => element(child, uses, childDepth))
+  const [carriers, layers] = partition(node.children, isShadowCarrier)
+  const drawnCarriers = carriers.map((child) => element(child, uses, childDepth))
+  const content = layers.map((child) => element(child, uses, childDepth))
   const shader = node.shader ? [shaderCanvas(node.shader, uses, childDepth)] : []
   const drawn = drawing(
     jsx.element(
       tagOf(node, kind),
       attributes,
-      [...shader, ...(node.slot ? [slotContent(node.slot, content, childDepth)] : content)],
+      [
+        ...shader,
+        ...drawnCarriers,
+        ...(node.slot ? [slotContent(node.slot, content, childDepth)] : content)
+      ],
       depth + (header ? 1 : 0),
       inline
     ),

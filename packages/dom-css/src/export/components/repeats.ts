@@ -4,6 +4,7 @@ import type { DesignStyleDeclaration } from '#dom-css/types'
 import { isEmptyObject } from 'es-toolkit/predicate'
 import { kebabCase } from 'es-toolkit/string'
 
+import { isShadowCarrier } from '../shadows'
 import { claimName } from '../storybook/names'
 import { isPlacement } from './references'
 
@@ -31,7 +32,9 @@ export function textOf(node: StateNode): string {
 }
 
 const elementsOf = (element: StateElement | undefined) =>
-  (element?.children ?? []).filter((child): child is StateElement => child.type === 'element')
+  (element?.children ?? []).filter(
+    (child): child is StateElement => child.type === 'element' && !isShadowCarrier(child)
+  )
 
 /**
  * The value each label stands for: the label as a slug, such as `account`, apart from the
