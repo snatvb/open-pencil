@@ -4,7 +4,6 @@ import { createAPI } from '#core-tests/helpers/figma-api'
 
 import { FigmaAPI, type FigmaEffect } from '@open-pencil/core/figma-api'
 import { SceneGraph } from '@open-pencil/scene-graph'
-import { findSharedStyle } from '@open-pencil/scene-graph/shared-styles'
 import { reconcileVariableBindings } from '@open-pencil/scene-graph/variables'
 import { registerTestFont } from '@open-pencil/test-support/fonts/bundled'
 beforeAll(() => registerTestFont())
@@ -229,7 +228,7 @@ describe('bound effects on a layer', () => {
       style.effects = [shadow]
       const rect = api.createRectangle()
       rect.effects = [shadow]
-      const styleNode = findSharedStyle(graph, style.id, 'EFFECT')
+      const styleNode = graph.getSharedStyleNode(style.id, 'EFFECT')
       if (!styleNode) {
         throw new Error('expected the style’s node')
       }
