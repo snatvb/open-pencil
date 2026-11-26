@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 import { defineCommand, runMain } from 'citty'
 
-import { takeFontDirs, useInstalledFonts } from '#cli/fonts/install'
+import { fontDirOptions, takeFontDirs, useInstalledFonts } from '#cli/fonts/install'
+import { printError } from '#cli/format'
 
 import { COMMANDS } from './commands'
 
@@ -14,16 +15,24 @@ const main = defineCommand({
       'OpenPencil CLI — inspect, export, and lint design documents, and drive the running app',
     version
   },
-  args: {
-    'font-dir': {
-      type: 'string',
-      description:
-        'Folder of installed fonts to search before the system ones; repeat for more folders'
-    }
-  },
+  args: fontDirOptions,
   subCommands: COMMANDS
 })
 
-const { fontDirs, args } = takeFontDirs(process.argv.slice(2))
-useInstalledFonts(fontDirs)
-void runMain(main, { rawArgs: args })
+function cliArgs(): string[] | null {
+  try {
+    const { fontDirs, args } = takeFontDirs(process.argv.slice(2))
+    useInstalledFonts(fontDirs)
+    return args
+  } catch (error) {
+    printError(error)
+    return null
+  }
+}
+
+const rawArgs = cliArgs()
+if (rawArgs) {
+  void runMain(main, { rawArgs })
+} else {
+  process.exitCode = 1
+}

@@ -10,6 +10,7 @@ import {
 } from '@open-pencil/core/tools'
 
 import { pageOptions } from '#cli/app/target'
+import { fontDirOptions } from '#cli/fonts/install'
 import { bold, dim, entity, fmtList, kv, printError, warn } from '#cli/format'
 import { documentWriteOptions, writeFigDocument } from '#cli/headless'
 import { readTextSource } from '#cli/input'
@@ -123,6 +124,7 @@ const call = defineCommand({
     description: 'Run one tool against the running app, or headlessly against a document file'
   },
   args: {
+    ...fontDirOptions,
     name: { type: 'positional', description: 'Tool name from `tool list`', required: true },
     file: {
       type: 'positional',

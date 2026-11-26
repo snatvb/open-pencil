@@ -3,7 +3,18 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { fontCollection, namedFont } from '#cli-tests/helpers/fonts'
+import {
+  fontCollection,
+  MAC_ENGLISH,
+  nameRecordTable,
+  namedFont,
+  os2Table,
+  sfnt,
+  UNICODE,
+  WINDOWS_ENGLISH,
+  WINDOWS_GERMAN,
+  type NameRecord
+} from '#cli-tests/helpers/fonts'
 
 import { fontFaceName } from '@open-pencil/core/text'
 
@@ -63,7 +74,126 @@ test('lists every face of a collection and loads each as a font of its own', asy
   expect(fontFaceName(italic)).toEqual({ family: 'Acme Sans', style: 'Italic' })
 })
 
-test('fails to read a file cut short of its table directory', async () => {
+const NAME_RECORD = 12 + 16
+
+function withUint32(bytes: Uint8Array, offset: number, value: number): Uint8Array {
+  const copy = bytes.slice()
+  new DataView(copy.buffer).setUint32(offset, value)
+  return copy
+}
+
+function fontNamed(records: NameRecord[], extraTables: string[] = []): Uint8Array {
+  return sfnt([
+    { tag: 'OS/2', data: os2Table(400, false) },
+    ...extraTables.map((tag) => ({ tag, data: new Uint8Array(16) })),
+    { tag: 'name', data: nameRecordTable(records) }
+  ])
+}
+
+const ACME = namedFont({ 1: 'Acme Sans', 2: 'Regular' })
+const ACME_BOLD = namedFont({ 1: 'Acme Sans', 2: 'Bold' }, 700)
+
+test('reads no face from a file cut short of its table directory', async () => {
   const path = await fontFile('broken.ttf', new TextEncoder().encode('not a font at all'))
-  await expect(readFontFileFaces(path)).rejects.toThrow(RangeError)
+  await expect(readFontFileFaces(path)).resolves.toEqual([])
+})
+
+test('reads lengths from the file only as far as the file goes', async () => {
+  const overlapping = ACME.slice()
+  const view = new DataView(overlapping.buffer)
+  view.setUint32(12 + 8, view.getUint32(NAME_RECORD + 8))
+  const cases = {
+    'huge-name.ttf': withUint32(ACME, NAME_RECORD + 12, 0xffffffff),
+    'far-name.ttf': withUint32(ACME, NAME_RECORD + 8, 0x7ffffff0),
+    'huge-count.ttc': withUint32(fontCollection([ACME]), 8, 2 ** 28),
+    'overlapping.ttf': overlapping
+  }
+  const rss = process.memoryUsage().rss
+  const faces = await Promise.all(
+    Object.entries(cases).map(async ([name, data]) => readFontFileFaces(await fontFile(name, data)))
+  )
+  expect(process.memoryUsage().rss - rss).toBeLessThan(256 * 2 ** 20)
+  expect(faces.map((found) => found.length)).toEqual([0, 0, 0, 1])
+})
+
+test('keeps the good faces of a collection with a broken one', async () => {
+  const collection = withUint32(fontCollection([ACME, ACME_BOLD]), 16, 0xfffffff0)
+  const faces = await readFontFileFaces(await fontFile('half.ttc', collection))
+  expect(faces.map(({ style }) => style)).toEqual(['Regular'])
+})
+
+const NAME_TABLES: Array<[string, NameRecord[], { family: string; style: string } | null]> = [
+  [
+    'blank typographic names',
+    [
+      { ...WINDOWS_ENGLISH, id: 1, text: 'Acme Sans' },
+      { ...WINDOWS_ENGLISH, id: 2, text: 'Bold' },
+      { ...WINDOWS_ENGLISH, id: 16, text: ' ' },
+      { ...WINDOWS_ENGLISH, id: 17, text: ' ' }
+    ],
+    { family: 'Acme Sans', style: 'Bold' }
+  ],
+  [
+    'trailing space in the family',
+    [
+      { ...WINDOWS_ENGLISH, id: 1, text: 'Acme Sans ' },
+      { ...WINDOWS_ENGLISH, id: 2, text: 'Regular' }
+    ],
+    { family: 'Acme Sans', style: 'Regular' }
+  ],
+  [
+    'Unicode platform only',
+    [
+      { ...UNICODE, id: 1, text: 'Acme Sans' },
+      { ...UNICODE, id: 2, text: 'Regular' }
+    ],
+    { family: 'Acme Sans', style: 'Regular' }
+  ],
+  [
+    'blank Windows English family beside a Mac English one',
+    [
+      { ...WINDOWS_ENGLISH, id: 1, text: '' },
+      { ...MAC_ENGLISH, id: 1, text: 'Acme Sans' },
+      { ...WINDOWS_ENGLISH, id: 2, text: 'Regular' }
+    ],
+    { family: 'Acme Sans', style: 'Regular' }
+  ],
+  [
+    'German Windows family beside a Mac English one',
+    [
+      { ...WINDOWS_GERMAN, id: 1, text: 'Acme Grotesk' },
+      { ...MAC_ENGLISH, id: 1, text: 'Acme Sans' },
+      { ...WINDOWS_ENGLISH, id: 2, text: 'Regular' }
+    ],
+    { family: 'Acme Sans', style: 'Regular' }
+  ]
+]
+
+for (const [label, records, names] of NAME_TABLES) {
+  test(`reads names as the desktop does: ${label}`, async () => {
+    const [face] = await readFontFileFaces(await fontFile('face.ttf', fontNamed(records)))
+    expect(face ? { family: face.family, style: face.style } : null).toEqual(names)
+  })
+}
+
+test('knows a face by its legacy family as well as its typographic one', async () => {
+  const path = await fontFile(
+    'acme.ttf',
+    namedFont({ 1: 'Acme Sans Compressed', 2: 'Regular', 16: 'Acme Sans', 17: 'Compressed Medium' })
+  )
+  const [face] = await readFontFileFaces(path)
+  expect(face.familyNames).toEqual(['Acme Sans', 'Acme Sans Compressed'])
+})
+
+test('marks a face whose outlines are only in hvgl as one the renderer cannot draw', async () => {
+  const plain = [
+    { ...WINDOWS_ENGLISH, id: 1, text: 'Acme Sans' },
+    { ...WINDOWS_ENGLISH, id: 2, text: 'Regular' }
+  ]
+  const hvglOnly = await readFontFileFaces(await fontFile('a.ttf', fontNamed(plain, ['hvgl'])))
+  const withGlyf = await readFontFileFaces(
+    await fontFile('b.ttf', fontNamed(plain, ['glyf', 'hvgl']))
+  )
+  expect(hvglOnly[0].drawable).toBe(false)
+  expect(withGlyf[0].drawable).toBe(true)
 })

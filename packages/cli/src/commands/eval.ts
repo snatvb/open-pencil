@@ -6,6 +6,7 @@ import { errorMessage } from '@open-pencil/std/errors'
 
 import { isAppMode, requireFile, rpc } from '#cli/app/client'
 import { appPageTargetRPCArgs, pageOptions } from '#cli/app/target'
+import { fontDirOptions } from '#cli/fonts/install'
 import { printError } from '#cli/format'
 import { documentWriteOptions, editDocument, writeFigDocument } from '#cli/headless'
 import { openHeadlessFigma } from '#cli/tool-data'
@@ -30,6 +31,7 @@ function serializeResult(value: unknown): unknown {
 export default defineCommand({
   meta: { description: 'Execute JavaScript with Figma plugin API' },
   args: {
+    ...fontDirOptions,
     file: {
       type: 'positional',
       description: 'Document file path (omit to connect to running app)',

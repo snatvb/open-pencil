@@ -10,6 +10,7 @@ import type { SceneGraph } from '@open-pencil/scene-graph'
 
 import { isAppMode, requireFile, rpc } from '#cli/app/client'
 import { appPageTargetRPCArgs, requestedPage, type PageCLIArgs } from '#cli/app/target'
+import { listInstalledFonts } from '#cli/fonts/install'
 import {
   editDocument,
   loadDocument,
@@ -29,7 +30,8 @@ import {
 export async function createHeadlessFigma(graph: SceneGraph): Promise<FigmaAPI> {
   const figma = new FigmaAPI(graph, {
     loadPage: (id) => loadDocumentPage(graph, id),
-    pageOfNode: (id) => pendingFigPageOfNode(graph, id)
+    pageOfNode: (id) => pendingFigPageOfNode(graph, id),
+    prepareFontList: listInstalledFonts
   })
   const renderer = await measureTextHeadlessly()
   // The process's one renderer keeps paths by layer id, which another document's layers share.

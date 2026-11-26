@@ -3,6 +3,7 @@ import { defineCommand } from 'citty'
 import { fontManager, prepareGraphFonts, type DocumentFontStatus } from '@open-pencil/core/text'
 
 import { appTargetOptions } from '#cli/app/target'
+import { fontDirOptions, listInstalledFonts } from '#cli/fonts/install'
 import { bold, entity, fmtList, kv, printError } from '#cli/format'
 import { loadDocument } from '#cli/headless'
 import { loadRPCData } from '#cli/rpc-data'
@@ -19,6 +20,7 @@ async function prepareFontStatus(
   fontManager.setOnlineFontProviders({})
   fontManager.setWebFontFetch(null)
   try {
+    await listInstalledFonts()
     return await prepareGraphFonts(graph, roots)
   } finally {
     fontManager.setOnlineFontProviders(
@@ -30,6 +32,7 @@ async function prepareFontStatus(
 export default defineCommand({
   meta: { description: 'Report fonts used by a document' },
   args: {
+    ...fontDirOptions,
     file: {
       type: 'positional',
       description: 'Document file path (omit to connect to running app)',

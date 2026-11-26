@@ -1,9 +1,13 @@
 import { readdir } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 
-import { chunk, groupBy, uniqBy } from 'es-toolkit/array'
+import { chunk, groupBy, uniq, uniqBy } from 'es-toolkit/array'
 
-import type { FamilyFace, HostFontFamily } from '@open-pencil/core/text'
+import {
+  UnsupportedFontFormatError,
+  type FamilyFace,
+  type HostFontFamily
+} from '@open-pencil/core/text'
 import {
   namesWeight,
   namesWidth,
@@ -23,8 +27,8 @@ export interface InstalledFontsOptions {
   onIndexed?: (families: HostFontFamily[]) => void
 }
 
-function familyKey(family: string): string {
-  return family.toLowerCase()
+function isHiddenFamily(family: string): boolean {
+  return family.startsWith('.')
 }
 
 async function fontFiles(folder: string): Promise<string[]> {
@@ -96,10 +100,30 @@ function listedFaces(face: InstalledFace): FamilyFace[] {
 }
 
 function hostFamilies(index: FamilyIndex): HostFontFamily[] {
-  return [...index.values()].map((faces) => ({
+  const drawable = [...index.values()].flat().filter((face) => face.drawable)
+  const families = groupBy(uniq(drawable), (face) => styleSpelling(face.family))
+  return Object.values(families).map((faces) => ({
     family: faces[0].family,
-    faces: uniqBy(faces.flatMap(listedFaces), (face) => styleSpelling(face.style))
+    faces: uniqBy(
+      faces.flatMap(listedFaces),
+      (face) => `${styleSpelling(face.style)}|${face.italic}`
+    )
   }))
+}
+
+function indexByFamilyNames(faces: readonly InstalledFace[]): FamilyIndex {
+  const index: FamilyIndex = new Map()
+  for (const face of faces.filter((candidate) => !isHiddenFamily(candidate.family))) {
+    for (const key of new Set(face.familyNames.map((name) => styleSpelling(name)))) {
+      const listed = index.get(key)
+      if (listed) {
+        listed.push(face)
+      } else {
+        index.set(key, [face])
+      }
+    }
+  }
+  return index
 }
 
 export class InstalledFonts {
@@ -108,9 +132,16 @@ export class InstalledFonts {
   constructor(private readonly options: InstalledFontsOptions) {}
 
   async load(family: string, style: string): Promise<ArrayBuffer | null> {
-    const faces = (await this.familyIndex()).get(familyKey(family)) ?? []
+    const faces = (await this.familyIndex()).get(styleSpelling(family)) ?? []
     const face = chooseInstalledFace(faces, style)
+    if (face && !face.drawable) {
+      throw new UnsupportedFontFormatError(family, style)
+    }
     return face ? readFaceData(face) : null
+  }
+
+  async families(): Promise<HostFontFamily[]> {
+    return hostFamilies(await this.familyIndex())
   }
 
   private familyIndex(): Promise<FamilyIndex> {
@@ -124,10 +155,7 @@ export class InstalledFonts {
     for (const batch of chunk(files, FILES_READ_AT_ONCE)) {
       batches.push((await Promise.all(batch.map(readableFaces))).flat())
     }
-    const faces = batches.flat()
-    const index: FamilyIndex = new Map(
-      Object.entries(groupBy(faces, (face) => familyKey(face.family)))
-    )
+    const index = indexByFamilyNames(batches.flat())
     this.options.onIndexed?.(hostFamilies(index))
     return index
   }

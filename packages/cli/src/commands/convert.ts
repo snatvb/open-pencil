@@ -8,6 +8,7 @@ import { layoutAuthoredNodes } from '@open-pencil/core/layout'
 
 import { requireFile } from '#cli/app/client'
 import { FONT_POLICIES, reportFontStatus } from '#cli/commands/export/font-policy'
+import { fontDirOptions } from '#cli/fonts/install'
 import { ok, printError } from '#cli/format'
 import {
   loadDocument,
@@ -30,6 +31,7 @@ function defaultOutput(file: string, format: string): string {
 export default defineCommand({
   meta: { description: 'Convert a document to another writable format' },
   args: {
+    ...fontDirOptions,
     file: {
       type: 'positional',
       description: 'Input document file path',

@@ -35,7 +35,7 @@ openpencil fonts design.fig --json
 openpencil fonts --document-id tab-123 --page-id 0:1
 ```
 
-File mode checks all document pages using the CLI host's available fonts without downloading online fonts. The CLI finds fonts installed on the machine (the system and user font folders of Windows, macOS, or Linux) the first time a document asks for a face it does not bundle; `--font-dir <folder>`, which you can repeat, adds folders it searches first:
+File mode checks all document pages using the CLI host's available fonts without downloading online fonts. The CLI finds fonts installed on the machine (the system and user font folders of Windows, macOS, or Linux) the first time a document asks for a font, and an installed face is drawn in place of a bundled one, as in the app; `--font-dir <folder>`, which you can repeat, adds folders it searches first:
 
 ```sh
 openpencil fonts design.fig --font-dir ./fonts

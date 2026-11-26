@@ -13,7 +13,7 @@ import { FIXTURES } from '@open-pencil/test-support/paths'
 import { firstPageId, makeSceneGraph } from '@open-pencil/test-support/scene'
 
 import { systemFontFolders } from '#cli/fonts/folders'
-import { takeFontDirs } from '#cli/fonts/install'
+import { FontDirError, takeFontDirs } from '#cli/fonts/install'
 
 requireBuiltWorkspacePackages()
 setDefaultTimeout(60_000)
@@ -41,6 +41,25 @@ test('takes every --font-dir out of the arguments a command parses', () => {
   expect(
     takeFontDirs(['export', '--font-dir', 'a', 'file.fig', '--font-dir=b', '--', '--font-dir', 'c'])
   ).toEqual({ fontDirs: ['a', 'b'], args: ['export', 'file.fig', '--', '--font-dir', 'c'] })
+})
+
+test('refuses a --font-dir without a folder', () => {
+  for (const argv of [['--font-dir='], ['export', '--font-dir'], ['--font-dir', '--json']]) {
+    expect(() => takeFontDirs(argv)).toThrow(FontDirError)
+  }
+})
+
+test('stops with a message when --font-dir has no folder', async () => {
+  const { stderr, exitCode } = await runCLI(['formats', '--font-dir='])
+  expect(exitCode).toBe(1)
+  expect(stderr).toContain('--font-dir needs a folder')
+})
+
+test('lists --font-dir in the help of commands that draw text', async () => {
+  for (const command of ['export', 'fonts', 'eval', 'convert']) {
+    const { stdout } = await runCLI([command, '--help'])
+    expect(stdout).toContain('--font-dir')
+  }
 })
 
 test('looks for installed fonts in each platform’s font folders', () => {

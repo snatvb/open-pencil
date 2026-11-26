@@ -3,9 +3,21 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { namedFont } from '#cli-tests/helpers/fonts'
+import {
+  nameRecordTable,
+  namedFont,
+  os2Table,
+  sfnt,
+  WINDOWS_ENGLISH
+} from '#cli-tests/helpers/fonts'
 
-import { fontFaceName, fontManager, fontTableView, prepareGraphFonts } from '@open-pencil/core/text'
+import {
+  FontManager,
+  fontFaceName,
+  fontManager,
+  fontTableView,
+  prepareGraphFonts
+} from '@open-pencil/core/text'
 import type { HostFontFamily } from '@open-pencil/core/text'
 import { SceneGraph } from '@open-pencil/scene-graph'
 
@@ -22,6 +34,8 @@ function face(
     path: style,
     directoryOffset: 0,
     family: 'Acme Sans',
+    familyNames: ['Acme Sans'],
+    drawable: true,
     style,
     weight,
     italic: false,
@@ -48,6 +62,11 @@ test('picks a face by its own name, compared without case or spaces', () => {
 
 test('picks the normal-width face for a name that only names a weight', () => {
   const faces = [face('Compressed Medium', 500, { normalWidth: false }), face('Book', 500)]
+  expect(chooseInstalledFace(faces, 'Medium')?.style).toBe('Book')
+})
+
+test('takes a width word in the style name over a normal width class', () => {
+  const faces = [face('Compressed Medium', 500), face('Book', 500)]
   expect(chooseInstalledFace(faces, 'Medium')?.style).toBe('Book')
 })
 
@@ -119,7 +138,11 @@ test('scans the folders once, on the first face asked for, however many miss', a
   expect(scans).toBe(1)
 })
 
-test('scans nothing for a document without text or for bundled faces', async () => {
+function weightOf(data: ArrayBuffer | null): number | undefined {
+  return data ? fontTableView(data, 'OS/2')?.getUint16(4) : undefined
+}
+
+test('scans nothing for a document without text', async () => {
   let scans = 0
   useInstalledFonts([], fontManager, () => {
     scans++
@@ -130,14 +153,66 @@ test('scans nothing for a document without text or for bundled faces', async () 
     const pageId = graph.getPages()[0].id
     graph.createNode('RECTANGLE', pageId, { width: 10, height: 10 })
     await prepareGraphFonts(graph, [pageId])
-    await fontManager.loadLocalFont('Inter', 'Regular')
     expect(scans).toBe(0)
   } finally {
     fontManager.setHostFontLoader(null)
   }
 })
 
-test('knows which faces the bundled fonts cover', () => {
-  expect(fontManager.bundlesFace('Inter', 'Regular')).toBe(true)
-  expect(fontManager.bundlesFace('Acme Sans', 'Regular')).toBe(false)
+test('draws a bundled family in its installed font, as the app does', async () => {
+  const folder = await fontFolder({ 'inter.ttf': namedFont({ 1: 'Inter', 2: 'Regular' }, 450) })
+  const manager = new FontManager()
+  useInstalledFonts([folder], manager, () => [])
+  expect(weightOf(await manager.loadLocalFont('Inter', 'Regular'))).toBe(450)
+})
+
+test('searches --font-dir folders before the system ones', async () => {
+  const fontDir = await fontFolder({ 'a.ttf': namedFont({ 1: 'Acme Sans', 2: 'Regular' }, 400) })
+  const system = await fontFolder({ 'b.ttf': namedFont({ 1: 'Acme Sans', 2: 'Regular' }, 450) })
+  const manager = new FontManager()
+  useInstalledFonts([fontDir], manager, () => [system])
+  expect(weightOf(await manager.loadLocalFont('Acme Sans', 'Regular'))).toBe(400)
+})
+
+test('finds a family by its legacy name and spelled without spaces', async () => {
+  const folder = await fontFolder({
+    'acme.ttf': namedFont(
+      { 1: 'Acme Sans Compressed', 2: 'Regular', 16: 'Acme Sans', 17: 'Compressed Medium' },
+      500
+    )
+  })
+  const fonts = new InstalledFonts({ folders: () => [folder] })
+  expect(await fonts.load('Acme Sans', 'Compressed Medium')).not.toBeNull()
+  expect(await fonts.load('Acme Sans Compressed', 'Medium')).not.toBeNull()
+  expect(await fonts.load('AcmeSans', 'Compressed Medium')).not.toBeNull()
+})
+
+test('reports a face the renderer cannot draw as unsupported rather than loading it', async () => {
+  const names = nameRecordTable([
+    { ...WINDOWS_ENGLISH, id: 1, text: 'Acme Sans' },
+    { ...WINDOWS_ENGLISH, id: 2, text: 'Regular' }
+  ])
+  const hvglOnly = sfnt([
+    { tag: 'OS/2', data: os2Table(400, false) },
+    { tag: 'hvgl', data: new Uint8Array(16) },
+    { tag: 'name', data: names }
+  ])
+  const folder = await fontFolder({ 'a.ttf': hvglOnly })
+  const catalogs: HostFontFamily[][] = []
+  const fonts = new InstalledFonts({
+    folders: () => [folder],
+    onIndexed: (families) => catalogs.push(families)
+  })
+  await expect(fonts.load('Acme Sans', 'Regular')).rejects.toMatchObject({
+    name: 'UnsupportedFontFormatError',
+    reason: 'unsupported-format'
+  })
+  expect(catalogs).toEqual([[]])
+})
+
+test('lists the installed families on request, before any face misses', async () => {
+  const folder = await fontFolder({ 'a.ttf': namedFont({ 1: 'Acme Sans', 2: 'Regular' }) })
+  const fonts = new InstalledFonts({ folders: () => [folder] })
+  const families = await fonts.families()
+  expect(families.map(({ family }) => family)).toEqual(['Acme Sans'])
 })

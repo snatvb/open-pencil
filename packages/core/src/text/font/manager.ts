@@ -257,10 +257,6 @@ export class FontManager {
     this.hostFontRequests.clear()
   }
 
-  bundlesFace(family: string, style: string): boolean {
-    return this.bundled.file(family, style) !== undefined
-  }
-
   /** Lets a host that bundles `@open-pencil/core/assets` itself say where each file ended up. */
   setBundledFontLocator(locate: BundledFontLocator | null): void {
     this.bundled.setLocator(locate)

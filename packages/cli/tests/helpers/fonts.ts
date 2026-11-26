@@ -1,7 +1,17 @@
 const DIRECTORY_HEADER = 12
 const TABLE_RECORD = 16
-const WINDOWS = { platform: 3, encoding: 1, language: 0x409 }
-const MAC_ROMAN = { platform: 1, encoding: 0, language: 0 }
+export const WINDOWS_ENGLISH = { platform: 3, encoding: 1, language: 0x409 }
+export const WINDOWS_GERMAN = { platform: 3, encoding: 1, language: 0x407 }
+export const MAC_ENGLISH = { platform: 1, encoding: 0, language: 0 }
+export const UNICODE = { platform: 0, encoding: 3, language: 0 }
+
+export interface NameRecord {
+  platform: number
+  encoding: number
+  language: number
+  id: number
+  text: string
+}
 
 export interface FontTable {
   tag: string
@@ -49,37 +59,39 @@ function utf16(text: string): Uint8Array {
   return new Uint8Array(view.buffer)
 }
 
-export function nameTable(records: NameRecords): Uint8Array {
-  const entries = Object.entries(records).map(([id, text]) => ({ id: Number(id), text }))
-  const strings = [
-    ...entries.map(({ id, text }) => ({ ...WINDOWS, id, data: utf16(text) })),
-    ...entries
-      .filter(({ id }) => id === 1)
-      .map(({ id, text }) => ({ ...MAC_ROMAN, id, data: new TextEncoder().encode(text) }))
-  ].toSorted((a, b) => a.platform - b.platform || a.id - b.id)
-  const stringsOffset = 6 + strings.length * 12
-  const size = strings.reduce((total, { data }) => total + data.length, stringsOffset)
+function encodedName({ platform, text }: NameRecord): Uint8Array {
+  return platform === MAC_ENGLISH.platform ? new TextEncoder().encode(text) : utf16(text)
+}
+
+export function nameRecordTable(records: readonly NameRecord[]): Uint8Array {
+  const sorted = records.toSorted(
+    (a, b) =>
+      a.platform - b.platform || a.encoding - b.encoding || a.language - b.language || a.id - b.id
+  )
+  const strings = sorted.map(encodedName)
+  const stringsOffset = 6 + sorted.length * 12
+  const size = strings.reduce((total, data) => total + data.length, stringsOffset)
   const bytes = new Uint8Array(size)
   const view = new DataView(bytes.buffer)
-  view.setUint16(2, strings.length)
+  view.setUint16(2, sorted.length)
   view.setUint16(4, stringsOffset)
   let offset = 0
-  strings.forEach(({ platform, encoding, language, id, data }, index) => {
+  sorted.forEach(({ platform, encoding, language, id }, index) => {
     const record = 6 + index * 12
-    for (const [position, value] of [
-      platform,
-      encoding,
-      language,
-      id,
-      data.length,
-      offset
-    ].entries()) {
-      view.setUint16(record + position * 2, value)
-    }
-    bytes.set(data, stringsOffset + offset)
-    offset += data.length
+    const fields = [platform, encoding, language, id, strings[index].length, offset]
+    fields.forEach((value, position) => view.setUint16(record + position * 2, value))
+    bytes.set(strings[index], stringsOffset + offset)
+    offset += strings[index].length
   })
   return bytes
+}
+
+export function nameTable(records: NameRecords): Uint8Array {
+  const entries = Object.entries(records).map(([id, text]) => ({ id: Number(id), text }))
+  return nameRecordTable([
+    ...entries.map(({ id, text }) => ({ ...WINDOWS_ENGLISH, id, text })),
+    ...entries.filter(({ id }) => id === 1).map(({ id, text }) => ({ ...MAC_ENGLISH, id, text }))
+  ])
 }
 
 export function os2Table(weight: number, italic: boolean, widthClass = 5): Uint8Array {

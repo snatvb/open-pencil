@@ -7,9 +7,30 @@ import { InstalledFonts } from '#cli/fonts/installed'
 
 export const FONT_DIR_FLAG = '--font-dir'
 
+export const fontDirOptions = {
+  'font-dir': {
+    type: 'string',
+    description: 'Folder of installed fonts to search before the system ones; repeat for more'
+  }
+} as const
+
 export interface FontDirArgs {
   fontDirs: string[]
   args: string[]
+}
+
+export class FontDirError extends Error {
+  constructor() {
+    super(`${FONT_DIR_FLAG} needs a folder, as in ${FONT_DIR_FLAG} ./fonts`)
+    this.name = 'FontDirError'
+  }
+}
+
+function fontDirValue(value: string | undefined): string {
+  if (!value || value.startsWith('--')) {
+    throw new FontDirError()
+  }
+  return value
 }
 
 export function takeFontDirs(argv: readonly string[]): FontDirArgs {
@@ -20,16 +41,18 @@ export function takeFontDirs(argv: readonly string[]): FontDirArgs {
     if (arg === '--') {
       return { fontDirs, args: args.concat(argv.slice(index)) }
     }
-    if (arg === FONT_DIR_FLAG && index + 1 < argv.length) {
-      fontDirs.push(argv[++index])
+    if (arg === FONT_DIR_FLAG) {
+      fontDirs.push(fontDirValue(argv[++index]))
     } else if (arg.startsWith(`${FONT_DIR_FLAG}=`)) {
-      fontDirs.push(arg.slice(FONT_DIR_FLAG.length + 1))
+      fontDirs.push(fontDirValue(arg.slice(FONT_DIR_FLAG.length + 1)))
     } else {
       args.push(arg)
     }
   }
   return { fontDirs, args }
 }
+
+let processFonts: InstalledFonts | null = null
 
 export function useInstalledFonts(
   fontDirs: readonly string[],
@@ -40,8 +63,13 @@ export function useInstalledFonts(
     folders: () => [...fontDirs.map((dir) => resolve(dir)), ...systemFolders()],
     onIndexed: (families) => manager.setHostFontCatalog(families)
   })
-  manager.setHostFontLoader(async (family, style) =>
-    manager.bundlesFace(family, style) ? null : installed.load(family, style)
-  )
+  manager.setHostFontLoader((family, style) => installed.load(family, style))
+  if (manager === fontManager) {
+    processFonts = installed
+  }
   return installed
+}
+
+export async function listInstalledFonts(): Promise<void> {
+  await processFonts?.families()
 }

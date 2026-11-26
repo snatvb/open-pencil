@@ -8,6 +8,7 @@ import { BUILTIN_IO_FORMATS, IORegistry, type ExportResult } from '@open-pencil/
 
 import { isAppMode, requireFile, rpc } from '#cli/app/client'
 import { appPageTargetRPCArgs, pageOptions, requestedPage } from '#cli/app/target'
+import { fontDirOptions } from '#cli/fonts/install'
 import { ok, printError } from '#cli/format'
 import {
   loadDocument,
@@ -249,6 +250,7 @@ async function exportFromFile(format: string, args: ExportArgs) {
 export default defineCommand({
   meta: { description: `Export a document to ${FORMAT_LIST}` },
   args: {
+    ...fontDirOptions,
     file: {
       type: 'positional',
       description:
