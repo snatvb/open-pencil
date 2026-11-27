@@ -1,18 +1,12 @@
-import { readFileSync } from 'node:fs'
+import { expect, test } from '@playwright/test'
 
-import { expect, test, type Page } from '@playwright/test'
-
-import { SkiaRenderer } from '@open-pencil/core/canvas'
 import { getCanvasKit } from '@open-pencil/core/canvaskit'
-import { renderNodesToImage } from '@open-pencil/core/io/formats/raster'
 import { renderNodesToSVG } from '@open-pencil/core/io/formats/svg'
-import { fontManager } from '@open-pencil/core/text'
 import { SceneGraph, type Fill, type Stroke } from '@open-pencil/scene-graph'
-import { svgDataURL } from '@open-pencil/scene-graph/images'
 import { polygonBlob } from '@open-pencil/test-support/geometry'
-import { repoPath } from '@open-pencil/test-support/paths'
 
-type RGB = [number, number, number]
+import { browserRaster, canvasRaster, pixel, type RGB } from '#tests/helpers/export/raster'
+
 type Point = [number, number]
 
 const SIZE = 40
@@ -252,74 +246,6 @@ function samplePoints(): Sample[] {
   ]
 }
 
-interface Raster {
-  width: number
-  data: number[]
-}
-
-function pixel(raster: Raster, [x, y]: Point): RGB {
-  const offset = (y * raster.width + x) * 4
-  return [raster.data[offset], raster.data[offset + 1], raster.data[offset + 2]]
-}
-
-async function canvasRaster(graph: SceneGraph, pageId: string, frameId: string): Promise<Raster> {
-  const ck = await getCanvasKit()
-  const surface = ck.MakeSurface(1, 1)
-  if (!surface) {
-    throw new Error('no surface')
-  }
-  const renderer = new SkiaRenderer(ck, surface)
-  const inter = readFileSync(repoPath('packages/core/assets/InterVariable.ttf'))
-  await fontManager.markLoaded('Inter', 'Regular', new Uint8Array(inter).buffer)
-  await renderer.loadFonts()
-  try {
-    const png = renderNodesToImage(ck, renderer, graph, pageId, [frameId], {
-      scale: 1,
-      format: 'PNG'
-    })
-    if (!png) {
-      throw new Error('no canvas render')
-    }
-    const image = ck.MakeImageFromEncoded(png)
-    if (!image) {
-      throw new Error('canvas render does not decode')
-    }
-    const pixels = image.readPixels(0, 0, {
-      width: image.width(),
-      height: image.height(),
-      colorType: ck.ColorType.RGBA_8888,
-      alphaType: ck.AlphaType.Unpremul,
-      colorSpace: ck.ColorSpace.SRGB
-    })
-    const width = image.width()
-    image.delete()
-    if (!(pixels instanceof Uint8Array)) {
-      throw new TypeError('no 8-bit canvas pixels')
-    }
-    return { width, data: Array.from(pixels) }
-  } finally {
-    surface.delete()
-  }
-}
-
-async function browserRaster(page: Page, svg: string): Promise<Raster> {
-  return page.evaluate(async (url) => {
-    const image = new Image()
-    image.src = url
-    await image.decode()
-    const canvas = document.createElement('canvas')
-    canvas.width = image.width
-    canvas.height = image.height
-    const context = canvas.getContext('2d')
-    if (!context) {
-      throw new Error('no 2D context')
-    }
-    context.drawImage(image, 0, 0)
-    const { data } = context.getImageData(0, 0, canvas.width, canvas.height)
-    return { width: canvas.width, data: Array.from(data) }
-  }, svgDataURL(svg))
-}
-
 test('gradient and image strokes export as the canvas strokes them', async ({ page }) => {
   const { graph, pageId, frameId } = await buildScene()
   const svg = renderNodesToSVG(graph, pageId, [frameId], { xmlDeclaration: false })
@@ -327,13 +253,13 @@ test('gradient and image strokes export as the canvas strokes them', async ({ pa
     throw new Error('nothing exported')
   }
   const [canvas, browser] = await Promise.all([
-    canvasRaster(graph, pageId, frameId),
+    canvasRaster(graph, pageId, frameId, 'Regular'),
     browserRaster(page, svg)
   ])
   expect(browser.width).toBe(canvas.width)
   for (const { label, point, blank } of samplePoints()) {
-    const expected = pixel(canvas, point)
-    const actual = pixel(browser, point)
+    const expected = pixel(canvas, ...point)
+    const actual = pixel(browser, ...point)
     const drawn = expected.some((value, channel) => value !== WHITE_PIXEL[channel])
     expect(drawn, `${label} at ${point}: canvas draws the stroke there`).toBe(!blank)
     for (const [channel, value] of expected.entries()) {
