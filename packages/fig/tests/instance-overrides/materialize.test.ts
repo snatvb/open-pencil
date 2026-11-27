@@ -184,3 +184,31 @@ test('a layer keeps as its saved layout only the bounds its instance saved for i
   const layouts = graph.getChildren(root.id).map((layer) => layer.derivedLayout)
   expect(layouts).toEqual([{ width: 30, height: 20 }, { x: 50, y: 10 }, null])
 })
+
+test('a layer placed again by its constraint for a saved size keeps that place as its saved layout', () => {
+  const changes: NodeChange[] = [
+    { guid: guid(1), type: 'SYMBOL', size: { x: 100, y: 100 } },
+    {
+      guid: guid(2),
+      type: 'FRAME',
+      parentIndex: { guid: guid(1), position: '!' },
+      size: { x: 20, y: 20 },
+      horizontalConstraint: 'MAX',
+      transform: { m00: 1, m01: 0, m02: 60, m10: 0, m11: 1, m12: 10 }
+    },
+    {
+      guid: guid(5),
+      type: 'INSTANCE',
+      size: { x: 200, y: 100 },
+      symbolData: { symbolID: guid(1) },
+      derivedSymbolData: [{ guidPath: { guids: [guid(2)] }, size: { x: 30, y: 20 } }]
+    }
+  ]
+  const graph = new SceneGraph()
+  const page = graph.getPages()[0]
+  const component = graph.createNode('COMPONENT', page.id)
+  const occurrence = interpretInstance(changes, '1:5', { derivedBounds: true })
+  const { root } = materializeInstance(graph, page.id, occurrence, new Map([['1:1', component.id]]))
+  const [layer] = graph.getChildren(root.id)
+  expect(layer.derivedLayout).toEqual({ x: 150, y: 10, width: 30, height: 20 })
+})
