@@ -10,7 +10,7 @@ import {
 } from './component/dependencies'
 import { createVariantDependencies } from './component/variant-dependencies'
 import { createResourceResolver } from './resource-reference'
-import { shaderDependencies } from './shader-dependencies'
+import { shaderDependencies } from './shaders'
 import { styleDependencies } from './style-dependencies'
 
 export interface SceneDependencyClosure {
