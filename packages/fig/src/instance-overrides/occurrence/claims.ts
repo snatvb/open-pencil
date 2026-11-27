@@ -224,7 +224,7 @@ export function applyDerivedBounds(
   if (!context.options.derivedBounds) {
     return
   }
-  const sizedWithoutTransform: InstanceOccurrence[] = []
+  const sizedWithoutTransform = new Set<InstanceOccurrence>()
   const derived = source.derivedSymbolData as DerivedSymbolOverride[] | undefined
   for (const entry of derived ?? []) {
     const path = entry.guidPath?.guids
@@ -237,8 +237,10 @@ export function applyDerivedBounds(
       continue
     }
     applyDerivedEntry(target, entry)
-    if (entry.size && !entry.transform) {
-      sizedWithoutTransform.push(target)
+    if (entry.transform) {
+      sizedWithoutTransform.delete(target)
+    } else if (entry.size) {
+      sizedWithoutTransform.add(target)
     }
   }
   // Figma often saves a resized layer's size without its transform even when the resize moved it.
