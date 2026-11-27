@@ -88,7 +88,7 @@ describe('gradient and image paint opacity exported to SVG', () => {
   test('writes a gradient stroke opacity as stroke-opacity and leaves the fill alone', () => {
     const stroke: Stroke = { ...gradient('GRADIENT_LINEAR', 0.5), weight: 2, align: 'CENTER' }
     expect(rects(svgOf(rectangleWith([solid(0, 0, 0, 1, 1)], [stroke])))).toEqual([
-      '<rect width="40" height="40" fill="#000000" stroke="#000000" stroke-width="2" stroke-opacity="0.5"/>'
+      '<rect width="40" height="40" fill="#000000" stroke="url(#grad0)" stroke-width="2" stroke-opacity="0.5"/>'
     ])
   })
 
