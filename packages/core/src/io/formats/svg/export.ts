@@ -208,6 +208,14 @@ function layerId(name: string, ids: NonNullable<SVGExportContext['layerIds']>): 
   return id
 }
 
+function textElements(node: SceneNode, visibleStrokes: Stroke[], ctx: SVGExportContext): SVGNode[] {
+  const drawnFill = node.fills.find(isDrawnPaint)
+  const fill = exportedFill(drawnFill, node, ctx)
+  const text = renderTextNode(node, drawnFill ? fill.color : 'none', ctx, fill.opacity)
+  const strokes = textStrokeElements(node, visibleStrokes, ctx)
+  return isPathTextWithStrokeGeometry(node) ? [...strokes, text] : [text, ...strokes]
+}
+
 function drawNode(layer: SceneNode, ctx: SVGExportContext): SVGNode | null {
   const node = withDrawnStrokes(layer, ctx.graph)
   const effects = layerEffects(node, ctx)
@@ -216,11 +224,7 @@ function drawNode(layer: SceneNode, ctx: SVGExportContext): SVGNode | null {
   const visibleStrokes = node.strokes.filter(isDrawnPaint)
 
   if (node.type === 'TEXT') {
-    const drawnFill = node.fills.find(isDrawnPaint)
-    const fill = exportedFill(drawnFill, node, ctx)
-    const text = renderTextNode(node, drawnFill ? fill.color : 'none', ctx, fill.opacity)
-    const strokes = textStrokeElements(node, visibleStrokes, ctx)
-    const drawn = isPathTextWithStrokeGeometry(node) ? [...strokes, text] : [text, ...strokes]
+    const drawn = textElements(node, visibleStrokes, ctx)
     return svgElement('g', groupAttrs, withLayerEffects(drawn, effects, groupAttrs))
   }
 
