@@ -3,24 +3,25 @@ import { CSS_BLEND_MODE } from '@open-pencil/scene-graph/css'
 import { shaderOfPaint } from '@open-pencil/scene-graph/shaders'
 
 import type { DesignStyleDeclaration } from '../types'
-import { fillToCSS, gradientToCSS, strokeColorToCSS } from './css'
+import { fillToCSS, gradientToCSS, projectedStroke, strokeColorToCSS } from './css'
 
 /** A field's CSS: its token reference where one is faithful, otherwise the literal value. */
 export type FieldCSS = (field: string, literal: string) => string
 
 const px = (value: number) => `${value}px`
 
-/** A layer's first stroke as a CSS border, its color in the document's profile. */
+/** A layer's projected stroke as a CSS border, its color in the document's profile. */
 export function addStroke(
   style: DesignStyleDeclaration,
   node: SceneNode,
   css: FieldCSS,
   profile: ColorProfile
 ): void {
-  const stroke = node.strokes.at(0)
-  const literalColor = strokeColorToCSS(stroke, profile)
-  if (!literalColor || !stroke) return
-  const color = css('strokes/0/color', literalColor)
+  const projected = projectedStroke(node)
+  const literalColor = strokeColorToCSS(projected?.stroke, profile)
+  if (!literalColor || !projected) return
+  const { stroke, index } = projected
+  const color = css(`strokes/${index}/color`, literalColor)
   const borderStyle = node.dashPattern.length > 0 ? 'dashed' : 'solid'
   if (!node.independentStrokeWeights) {
     style.border = `${css('strokeWeight', px(stroke.weight))} solid ${color}`
